@@ -1,0 +1,250 @@
+{% macro source_links(paths) -%}
+<ul class="overview-source-list">
+    {% for path in paths %}
+    <li><a href="https://github.com/tosane932/tosane-works/blob/main/store/bakery-hub/{{ path }}"><code>{{ path }}</code></a></li>
+    {% endfor %}
+</ul>
+{%- endmacro %}
+{% macro feature(id, title, role, routes) -%}
+<article class="overview-card" id="feature-{{ id }}">
+    <h3>{{ title }}</h3>
+    <p>{{ role }}</p>
+    <p class="overview-route"><span>主なURL</span> <code>{{ routes }}</code></p>
+    <details>
+        <summary>仕組みと確認コードを読む</summary>
+        <dl class="overview-description">{{ caller() }}</dl>
+    </details>
+</article>
+{%- endmacro %}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>システム概要 | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="system-overview-page app-shell-page">
+{% include "_app_navigation.html" %}
+<main class="overview-shell" id="overview-top">
+    <header class="overview-header">
+        <p class="overview-eyebrow">Bakery Hub / 学習・確認用</p>
+        <h1>
+            <svg class="ui-icon ui-icon-page-heading" data-icon="book-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                <path d="M12 7v14"></path>
+                <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path>
+            </svg>
+            <span>システム概要</span>
+        </h1>
+        <p>Bakery Hubで使用している技術と、各機能が動く仕組みを、学習・確認用にまとめた公開ページです。</p>
+    </header>
+
+    <nav class="overview-contents" aria-label="このページの目次">
+        <a href="#flow">全体の流れ</a>
+        <a href="#features">機能別の仕組み</a>
+        <a href="#basics">基礎を探す</a>
+        <a href="#technologies">共通技術</a>
+        <a href="#tests">テストの目的</a>
+    </nav>
+
+    <section class="overview-section" id="flow">
+        <h2>1. Bakery Hub全体の流れ</h2>
+        <p>まずは、売上入力の「画面を開く → 数量を送る → 保存結果を見る」を例に、処理の役割を分けて読んでみましょう。</p>
+        <ol class="overview-flow">
+            <li><strong>ブラウザからリクエスト</strong><span><code>GET /input</code>で画面を開き、フォームから<code>POST /input</code>で日付・商品ID・数量を送ります。</span></li>
+            <li><strong>Flaskのrouteが受け取る</strong><span><code>app.py</code>の<code>input_sales()</code>が担当。認証を確認し、利用者に許可されたDatasetを取得します。</span></li>
+            <li><strong>Pythonで入力を確かめる</strong><span>日付や数量を変換し、<code>if</code>で不正値を拒否。<code>for</code>で各行を確認し、別Datasetの商品を保存対象に含めません。</span></li>
+            <li><strong>SQLAlchemyを通してDBへ</strong><span><code>Product</code>・<code>DailySales</code>モデルを使って読み書きします。PostgreSQLとSQLiteでは、同じ商品・日付の行があれば数量を更新します。</span></li>
+            <li><strong>保存を確定してHTMLを作る</strong><span><code>db.session.commit()</code>で確定。失敗時は<code>rollback()</code>で取り消します。<code>render_template()</code>がデータをJinjaへ渡し、HTMLを生成します。</span></li>
+            <li><strong>ブラウザで表示・操作</strong><span>HTMLとCSSで画面を表示。JavaScriptは入力欄の操作やAIボタンなど、画面上の動きを担当します。</span></li>
+        </ol>
+        <p class="overview-note">本番用DBはPostgreSQL、通常のpytestはSQLiteのメモリ内DBです。Dashboardの更新やメモ・タスクの一部操作は、HTMLの代わりにJSONを返し、JavaScriptが画面を更新します。このシステム概要自体は、業務データを取得せず説明を表示します。</p>
+    </section>
+
+    <section class="overview-section" id="features">
+        <h2>2. メニュー・機能別の仕組み</h2>
+        <p>役割を確認してから詳細を開くと、Python・DB・画面・テストのつながりを追えます。ファイル名のリンクはGitHubのmainを開きます。</p>
+        <nav class="overview-contents" aria-label="機能別の目次">
+            {% for id, label in [('products', '商品登録'), ('sales', '売上入力'), ('dashboard', '売上分析'), ('materials', '材料発注'), ('memos', '店舗メモ'), ('tasks', 'タスク'), ('guest', 'Guest Demo'), ('auth', 'ログイン'), ('ai', 'AI')] %}
+            <a href="#feature-{{ id }}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+        <div class="overview-feature-grid">
+        {% call feature('products', '商品・メニュー登録', '年月ごとに商品名・価格を登録、編集します。フォームから外した既存商品は販売終了にし、過去の売上を残します。', 'GET /・POST /') %}
+            <dt>Python / Flask</dt>
+            <dd><code>index()</code>が<code>request.args</code>から表示条件、<code>request.form.getlist()</code>から複数行を取得。<code>if</code>で年月・文字数・価格・商品IDを検証し、<code>for</code>で更新内容を組み立てます。</dd>
+            <dt>Database</dt>
+            <dd><code>Product</code>をDatasetと年月で絞り込みます。新規行を追加し、既存行を更新。外した商品は<code>is_active=False</code>にする論理削除です。まとめてcommitし、DBエラー時はrollbackします。</dd>
+            <dt>Frontend</dt>
+            <dd><code>index.html</code>のJinjaとHTML formで表示。テンプレート内のJavaScriptが行の追加・削除や年月切替を担当します。</dd>
+            <dt>pytest</dt>
+            <dd>名前・価格の境界、不正な年月、商品IDの重複、Dataset越境、販売終了後の履歴維持、保存失敗時の全変更rollbackを確認します。同名の商品を一律禁止するテストではありません。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['app.py', 'models.py', 'templates/index.html', 'tests/test_products.py']) }}</dd>
+        {% endcall %}
+
+        {% call feature('sales', '日次売上入力', '商品ごとの販売数量を日付別に保存し、同じ商品・日付の入力は数量を更新します。', 'GET /input・POST /input') %}
+            <dt>Python / Flask</dt>
+            <dd><code>input_sales()</code>が日付を<code>datetime.date.fromisoformat()</code>で変換。商品と数量の件数、数量の範囲、商品が属する年月・Dataset・販売状態を全行で検証してから保存します。</dd>
+            <dt>Database</dt>
+            <dd><code>DailySales.product_id</code>で<code>Product</code>につながります。商品IDと日付には一意制約があり、PostgreSQL / SQLiteの<code>on_conflict_do_update()</code>で重複行を増やさず更新します。複数行の保存は1回のcommitで確定します。</dd>
+            <dt>Frontend</dt>
+            <dd><code>input.html</code>が登録済み数量を表示し、HTML formで送信。JavaScriptは数量欄のフォーカス時の選択や「今日のひとこと」の取得を担当します。</dd>
+            <dt>pytest</dt>
+            <dd>追加と更新、別日付の保持、数量の境界、重複ID・別月・販売終了商品の拒否、複数行の不正入力やDB障害で一部だけ保存されないことを確認します。PostgreSQL用には同じ商品・日付への並行送信テストもあります。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['app.py', 'models.py', 'templates/input.html', 'tests/test_sales.py', 'tests/test_sales_postgresql.py']) }}</dd>
+        {% endcall %}
+
+        {% call feature('dashboard', '売上データ分析 / Dashboard', '期間ごとの販売数量ランキング・グラフと、日本時間の本日の売上金額を表示します。', 'GET /dashboard・GET /api/dashboard-data') %}
+            <dt>Python / Flask</dt>
+            <dd><code>_get_dashboard_period()</code>で表示期間をそろえ、<code>_get_sales_from_db()</code>の辞書を<code>sorted()</code>で数量順にします。グラフ用の名前と数量はlistに分け、HTMLまたは<code>jsonify()</code>で返します。</dd>
+            <dt>Database</dt>
+            <dd><code>Product</code>と<code>DailySales</code>をjoinし、Datasetと日付で絞り、商品名ごとに数量を合計します。本日の金額は<code>単価 × 数量</code>を別に合計するため、選んだ分析期間に左右されません。</dd>
+            <dt>Frontend</dt>
+            <dd><code>dashboard.html</code>のJavaScriptが<code>fetch()</code>でJSONを取得。ランキングの表示とChart.jsのグラフを更新し、AIボタンは別のPOSTを送ります。</dd>
+            <dt>pytest</dt>
+            <dd>HTMLとAPIの期間一致、年・月の不正値、数量とグラフの一致、販売終了商品の履歴、他Datasetの除外、本日の金額の期間独立性を確認します。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['app.py', 'templates/dashboard.html', 'tests/test_dashboard.py', 'tests/test_business_date.py']) }}</dd>
+        {% endcall %}
+
+        {% call feature('materials', '店舗メモツール / 材料発注', '材料名・数量のメモ・補足をチェックリストに登録し、完了・未完了を切り替え、不要な項目を削除します。外部への発注送信は行いません。', 'GET /material-orders・POST /material-orders など') %}
+            <dt>Python / Flask</dt>
+            <dd><code>material_orders.py</code>のBlueprintが処理をまとめています。<code>_validate_create_form()</code>で文字数などを確認し、完了操作では「切り替える」ではなく希望する状態を受け取ります。</dd>
+            <dt>Database</dt>
+            <dd><code>MaterialOrderItem</code>をDatasetごとに保存。<code>is_completed</code>と<code>completed_at</code>を合わせて更新し、未完了を先に表示します。DB障害時は変更をrollbackします。</dd>
+            <dt>Frontend</dt>
+            <dd><code>material_orders.html</code>のHTML formで追加・完了・削除を送信。JavaScriptは追加ボタンから入力欄へフォーカスを移します。削除前の確認も用意しています。</dd>
+            <dt>pytest</dt>
+            <dd>入力の正規化・境界、件数上限、並び順、同じ完了状態の再送、他Datasetの操作拒否、CSRF、不正入力やDB障害でデータが変わらないことを確認します。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['material_orders.py', 'models.py', 'templates/material_orders.html', 'tests/test_material_orders.py']) }}</dd>
+        {% endcall %}
+
+        {% call feature('memos', '店舗メモツール / 店舗メモ', 'メモの作成・編集・検索・固定・複製と、ゴミ箱への移動・復元・完全削除を行います。スマホ編集では本文を自動保存します。', 'GET /shop-tools/memo・POST /shop-tools/memo/autosave など') %}
+            <dt>Python / Flask</dt>
+            <dd><code>shop_memos.py</code>のBlueprintがformとJSONを処理。本文からタイトルを作る関数、文字数の検証、検索文字の扱い、削除状態ごとの条件分岐を用意しています。</dd>
+            <dt>Database</dt>
+            <dd><code>ShopMemo</code>に本文と日時を保存。<code>deleted_at</code>があるものをゴミ箱、<code>pinned_at</code>があるものを固定として扱います。Datasetで絞り、commit / rollbackで変更を確定・取消します。</dd>
+            <dt>Frontend</dt>
+            <dd>Jinjaのメモ一覧・ゴミ箱と<code>shop_memos.js</code>が担当。入力イベントと<code>fetch()</code>による自動保存、操作メニュー、取り消し表示を実装。通常一覧のURLは文字として表示し、ゴミ箱では検証したHTTP(S) URLをリンクにします。</dd>
+            <dt>pytest</dt>
+            <dd>CRUD、検索、固定の順番、複製、ゴミ箱と復元、自動保存、文字数・件数、HTMLのエスケープ、Dataset越境、失敗時rollbackを確認します。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['shop_memos.py', 'templates/shop_tools/memos.html', 'templates/shop_tools/memo_trash.html', 'static/shop_memos.js', 'tests/test_shop_memo_routes.py']) }}</dd>
+        {% endcall %}
+
+        {% call feature('tasks', '店舗メモツール / タスク', 'タスクの追加・編集・完了・お気に入り・並び替えと、選択したタスクや完了済みタスクの削除を行います。', 'GET /shop-tools/tasks・POST /shop-tools/tasks/reorder など') %}
+            <dt>Python / Flask</dt>
+            <dd><code>shop_tasks.py</code>のBlueprintがform / JSONを取得。タイトル、真偽値、並び替えIDのlistを検証し、重複・欠落・別DatasetのIDを拒否します。</dd>
+            <dt>Database</dt>
+            <dd><code>ShopTask</code>の<code>position</code>で順番、<code>is_starred</code>でお気に入りを保存。完了状態と完了日時を一緒に更新し、並び替えや一括削除もまとめてcommitします。</dd>
+            <dt>Frontend</dt>
+            <dd><code>shop_tasks.html</code>と<code>shop_tasks.js</code>が担当。click・pointer・touchイベントで完了、編集、長押し選択・並び替えを扱い、JSONで保存します。完了操作の取り消しと送信中のボタン制御も実装しています。</dd>
+            <dt>pytest</dt>
+            <dd>タイトルの境界、CRUD、完了の再送、お気に入り、保存される並び順、一括削除、別Datasetの拒否、CSRF、DB障害時rollbackを確認します。ジェスチャーの見た目や触り心地はブラウザでも確認する必要があります。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['shop_tasks.py', 'templates/shop_tasks.html', 'static/shop_tasks.js', 'tests/test_shop_tasks.py']) }}</dd>
+        {% endcall %}
+
+        {% call feature('guest', 'Guest Demo', 'ログイン画面からデモを開始し、ゲスト専用のデータ領域で各機能を試せます。管理者や別ゲストのデータとは分離しています。', 'POST /guest/start') %}
+            <dt>Python / Flask</dt>
+            <dd><code>start_guest_session()</code>で専用Datasetと<code>GuestUser</code>を作成し、Flask-Loginで認証。<code>load_user()</code>で復元・期限確認し、<code>require_current_dataset()</code>で利用可能な領域を決めます。</dd>
+            <dt>Database</dt>
+            <dd><code>Dataset</code>が期限・活動日時・AI利用回数を持ちます。Guest作成回数と同時利用数を制限し、期限切れのデータをcleanupします。各機能のqueryは認証されたDatasetに限定します。</dd>
+            <dt>Frontend</dt>
+            <dd><code>login.html</code>のCSRF付きformで開始。共通メニューは「ゲストデモ」と表示し、終了ボタンで認証Sessionを終了します。</dd>
+            <dt>pytest</dt>
+            <dd>開始、期限、偽装した認証情報、Dataset分離、作成制限・同時利用数、cleanupが管理者や有効なGuestを消さないこと、AI利用上限を確認します。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['app.py', 'models.py', 'templates/login.html', 'tests/test_guest_entry.py', 'tests/test_guest_identity.py', 'tests/test_guest_cleanup.py', 'tests/test_dataset_authorization.py']) }}</dd>
+        {% endcall %}
+
+        {% call feature('auth', '管理者ログイン・ログアウト', '設定された単一管理者を認証します。業務ページは管理者または正規Guestが利用でき、システム概要は未ログインでも読めます。', 'GET /login・POST /login・POST /logout') %}
+            <dt>Python / Flask</dt>
+            <dd><code>check_password_hash()</code>で照合し、<code>login_user()</code>で認証。<code>load_user()</code>はパスワード設定の変更も確認します。保護されたrouteのデコレータがアクセスを制御します。</dd>
+            <dt>Database</dt>
+            <dd>管理者の認証設定は環境設定で読み、ユーザーの登録テーブルはありません。業務データは管理者Datasetに属します。ログイン失敗回数の制限にはDBの回数管理も使います。</dd>
+            <dt>Frontend</dt>
+            <dd>JinjaとHTML formで認証情報をPOST。ログアウトもCSRF付きPOSTです。FlaskのSession Cookieを使って認証状態を引き継ぎます。</dd>
+            <dt>pytest</dt>
+            <dd>成功・失敗、未ログイン時の保護、認証設定変更後の拒否、ログイン試行制限、ログアウトのPOST限定とCSRFを確認します。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['app.py', 'config.py', 'templates/login.html', 'tests/test_auth.py', 'tests/test_authorization.py', 'tests/test_admin_login_rate_limit.py', 'tests/test_logout.py']) }}</dd>
+        {% endcall %}
+
+        {% call feature('ai', 'AIアドバイス・今日のひとこと', '売上分析では販売数量から改善案を生成し、売上入力では短いひとことを表示します。どちらもボタン操作で取得します。', 'POST /api/ai-advice・POST /api/greeting') %}
+            <dt>Python / Flask</dt>
+            <dd><code>google.genai</code>でGeminiを呼び、<code>prompts.py</code>で売上用の文章を組み立てます。15秒のtimeoutを指定し、<code>try / except</code>で失敗を扱い、JSONで結果を返します。</dd>
+            <dt>Database</dt>
+            <dd>売上分析の入力は現在のDataset・適用した期間の数量集計です。GuestのAI利用回数はDatasetで管理し、上限を超える呼び出しを防ぎます。AIの生成結果を売上レコードとして保存する処理ではありません。</dd>
+            <dt>Frontend</dt>
+            <dd>JavaScriptがCSRF token付きの<code>fetch()</code>を送信。待機表示とボタンの無効化を行い、結果は<code>textContent</code>で表示します。</dd>
+            <dt>pytest</dt>
+            <dd>Geminiクライアントを置き換え、期間・Datasetが正しい入力、timeout指定、API失敗時の代替メッセージ、CSRF、Guest利用上限を確認します。実APIの生成品質を保証するテストではありません。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['app.py', 'prompts.py', 'templates/dashboard.html', 'templates/input.html', 'tests/test_ai_integration.py', 'tests/test_ai_public_defense.py', 'tests/test_guest_ai_limit.py']) }}</dd>
+        {% endcall %}
+        </div>
+    </section>
+
+    <section class="overview-section" id="basics">
+        <h2>3. 「基礎」はどこで使われる？</h2>
+        <p>用語だけ覚えるより、該当する機能を開き「この処理を変えると何が起きるか」を考えてからコードを読んでみましょう。</p>
+        <dl class="overview-basics overview-card">
+            <dt><code>if</code> / <code>for</code></dt><dd><a href="#feature-products">商品登録</a>で、不正な値なら拒否し、複数行を順に検証・更新します。条件分岐と繰り返しです。</dd>
+            <dt>関数 / 引数 / <code>return</code></dt><dd><a href="#feature-dashboard">売上分析</a>の<code>_get_sales_from_db(current_dataset, target_year, target_month)</code>は、対象領域と期間を引数で受け取り、集計結果を返します。</dd>
+            <dt><code>list</code> / <code>dict</code></dt><dd><a href="#feature-sales">売上入力</a>は検証済みの行をlistにまとめます。<a href="#feature-dashboard">売上分析</a>は商品名と数量のdictから、グラフ用のlistを作ります。</dd>
+            <dt><code>try / except</code></dt><dd><a href="#feature-sales">売上入力</a>の日付変換の失敗やDB保存の例外を扱い、エラー応答やrollbackへ進みます。</dd>
+            <dt><code>class</code> / <code>import</code></dt><dd><code>models.py</code>の<code>Product(db.Model)</code>などがデータ構造を表すclassです。<code>app.py</code>は<code>from models import Product</code>などで別ファイルの定義を使います。</dd>
+            <dt>GET / POST</dt><dd>GETは画面や集計の取得、POSTは入力送信や操作に使用。<a href="#feature-ai">AI取得</a>も利用回数を消費するためPOSTです。Session復元時のGuest活動日時更新など、GETに伴う共通処理もあります。</dd>
+            <dt>request / response</dt><dd><code>request.args</code>はURLの条件、<code>request.form</code>はフォーム、<code>request.get_json()</code>はJSONを読む入口。応答にはHTML、JSON、リダイレクトやエラーのHTTP状態コードがあります。</dd>
+            <dt>Sessionは2つを区別</dt><dd>Flaskの<code>session</code>は<a href="#feature-auth">認証状態</a>を引き継ぐための仕組み。SQLAlchemyの<code>db.session</code>はDB読み書きの作業単位です。Flaskの標準Session Cookieは署名で改ざんを検知しますが、暗号化された秘密の保管庫ではありません。</dd>
+            <dt>CRUD</dt><dd>Create（作成）・Read（読み取り）・Update（更新）・Delete（削除）。<a href="#feature-memos">店舗メモ</a>で一通り確認できます。商品は履歴を残す販売終了、メモはゴミ箱と完全削除を分けています。</dd>
+            <dt>transaction / rollback</dt><dd>関連する変更をひとまとまりで確定・取消する仕組み。<a href="#feature-sales">売上入力</a>では複数行を保存してからcommitし、DB例外ならrollbackします。</dd>
+            <dt>validation</dt><dd>入力を保存前に検証すること。<a href="#feature-products">商品登録</a>の名前・価格や<a href="#feature-tasks">タスク</a>のID検証が例です。HTMLの入力制限に加え、サーバーでも確認します。</dd>
+            <dt>template / Jinja</dt><dd>Pythonが渡したデータをHTMLへ埋め込みます。<code>input.html</code>では商品の繰り返し表示や成功表示に使い、通常の文字列はHTMLエスケープされます。</dd>
+            <dt>JavaScript event</dt><dd><a href="#feature-tasks">タスク</a>の<code>addEventListener()</code>がclick・pointer・touchなどを受けて、画面の変更やサーバーへの送信につなげます。</dd>
+            <dt>pytest fixture</dt><dd><code>conftest.py</code>の<code>flask_app</code>、<code>authenticated_client</code>、<code>csrf_token</code>が、テスト用DB・認証済みclient・CSRF tokenの準備を共通化します。</dd>
+        </dl>
+    </section>
+
+    <section class="overview-section" id="technologies">
+        <h2>4. 共通技術と役割</h2>
+        <dl class="overview-basics overview-card">
+            <dt>Python / Flask</dt><dd>入力検証、日付処理、集計結果の整理をPythonで記述。FlaskがURLと関数を結び、HTML・JSON・リダイレクトを返します。店舗ツールはBlueprintで分けています。</dd>
+            <dt>SQLAlchemy / PostgreSQL</dt><dd>モデル・query・transactionでデータを扱います。PostgreSQLは本番用DBとDocker / CIのDBに使用。SQLiteはローカルの既定DBと通常pytestに使います。</dd>
+            <dt>HTML / Jinja / CSS</dt><dd>HTMLがフォームと見出し、Jinjaがデータの表示、<code>style.css</code>が配色・カード・PCとスマホの配置を担当。主要メニューは共通テンプレートです。</dd>
+            <dt>JavaScript / Chart.js</dt><dd>メニュー開閉、入力操作、JSONの取得と画面更新を担当。DashboardのグラフはChart.jsを使います。</dd>
+            <dt>Flask-Login / Session</dt><dd>管理者・Guestの認証状態を引き継ぎます。データの利用範囲は別途Datasetで確認します。CookieにはSecure・HttpOnly・SameSiteの設定があり、HTTPのローカル開発時だけSecureを無効にできます。</dd>
+            <dt>CSRF / エスケープ</dt><dd>Flask-WTFの<code>CSRFProtect</code>がPOSTのtokenを確認します。JinjaのエスケープやJavaScriptの<code>textContent</code>は、入力文字がHTMLとして実行されることを防ぐために使います。</dd>
+            <dt>Gemini API</dt><dd>売上の改善案とひとことを生成。Python側でAPIを呼び、timeout・エラー応答・Guest利用上限を扱います。</dd>
+            <dt>pytest / GitHub Actions</dt><dd>pytestが期待する応答とDB状態を検証。<code>.github/workflows/test.yml</code>は対象パスのmainへのpush・PRで、通常テストとPostgreSQLのmigration・指定された並行処理テストを実行します。</dd>
+            <dt>Docker / Gunicorn / Render</dt><dd>DockerfileでPython実行環境を組み立て、GunicornがFlaskアプリへのHTTP要求を処理します。READMEにRenderでの公開構成を記載。Docker ComposeはwebとPostgreSQLを組み合わせます。</dd>
+            <dt>Flask-Migrate / Alembic</dt><dd><code>migrations/</code>でDB構造の変更履歴を管理します。今回のシステム概要追加にはテーブル・migrationの変更はありません。</dd>
+        </dl>
+        <p class="overview-note">ここではコードと設定ファイルにある設計を説明しています。稼働中の本番環境を診断するページではありません。認証情報や設定の秘密値、実際のCookie・Session値は表示しません。</p>
+    </section>
+
+    <section class="overview-section" id="tests">
+        <h2>5. テストは何を壊さないためにある？</h2>
+        <p>成功画面だけでなく、「拒否されたときにDBが変わっていないか」「他の利用者のデータが混ざっていないか」まで確認します。</p>
+        <ul class="overview-test-list overview-card">
+            <li><strong>入力の境界・不正値</strong> — 商品名・価格・販売数量・メモ本文・タスクタイトルなどの許容範囲を確認します。</li>
+            <li><strong>認証・権限・CSRF</strong> — 未ログインの業務操作、偽装した認証、tokenなしのPOSTを拒否し、公開ページは読めることを確認します。</li>
+            <li><strong>Dataset分離</strong> — 管理者、Guest A、Guest Bの表示・更新・集計・AI入力が混ざらないことを確認します。</li>
+            <li><strong>transaction / rollback</strong> — 保存失敗で商品・売上・店舗ツールの変更が一部だけ残らないことを確認します。</li>
+            <li><strong>日付と期間</strong> — 日本時間の今日、月・年の切替、DashboardのHTMLとAPIの期間一致を確認します。</li>
+            <li><strong>CRUD・履歴・並び順</strong> — 販売終了後の売上履歴、メモのゴミ箱と復元、タスクの保存順と一括操作を確認します。</li>
+            <li><strong>繰り返し・並行処理</strong> — 完了状態の再送、同じ商品・日付の売上更新などを確認。PostgreSQL用にはGuest上限や保存の実並行テストがあります。すべてのUI連打や競合を網羅するという意味ではありません。</li>
+            <li><strong>表示の安全性</strong> — 入力文字のエスケープ、URL処理、セキュリティヘッダー、共通navigationを確認します。</li>
+            <li><strong>DB構造の変更</strong> — migrationのupgrade / downgrade、既存データの保全、DB制約を確認します。</li>
+        </ul>
+        <p class="overview-note">通常テストは<code>conftest.py</code>の隔離DBを使います。PostgreSQL専用テストは使い捨てのテストDBと明示的な設定が必要です。AI連携テストはクライアントを置き換えます。pytestのGREENだけでは、スマホの操作感や本番環境での動作をすべて保証できないため、ブラウザでの表示確認も組み合わせます。</p>
+        {{ source_links(['conftest.py', 'tests/test_csrf.py', 'tests/test_xss_regressions.py', 'tests/test_system_overview.py']) }}
+    </section>
+    <footer class="overview-footer"><a href="#overview-top">ページの先頭へ戻る</a></footer>
+</main>
+</body>
+</html>

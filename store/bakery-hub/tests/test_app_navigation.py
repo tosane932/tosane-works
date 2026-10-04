@@ -21,7 +21,10 @@ APP_SIDEBAR_ITEMS = {
     "sales": ("日次売上入力", "clipboard-pen-line"),
     "dashboard": ("売上データ分析", "chart-column"),
     "shop-tools": ("店舗メモツール", "wrench"),
+    "system-overview": ("システム概要", "book-open"),
 }
+
+SIDEBAR_ROUTES = {**APP_ROUTES, "system-overview": "/system-overview"}
 
 
 def _assert_inline_icon(container, icon_name):
@@ -94,8 +97,8 @@ def _assert_app_navigation(document, active_page, user_label):
         link["data-page"]: link
         for link in navigation.select("a[data-page]")
     }
-    assert set(links) == set(APP_ROUTES)
-    for page, path in APP_ROUTES.items():
+    assert set(links) == set(SIDEBAR_ROUTES)
+    for page, path in SIDEBAR_ROUTES.items():
         label, icon_name = APP_SIDEBAR_ITEMS[page]
         assert links[page]["href"] == path
         assert links[page].get_text(" ", strip=True) == label

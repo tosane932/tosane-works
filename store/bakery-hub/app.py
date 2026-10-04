@@ -1189,6 +1189,12 @@ def start_guest_demo():
     return redirect(url_for("index"), code=303)
 
 
+@app.get("/system-overview")
+def system_overview():
+    """実装を復習するための公開ページ。業務データは取得しない。"""
+    return render_template("system_overview.html")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
