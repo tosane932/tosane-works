@@ -50,6 +50,12 @@
 
 調査だけで十分な場合や、テスト追加が不適切な作業では、機械的にREDテストを追加しないでください。
 
+## Bakery Hubのシステム概要
+
+- Bakery Hub（`store/bakery-hub/`）に新機能を追加した場合、または既存機能の主要な仕様・処理フローを変更した場合は、作業完了前に `store/bakery-hub/templates/system_overview.html` への反映要否を必ず確認する
+- 反映が必要な場合は、実際のコード・テストを確認したうえで、機能説明、使用技術（Python / Flask / SQLAlchemy / JavaScript / pytest）、処理フロー、基礎概念など、変更に関係する箇所を現在の実装に合わせて更新する
+- 軽微な文言修正や見た目だけの変更など、学習内容やシステム理解に影響しない変更では、無理に追記しない
+
 ## Git運用
 
 - 原則としてfeatureまたはchore branchで作業する
