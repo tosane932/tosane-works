@@ -1,6 +1,8 @@
 {% set current_endpoint = request.endpoint or '' %}
 {% if current_endpoint == 'index' %}
     {% set active_app_page = 'products' %}
+{% elif current_endpoint == 'product_catalog' %}
+    {% set active_app_page = 'product-catalog' %}
 {% elif current_endpoint == 'input_sales' %}
     {% set active_app_page = 'sales' %}
 {% elif current_endpoint == 'dashboard' %}
@@ -122,6 +124,19 @@
                 </svg>
             </span>
             <span>商品・メニュー登録</span>
+        </a>
+        <a
+            href="{{ url_for('product_catalog') }}"
+            data-page="product-catalog"
+            class="app-sidebar-link app-sidebar-link-products touch-control-no-select{% if active_app_page == 'product-catalog' %} app-sidebar-link-current{% endif %}"
+            {% if active_app_page == 'product-catalog' %}aria-current="page"{% endif %}>
+            <span class="app-sidebar-icon" aria-hidden="true">
+                <svg data-icon="list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                    <path d="M8 6h13M8 12h13M8 18h13"></path>
+                    <path d="M3 6h.01M3 12h.01M3 18h.01"></path>
+                </svg>
+            </span>
+            <span>商品一覧</span>
         </a>
         <a
             href="{{ url_for('input_sales') }}"

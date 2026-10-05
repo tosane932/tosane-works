@@ -11,6 +11,7 @@ from models import Dataset, db
 
 APP_ROUTES = {
     "products": "/",
+    "product-catalog": "/products",
     "sales": "/input",
     "dashboard": "/dashboard",
     "shop-tools": "/material-orders",
@@ -18,6 +19,7 @@ APP_ROUTES = {
 
 APP_SIDEBAR_ITEMS = {
     "products": ("商品・メニュー登録", "package-plus"),
+    "product-catalog": ("商品一覧", "list"),
     "sales": ("日次売上入力", "clipboard-pen-line"),
     "dashboard": ("売上データ分析", "chart-column"),
     "shop-tools": ("店舗メモツール", "wrench"),

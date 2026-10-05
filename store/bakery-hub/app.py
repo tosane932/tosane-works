@@ -1518,6 +1518,21 @@ def index():
         current_year=today.year,
     )
 
+
+@app.route("/products", methods=["GET"])
+@admin_or_guest_required
+def product_catalog():
+    """現在のDatasetの商品を登録解除済み・過去の年月も含めて表示する。"""
+    current_dataset = require_current_dataset()
+    products = (
+        Product.query
+        .filter_by(dataset_id=current_dataset.id)
+        .order_by(Product.year.desc(), Product.month.desc(), Product.id.asc())
+        .all()
+    )
+    return render_template("products.html", products=products)
+
+
 def _get_optional_integer_query_parameter(name):
     value = request.args.get(name)
     if not value:
