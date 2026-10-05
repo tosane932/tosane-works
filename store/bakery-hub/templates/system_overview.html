@@ -41,10 +41,13 @@
 
     <nav class="overview-contents" aria-label="このページの目次">
         <a href="#flow">全体の流れ</a>
+        <a href="#walkthrough">1つの処理を追う</a>
         <a href="#features">機能別の仕組み</a>
         <a href="#basics">基礎を探す</a>
         <a href="#technologies">共通技術</a>
         <a href="#tests">テストの目的</a>
+        <a href="#quiz">理解度チェック</a>
+        <a href="#troubleshooting">困ったときの逆引き</a>
     </nav>
 
     <section class="overview-section" id="flow">
@@ -59,6 +62,72 @@
             <li><strong>ブラウザで表示・操作</strong><span>HTMLとCSSで画面を表示。JavaScriptは入力欄の操作やAIボタンなど、画面上の動きを担当します。</span></li>
         </ol>
         <p class="overview-note">本番用DBはPostgreSQL、通常のpytestはSQLiteのメモリ内DBです。Dashboardの更新やメモ・タスクの一部操作は、HTMLの代わりにJSONを返し、JavaScriptが画面を更新します。このシステム概要自体は、業務データを取得せず説明を表示します。</p>
+    </section>
+
+    <section class="overview-section" id="walkthrough">
+        <h2>1つの処理を最後まで追ってみる</h2>
+        <p>題材は「売上入力 → DB保存 → Dashboard表示」。今月の登録済み商品に数量を入力する場面を、1段階ずつ開いて追いましょう。</p>
+        <p class="overview-note">ブラウザ操作 → HTTP → Flask / Python → SQLAlchemy → DB → Flask / Jinja → HTML → ブラウザ表示、という往復です。保存とDashboardの表示は、別々のリクエストでつながります。</p>
+        <ol class="overview-walkthrough">
+            <li class="overview-card">
+                <h3>売上入力画面を開く</h3>
+                <p><code>GET /input</code>で、今月の商品と今日の数量を表示します。</p>
+                <details>
+                    <summary>処理と基礎を読む</summary>
+                    <p>FlaskがURLに対応する<code>input_sales()</code>を呼びます。認証とDatasetを確認し、<code>_get_current_products()</code>で現在のDataset・今年・今月の販売中商品をqueryします。今日の数量も読み、<code>render_template()</code>で<code>input.html</code>へ渡します。Jinjaが商品を繰り返し並べたHTMLを作り、ブラウザがCSSと合わせて表示します。</p>
+                    <p class="overview-foundations"><strong>ここで学べる基礎</strong><br>Web：<code>GET</code> / route / response<br>Database：<code>query</code> / 絞り込み<br>Frontend：<code>Jinja</code> / HTML / CSS</p>
+                    {{ source_links(['templates/input.html']) }}
+                </details>
+            </li>
+            <li class="overview-card">
+                <h3>入力して送信する</h3>
+                <p>「本日の売上個数を更新する」ボタンから、日付・商品ID・数量を送ります。</p>
+                <details>
+                    <summary>処理と基礎を読む</summary>
+                    <p>HTML formの<code>method="POST"</code>により、ブラウザが<code>POST /input</code>を送ります。CSRF tokenの確認と認証を通った後、同じ<code>input_sales()</code>がPOST用の分岐へ進みます。日付は<code>request.form.get("date")</code>、複数行の商品IDと数量は<code>request.form.getlist()</code>で受け取ります。</p>
+                    <p class="overview-foundations"><strong>ここで学べる基礎</strong><br>Frontend：<code>HTML form</code> / name<br>Web：<code>POST</code> / request / CSRF<br>Python：<code>if</code> / list</p>
+                </details>
+            </li>
+            <li class="overview-card">
+                <h3>Pythonで入力を確認する</h3>
+                <p>全行を検証し、不正な入力や別Datasetの商品を拒否します。</p>
+                <details>
+                    <summary>処理と基礎を読む</summary>
+                    <p>日付を<code>datetime.date.fromisoformat()</code>で変換し、商品ID・数量の件数一致、重複ID、数量の範囲を確認します。<code>for</code>で各商品を調べ、認証されたDatasetに属し、売上日と同じ年月の販売中商品であることも確認します。検証済みの行をlistにまとめ、不正なら<code>return</code>で400の応答を返して保存前に終了します。</p>
+                    <p class="overview-foundations"><strong>ここで学べる基礎</strong><br>Python：<code>if</code> / <code>for</code> / 関数 / list / <code>return</code><br>Web：validation / <code>400</code><br>Database：Datasetでの絞り込み</p>
+                </details>
+            </li>
+            <li class="overview-card">
+                <h3>DBへ保存する</h3>
+                <p>商品と日付の組み合わせで数量を追加・更新し、まとめて確定します。</p>
+                <details>
+                    <summary>処理と基礎を読む</summary>
+                    <p><code>DailySales</code> Modelのテーブルを使い、商品ID・日付・数量をdictにまとめます。本番用のPostgreSQLと通常pytestのSQLiteでは、<code>on_conflict_do_update()</code>で同じ商品・日付があれば数量を更新します。<code>db.session.execute()</code>で全行を保存し、1回の<code>db.session.commit()</code>でtransactionを確定します。DB例外なら<code>rollback()</code>で取り消し、500を返します。</p>
+                    <p class="overview-foundations"><strong>ここで学べる基礎</strong><br>Python：<code>dict</code> / <code>try / except</code><br>Database：Model / SQLAlchemy / <code>db.session</code> / transaction / commit / rollback</p>
+                    {{ source_links(['app.py', 'models.py']) }}
+                </details>
+            </li>
+            <li class="overview-card">
+                <h3>保存結果からDashboardへ進む</h3>
+                <p>入力画面の成功表示を確認し、「お店の健康診断書（売上分析・ランキング）を見る」リンクを開きます。</p>
+                <details>
+                    <summary>処理と基礎を読む</summary>
+                    <p>保存後は<code>return render_template(..., success=True, ...)</code>で入力画面のHTMLを返します。この処理ではリダイレクトはしません。<code>return</code>で関数が終わるため、後ろにあるGET用の処理には進みません。利用者がリンクを開くと、ブラウザが新たに<code>GET /dashboard</code>を送り、別の関数<code>dashboard()</code>が動きます。</p>
+                    <p class="overview-foundations"><strong>ここで学べる基礎</strong><br>Python：<code>return</code> / 関数の終了<br>Frontend：<code>Jinja</code>の条件分岐 / HTML link<br>Web：response / 次の<code>GET</code></p>
+                </details>
+            </li>
+            <li class="overview-card">
+                <h3>Dashboardで表示する</h3>
+                <p>保存済みの数量を集計し、ランキングとグラフに表示します。</p>
+                <details>
+                    <summary>処理と基礎を読む</summary>
+                    <p><code>_get_sales_from_db()</code>がProductとDailySalesをjoinし、Datasetと表示期間で絞ります。数量の合計はDBの<code>db.func.sum()</code>が担当し、Pythonが結果をdictにして<code>sorted()</code>で数量順に並べ、グラフ用のlistも作ります。Flaskが<code>dashboard.html</code>へ渡し、JinjaがランキングのHTMLを、JavaScriptとChart.jsがグラフを表示します。</p>
+                    <p>初期表示は全年度・全月です。期間の「更新」ではJavaScriptの<code>fetch()</code>が<code>GET /api/dashboard-data</code>を送り、Flaskの<code>jsonify()</code>で返されたJSONから画面を更新します。「本日の売上」は日本時間の今日を別に集計します。</p>
+                    <p class="overview-foundations"><strong>ここで学べる基礎</strong><br>Database：<code>join</code> / query / 集計<br>Python：dict / list / <code>sorted()</code><br>Frontend：Jinja / <code>JavaScript</code> / fetch<br>Web：HTML response / <code>JSON</code></p>
+                    {{ source_links(['templates/dashboard.html']) }}
+                </details>
+            </li>
+        </ol>
     </section>
 
     <section class="overview-section" id="features">
@@ -243,6 +312,131 @@
         </ul>
         <p class="overview-note">通常テストは<code>conftest.py</code>の隔離DBを使います。PostgreSQL専用テストは使い捨てのテストDBと明示的な設定が必要です。AI連携テストはクライアントを置き換えます。pytestのGREENだけでは、スマホの操作感や本番環境での動作をすべて保証できないため、ブラウザでの表示確認も組み合わせます。</p>
         {{ source_links(['conftest.py', 'tests/test_csrf.py', 'tests/test_xss_regressions.py', 'tests/test_system_overview.py']) }}
+    </section>
+    <section class="overview-section" id="quiz">
+        <h2>理解度チェック</h2>
+        <p>まず自分の言葉で答えてから、「答えを見る」を開いて比べましょう。迷ったら<a href="#walkthrough">処理フロー</a>や<a href="#basics">基礎の説明</a>へ戻れます。</p>
+        <div class="overview-learning-list">
+            <article class="overview-card" id="quiz-q1">
+                <h3>Q1. 売上フォームの値をFlask側でどう受け取る？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p><code>request.form</code>を使います。日付は<code>get("date")</code>、複数行の商品ID・数量は<code>getlist()</code>で受け取ります。HTMLの<code>name</code>が取り出すキーになり、届いた文字列はPython側で変換・検証してから保存します。</p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="quiz-q2">
+                <h3>Q2. GETとPOSTをどう使い分けている？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p><code>GET</code>は入力画面や集計の取得、<code>POST</code>は売上送信などの操作に使います。AI取得も利用回数を消費するためPOSTです。GETでもGuestの活動日時更新などの共通処理はあるので、「GETならDB変更が一切ない」とは限りません。</p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="quiz-q3">
+                <h3>Q3. db.session.commit()は何を確定する？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p><code>db.session.commit()</code>は、そのtransactionのDB変更を確定します。<code>add()</code>は保存対象の追加、売上入力で使う<code>execute()</code>はSQLの実行ですが、それだけでは確定しません。全行を処理してcommitが成功すると変更が確定し、DB例外時はrollbackで取り消します。</p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="quiz-q4">
+                <h3>Q4. return redirect(...)の後、同じ関数の後ろは動く？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>後ろの通常の処理には進みません。<code>return</code>は関数を終了し、<code>redirect()</code>の応答を返します。ブラウザが移動先へ送るGETは別のリクエストです。売上入力はredirectではなく、成功表示付きの<code>render_template()</code>をreturnします。いずれも、同じ関数の後ろに続けて進む処理ではありません。</p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="quiz-q5">
+                <h3>Q5. SQLAlchemyのModelは何のためにある？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p><code>Model</code>は、DBのテーブル・列・関連・制約をPythonのclassで表すためのものです。たとえば<code>DailySales.product_id</code>でProductに売上が結び付き、商品IDと日付の一意制約で重複行を防ぎます。Modelはデータの構造であり、入力値の検証やDatasetの認可も別途必要です。</p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="quiz-q6">
+                <h3>Q6. JinjaとJavaScriptの主な役割はどう違う？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p><code>Jinja</code>はサーバーで、Pythonから渡された商品や集計をHTMLに埋め込みます。JavaScriptはブラウザで、クリックへの反応やJSON取得後の表示変更を行います。Dashboardは最初のランキングをJinjaで表示し、期間更新はJavaScriptのfetchで取得した値から表示し直します。</p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="quiz-q7">
+                <h3>Q7. pytestでrollback後のDBまで確認するのはなぜ？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>エラー応答が返っても、一部の行だけ保存されている可能性があるからです。複数行の保存途中でDB障害を起こし、<code>rollback</code>後の件数・値が変更前と同じか確認します。これで「失敗時に半端な保存を残さない」というtransactionの保証を検証できます。</p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="quiz-q8">
+                <h3>Q8. 認証のSessionとdb.sessionは同じもの？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>役割が違います。FlaskのSessionはFlask-Loginとともに、リクエストをまたいで認証状態を引き継ぎます。<code>db.session</code>はSQLAlchemyがDBの読み書きとtransactionを管理する仕組みです。認証状態だけで商品を選ぶのではなく、認証された利用者のDatasetにqueryを限定します。</p></div>
+                </details>
+            </article>
+        </div>
+    </section>
+
+    <section class="overview-section" id="troubleshooting">
+        <h2>困ったときはどこを見る？</h2>
+        <p>症状に近いカードを開き、最初の確認場所を探しましょう。ブラウザの開発者ツールの「Network」では、送ったURL・HTTPメソッド・応答の状態を確認できます。</p>
+        <div class="overview-feature-grid">
+            <article class="overview-card" id="trouble-button">
+                <h3>ボタンを押しても何も起きない</h3>
+                <details><summary>確認場所と理由を見る</summary>
+                    <p><strong>最初に：</strong>HTML form / JavaScript / route</p>
+                    <p>Networkに送信がなければ、フォームの入力制限やJavaScriptのConsoleエラーを確認。送信があればURL・メソッドとFlaskのrouteを見比べます。</p>
+                    <p><a href="#feature-sales">売上入力</a>の<code>templates/input.html</code>から確認できます。</p>
+                </details>
+            </article>
+            <article class="overview-card" id="trouble-post">
+                <h3>POSTで400になる</h3>
+                <details><summary>確認場所と理由を見る</summary>
+                    <p><strong>最初に：</strong>応答本文 / CSRF token / 入力検証</p>
+                    <p>このアプリのCSRF拒否は400です。formの<code>csrf_token</code>やfetchの<code>X-CSRFToken</code>を確認します。入力検証も400を返すため、応答本文からどちらかを見分けます。</p>
+                    <p><a href="#feature-auth">認証とフォーム</a>、<code>tests/test_csrf.py</code>が手掛かりです。</p>
+                </details>
+            </article>
+            <article class="overview-card" id="trouble-save">
+                <h3>入力した内容が保存されない</h3>
+                <details><summary>確認場所と理由を見る</summary>
+                    <p><strong>最初に：</strong>HTTP応答 / validation / transaction</p>
+                    <p>400なら検証で保存前に終了した可能性があります。500ならDB障害とrollbackを確認。送信した日付と商品IDも照合し、成功表示だけで判断せず保存対象を追います。</p>
+                    <p><a href="#feature-sales">売上入力</a>の<code>input_sales()</code>と<code>tests/test_sales.py</code>を読みます。</p>
+                </details>
+            </article>
+            <article class="overview-card" id="trouble-display">
+                <h3>DBにはあるのに画面に出ない</h3>
+                <details><summary>確認場所と理由を見る</summary>
+                    <p><strong>最初に：</strong>queryの条件 / template / JSON</p>
+                    <p>Dataset・年月・販売状態で対象外になっていないか確認します。Dashboardなら表示期間とAPIのJSONを比べ、データ取得と画面更新のどちらで抜けたか絞ります。</p>
+                    <p><a href="#feature-dashboard">売上分析</a>の<code>_get_sales_from_db()</code>と<code>templates/dashboard.html</code>が入口です。</p>
+                </details>
+            </article>
+            <article class="overview-card" id="trouble-date">
+                <h3>日付や月の切り替わりがおかしい</h3>
+                <details><summary>確認場所と理由を見る</summary>
+                    <p><strong>最初に：</strong>日本時間の今日 / 売上日 / 表示期間</p>
+                    <p><code>business_today()</code>は日本時間の今日を返します。入力画面は今月の商品、Dashboardの本日売上は今日、ランキングは選択期間を見るので、どの日付を使う処理か区別します。</p>
+                    <p><a href="#feature-sales">売上入力</a>と<code>tests/test_business_date.py</code>で境界を確認します。</p>
+                </details>
+            </article>
+            <article class="overview-card" id="trouble-dataset">
+                <h3>Guestのデータが混ざって見える</h3>
+                <details><summary>確認場所と理由を見る</summary>
+                    <p><strong>最初に：</strong>認証されたDataset / queryの絞り込み</p>
+                    <p><code>require_current_dataset()</code>の結果を使っているか、queryやjoinでDataset条件が抜けていないか確認します。URLやformのDataset IDを認可の根拠にすると越境の原因になります。</p>
+                    <p><a href="#feature-guest">Guest Demo</a>と<code>tests/test_dataset_authorization.py</code>で利用者の境界を確認します。</p>
+                </details>
+            </article>
+            <article class="overview-card" id="trouble-sort">
+                <h3>並び順がおかしい</h3>
+                <details><summary>確認場所と理由を見る</summary>
+                    <p><strong>最初に：</strong>保存された順番 / query / Python / JavaScript</p>
+                    <p>Dashboardは<code>sorted()</code>で数量順、タスクは<code>position</code>で順番を管理します。まずサーバーが返す順番を見て、正しければJavaScriptの表示・並び替え処理を確認します。</p>
+                    <p><a href="#feature-tasks">タスク</a>の<code>shop_tasks.py</code>と<code>static/shop_tasks.js</code>を見比べます。</p>
+                </details>
+            </article>
+            <article class="overview-card" id="trouble-pytest">
+                <h3>pytestだけ失敗する</h3>
+                <details><summary>確認場所と理由を見る</summary>
+                    <p><strong>最初に：</strong>fixture / テストDB / assertion / 日付</p>
+                    <p><code>conftest.py</code>のfixtureが準備した認証・商品年月と、期待値を照合します。通常テストはメモリ内SQLiteなので、本番のデータがある前提では動きません。日付依存やDBの違いも確認します。</p>
+                    <p><a href="#feature-sales">売上入力のテスト</a>を入口に、失敗したassertionが守る条件を読みます。</p>
+                </details>
+            </article>
+        </div>
     </section>
     <footer class="overview-footer"><a href="#overview-top">ページの先頭へ戻る</a></footer>
 </main>
