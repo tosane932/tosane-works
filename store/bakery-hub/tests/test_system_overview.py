@@ -140,3 +140,90 @@ def test_overview_does_not_accept_writes(client, csrf_token):
     token = csrf_token(client, "/login")
     response = client.post("/system-overview", data={"csrf_token": token})
     assert response.status_code == 405
+
+
+def test_learning_sections_have_headings_and_contents_links(client):
+    document = _document(client.get("/system-overview"))
+    contents = document.select_one('nav[aria-label="このページの目次"]')
+    for section_id, title in (
+        ("walkthrough", "1つの処理を最後まで追ってみる"),
+        ("quiz", "理解度チェック"),
+        ("troubleshooting", "困ったときはどこを見る？"),
+    ):
+        section = document.select_one(f"main section#{section_id}")
+        assert section is not None
+        assert title in section.select_one("h2").get_text()
+        assert contents.select_one(f'a[href="#{section_id}"]')
+
+
+def test_sales_walkthrough_explains_actual_save_and_dashboard_path(client):
+    document = _document(client.get("/system-overview"))
+    steps = document.select("#walkthrough ol > li")
+    assert len(steps) == 6
+    for step, title in zip(steps, (
+        "売上入力画面を開く", "入力して送信する", "Pythonで入力を確認する",
+        "DBへ保存する", "保存結果からDashboardへ進む", "Dashboardで表示する",
+    )):
+        assert title in step.select_one("h3").get_text()
+        assert step.select_one("details > summary").get_text() == "処理と基礎を読む"
+        assert "ここで学べる基礎" in step.get_text()
+        assert step.select_one(".overview-foundations code")
+    assert "GET /input" in steps[0].get_text()
+    assert "POST /input" in steps[1].get_text()
+    assert "request.form" in steps[1].get_text()
+    assert "Dataset" in steps[2].get_text()
+    assert "db.session.commit()" in steps[3].get_text()
+    assert "rollback()" in steps[3].get_text()
+    assert "PostgreSQL" in steps[3].get_text()
+    assert "リダイレクトはしません" in steps[4].get_text()
+    assert "success=True" in steps[4].get_text()
+    assert "GET /dashboard" in steps[4].get_text()
+    assert "db.func.sum()" in steps[5].get_text()
+    assert "sorted()" in steps[5].get_text()
+    assert "/api/dashboard-data" in steps[5].get_text()
+    assert steps[0].select_one('a[href$="/templates/input.html"]')
+    assert steps[3].select_one('a[href$="/app.py"]')
+    assert steps[5].select_one('a[href$="/templates/dashboard.html"]')
+
+
+def test_quiz_keeps_eight_explained_answers_in_closed_native_details(client):
+    document = _document(client.get("/system-overview"))
+    questions = document.select("#quiz article")
+    assert len(questions) == 8
+    for number, question in enumerate(questions, start=1):
+        assert question["id"] == f"quiz-q{number}"
+        assert question.select_one("h3").get_text().startswith(f"Q{number}.")
+        details = question.select_one("details")
+        assert details is not None
+        assert not details.has_attr("open")
+        assert details.select_one("summary").get_text() == "答えを見る"
+        answer = details.select_one(".overview-answer")
+        assert answer is not None
+        assert len(answer.get_text(strip=True)) >= 50
+    for question, expected in zip(questions, (
+        "request.form", "GET", "db.session.commit()", "return",
+        "Model", "Jinja", "rollback", "Flask-Login",
+    )):
+        assert expected in question.select_one(".overview-answer").get_text()
+    # Questions are ordinary headings; answer text belongs only to the details.
+    assert all(q.select_one("h3").find_parent("details") is None for q in questions)
+    assert document.select("script[src]") == []
+
+
+def test_troubleshooting_maps_real_symptoms_to_places_and_reasons(client):
+    document = _document(client.get("/system-overview"))
+    cards = document.select("#troubleshooting article")
+    assert len(cards) == 8
+    for card in cards:
+        assert card.select_one("h3")
+        assert card.select_one("details > summary").get_text() == "確認場所と理由を見る"
+        assert card.select_one("code")
+        assert card.select_one("details p")
+        assert card.select_one('a[href^="#feature-"]')
+    csrf_card = document.select_one("#trouble-post")
+    assert "400" in csrf_card.select_one("h3").get_text()
+    assert "CSRF" in csrf_card.get_text()
+    assert "入力検証" in csrf_card.get_text()
+    assert "business_today()" in document.select_one("#trouble-date").get_text()
+    assert "require_current_dataset()" in document.select_one("#trouble-dataset").get_text()
+    assert "fixture" in document.select_one("#trouble-pytest").get_text()

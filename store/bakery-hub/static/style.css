@@ -7420,6 +7420,38 @@ body.shop-task-reorder-lock .shop-task-card {
     text-align: right;
 }
 
+/* 学習用の段階・問題は読み順を保つ1列。既存カードとdetailsを共用する。 */
+.system-overview-page .overview-walkthrough,
+.system-overview-page .overview-learning-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+}
+
+.system-overview-page .overview-walkthrough {
+    padding-left: 28px;
+}
+
+.system-overview-page .overview-walkthrough li::marker {
+    color: #6e543c;
+    font-weight: 700;
+}
+
+.system-overview-page .overview-foundations,
+.system-overview-page .overview-answer {
+    padding: 14px;
+    background: #f4f0e8;
+    border-radius: 8px;
+}
+
+.system-overview-page .overview-foundations {
+    font-size: 14px;
+}
+
+.system-overview-page .overview-answer p:last-child {
+    margin-bottom: 0;
+}
+
 @media (max-width: 1100px) {
     .system-overview-page .overview-feature-grid {
         grid-template-columns: minmax(0, 1fr);
