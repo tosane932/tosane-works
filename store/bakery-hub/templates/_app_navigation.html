@@ -5,6 +5,8 @@
     {% set active_app_page = 'sales' %}
 {% elif current_endpoint == 'dashboard' %}
     {% set active_app_page = 'dashboard' %}
+{% elif current_endpoint == 'system_overview' %}
+    {% set active_app_page = 'system-overview' %}
 {% elif
     current_endpoint.startswith('material_orders.')
     or current_endpoint.startswith('shop_memos.')
@@ -194,9 +196,25 @@
             </span>
             <span>店舗メモツール</span>
         </a>
+        <div class="app-sidebar-nav-divider" aria-hidden="true"></div>
+
+        <a
+            href="{{ url_for('system_overview') }}"
+            data-page="system-overview"
+            class="app-sidebar-link app-sidebar-link-overview touch-control-no-select{% if active_app_page == 'system-overview' %} app-sidebar-link-current{% endif %}"
+            {% if active_app_page == 'system-overview' %}aria-current="page"{% endif %}>
+            <span class="app-sidebar-icon" aria-hidden="true">
+                <svg data-icon="book-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path>
+                </svg>
+            </span>
+            <span>システム概要</span>
+        </a>
     </nav>
 
     <div class="app-sidebar-session">
+        {% if current_user.is_authenticated %}
         <span class="app-sidebar-user-label">
             利用中：{% if current_user.is_guest %}ゲストデモ{% else %}管理者{% endif %}
         </span>
@@ -246,6 +264,21 @@
                 <span>ログイン画面に戻る</span>
             </span>
             <small class="app-sidebar-login-note">ゲスト利用は継続します</small>
+        </a>
+        {% endif %}
+        {% else %}
+        <span class="app-sidebar-user-label">利用状態：未ログイン</span>
+        <a href="{{ url_for('login') }}" class="app-sidebar-login-link touch-control-no-select">
+            <span class="app-sidebar-login-title">
+                <span class="app-sidebar-session-icon" aria-hidden="true">
+                    <svg data-icon="log-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                        <path d="m10 17 5-5-5-5"></path>
+                        <path d="M15 12H3"></path>
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                    </svg>
+                </span>
+                <span>ログイン・ゲストデモへ</span>
+            </span>
         </a>
         {% endif %}
     </div>

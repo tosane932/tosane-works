@@ -7240,3 +7240,203 @@ body.shop-task-reorder-lock .shop-task-card {
     .dashboard-page .dashboard-actions { grid-column: 1 / -1; grid-row: 7; flex-direction: row; margin: 0; }
     .dashboard-page .dashboard-action { padding: 9px 12px; }
 }
+
+/* システム概要：既存の配色・navigationを使う公開の学習ページ */
+.app-sidebar-link.app-sidebar-link-overview {
+    color: #625347;
+    background: #f4f0e8;
+    border-color: #e5dccb;
+}
+
+.app-sidebar-link-overview.app-sidebar-link-current {
+    border-color: #8b735e;
+}
+
+.system-overview-page .overview-shell {
+    max-width: 960px;
+    margin: 0 auto;
+    min-width: 0;
+    line-height: 1.85;
+    overflow-wrap: anywhere;
+}
+
+.system-overview-page .overview-header,
+.system-overview-page .overview-card {
+    padding: 24px;
+    background: #ffffff;
+    border: 1px solid #e5dccb;
+    border-radius: 16px;
+}
+
+.system-overview-page .overview-eyebrow,
+.system-overview-page .overview-route,
+.system-overview-page .overview-note {
+    color: #6e5b4b;
+    font-size: 14px;
+}
+
+.system-overview-page h1 {
+    margin: 8px 0 16px;
+}
+
+.system-overview-page h2 {
+    margin: 0 0 12px;
+    color: #6e543c;
+    font-size: 21px;
+    line-height: 1.5;
+}
+
+.system-overview-page h3 {
+    margin: 0 0 10px;
+    color: #6e543c;
+    font-size: 18px;
+    line-height: 1.5;
+}
+
+.system-overview-page p {
+    margin: 0 0 14px;
+}
+
+.system-overview-page .overview-section {
+    margin-top: 36px;
+    scroll-margin-top: 72px;
+}
+
+.system-overview-page .overview-contents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 20px 0;
+}
+
+.system-overview-page .overview-shell a {
+    color: #75501e;
+    text-underline-offset: 3px;
+}
+
+.system-overview-page .overview-contents a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 12px;
+    box-sizing: border-box;
+    background: #f7eed6;
+    border-radius: 8px;
+}
+
+.system-overview-page .overview-shell a:focus-visible,
+.system-overview-page summary:focus-visible {
+    outline: 3px solid #8b5a1a;
+    outline-offset: 3px;
+}
+
+.system-overview-page .overview-flow {
+    display: grid;
+    gap: 12px;
+    padding-left: 28px;
+}
+
+.system-overview-page .overview-flow li {
+    padding: 14px;
+    background: #ffffff;
+    border: 1px solid #e5dccb;
+    border-radius: 10px;
+}
+
+.system-overview-page .overview-flow strong,
+.system-overview-page .overview-flow span {
+    display: block;
+}
+
+.system-overview-page .overview-flow strong {
+    margin-bottom: 4px;
+}
+
+.system-overview-page .overview-feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 16px;
+}
+
+.system-overview-page .overview-card {
+    min-width: 0;
+    scroll-margin-top: 72px;
+}
+
+.system-overview-page summary {
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 8px 0;
+    color: #75501e;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.system-overview-page .overview-description,
+.system-overview-page .overview-basics {
+    margin: 0;
+}
+
+.system-overview-page dt {
+    margin-top: 16px;
+    color: #6e543c;
+    font-weight: 700;
+}
+
+.system-overview-page dd {
+    margin: 4px 0 0;
+}
+
+.system-overview-page .overview-basics dt:first-child {
+    margin-top: 0;
+}
+
+.system-overview-page code {
+    padding: 2px 5px;
+    background: #f4f0e8;
+    border-radius: 4px;
+    font-size: 0.92em;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.system-overview-page .overview-source-list {
+    margin: 4px 0;
+    padding-left: 20px;
+    font-size: 14px;
+}
+
+.system-overview-page .overview-test-list {
+    padding-left: 44px;
+}
+
+.system-overview-page .overview-test-list li + li {
+    margin-top: 12px;
+}
+
+.system-overview-page .overview-footer {
+    margin: 32px 0 8px;
+    text-align: right;
+}
+
+@media (max-width: 1100px) {
+    .system-overview-page .overview-feature-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .system-overview-page .overview-header,
+    .system-overview-page .overview-card {
+        padding: 18px;
+    }
+
+    .system-overview-page .overview-test-list {
+        padding-left: 36px;
+    }
+
+    .system-overview-page h2 {
+        font-size: 19px;
+    }
+}
