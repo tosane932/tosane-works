@@ -6956,6 +6956,7 @@ body.shop-task-reorder-lock .shop-task-card {
 
     .dashboard-chart-scroll {
         max-height: 70vh;
+        overscroll-behavior-y: auto;
     }
 }
 
