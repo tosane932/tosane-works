@@ -19,7 +19,7 @@
      </script>
 </head>
 {% macro image_selector(selected_key=none) %}
-{% set image_option = product_image_options.get(selected_key) if selected_key else none %}
+{% set image_option = product_image_assets.get(selected_key) if selected_key else none %}
 <div class="product-image-field">
     <input
         type="hidden"
@@ -73,7 +73,8 @@
             value="{{ key }}"
             data-product-name="{{ option.label }}"
             data-default-price="{{ option.default_price }}"
-            data-image-url="{{ url_for('static', filename='product_images/' ~ option.filename) }}">
+            data-image-key="{{ option.image_key if option.image_key is defined and option.image_key else (key if option.filename else '') }}"
+            data-image-url="{{ url_for('static', filename='product_images/' ~ option.filename) if option.filename else '' }}">
             {{ option.label }}
         </option>
         {% endfor %}
@@ -200,10 +201,14 @@
 
                     <input type="hidden" name="product_id" value="{{ p.id }}">
 
-                    {% set template_key = p.image_key
-    if p.image_key in product_image_options
-    and product_image_options[p.image_key].label == p.name
-    else none %}
+                    {% set template_match = namespace(key=none) %}
+                    {% for key, option in product_image_options.items() %}
+                        {% if option.label == p.name
+                            and p.image_key == (option.image_key if option.image_key is defined and option.image_key else (key if option.filename else none)) %}
+                            {% set template_match.key = key %}
+                        {% endif %}
+                    {% endfor %}
+                    {% set template_key = template_match.key %}
 
 {% if template_key %}
     {{ fixed_template_product(template_key) }}
@@ -221,7 +226,7 @@
                         max="9990" step="10"
                         required></div>
 
-                    {{ image_selector(template_key) }}
+                    {{ image_selector(p.image_key) }}
 
                     <button
                         type="button"
@@ -320,6 +325,38 @@
             <span>この内容で今月のメニューを登録する</span>
         </button>
     </form>
+    {% if current_user.is_admin %}
+    <section class="admin-catalog-section" aria-labelledby="admin-catalog-heading">
+        <h2 id="admin-catalog-heading">商品カタログへ追加</h2>
+        <p>テンプレートの申請を作成します。レビュー後のデプロイで選択できるようになります。今月の商品には自動登録されません。</p>
+        <form method="POST" action="{{ url_for('submit_product_catalog') }}" enctype="multipart/form-data" class="admin-catalog-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>登録済みカタログ商品を更新（新規なら選択不要）
+                <select name="catalog_edit_key" id="catalog-edit-key">
+                    <option value="">新しい商品を追加</option>
+                    {% for key, option in admin_catalog_options.items() %}
+                    <option value="{{ key }}" data-label="{{ option.label }}" data-price="{{ option.default_price }}" data-reading="{{ option.reading }}" data-guest="{{ 'on' if option.guest_allowed else '' }}" data-image-url="{{ url_for('static', filename='product_images/' ~ option.filename) if option.filename else '' }}">{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>商品名 <input type="text" name="catalog_label" maxlength="100" required></label>
+            <label>初期価格（0〜9,990円・10円単位） <input type="number" name="catalog_default_price" min="0" max="9990" step="10" required></label>
+            <label>読み（ひらがな） <input type="text" name="catalog_reading" maxlength="100" required></label>
+            <label class="admin-catalog-upload">
+                <svg class="ui-icon ui-icon-control" data-icon="image-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <path d="m21 15-5-5L5 21"></path><path d="M12 16V9m-3 3 3-3 3 3"></path>
+                </svg>
+                <span>画像を選択（任意・200KB以下）</span>
+                <input type="file" name="catalog_image" accept="image/jpeg,image/png,image/webp">
+            </label>
+            <img id="catalog-upload-preview" class="admin-catalog-preview" alt="選択した画像のプレビュー" hidden>
+            <label class="admin-catalog-guest"><input type="checkbox" name="catalog_guest_allowed" value="on">ゲストもテンプレートを選択可能にする</label>
+            <button type="submit" class="btn btn-add touch-control-no-select">商品カタログのPRを作成</button>
+        </form>
+    </section>
+    {% endif %}
 </div>
 
 <template id="custom-product-name-field-template">
@@ -451,7 +488,7 @@
         if (priceInput && selected.dataset.defaultPrice) {
             priceInput.value = selected.dataset.defaultPrice;
         }
-        imageKey.value = selected.value;
+        imageKey.value = selected.dataset.imageKey || '';
 
         if (selected.dataset.imageUrl) {
             preview.src = selected.dataset.imageUrl;
@@ -470,6 +507,35 @@
 
         applyProductTemplate(row, event.target);
     });
+
+    const catalogEdit = document.getElementById('catalog-edit-key');
+    if (catalogEdit) {
+        const upload = catalogEdit.form.elements.catalog_image;
+        const preview = document.getElementById('catalog-upload-preview');
+        let previewUrl = null;
+        catalogEdit.addEventListener('change', () => {
+            const selected = catalogEdit.selectedOptions[0];
+            const form = catalogEdit.form;
+            upload.value = '';
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = null;
+            preview.hidden = !selected.dataset.imageUrl;
+            if (selected.dataset.imageUrl) preview.src = selected.dataset.imageUrl;
+            else preview.removeAttribute('src');
+            form.elements.catalog_label.value = selected.dataset.label || '';
+            form.elements.catalog_default_price.value = selected.dataset.price || '';
+            form.elements.catalog_reading.value = selected.dataset.reading || '';
+            form.elements.catalog_guest_allowed.checked = selected.dataset.guest === 'on';
+        });
+        upload.addEventListener('change', () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = upload.files.length ? URL.createObjectURL(upload.files[0]) : null;
+            const url = previewUrl || catalogEdit.selectedOptions[0].dataset.imageUrl;
+            preview.hidden = !url;
+            if (url) preview.src = url;
+            else preview.removeAttribute('src');
+        });
+    }
 
     // テンプレート名を書き換えたら、新しい自由入力商品として画像連携も解除
     menuContainer.addEventListener('input', (event) => {

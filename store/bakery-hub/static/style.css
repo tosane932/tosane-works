@@ -9,6 +9,22 @@
     line-height: 1.7;
 }
 
+.product-catalog-page .product-catalog-section {
+    margin-top: 28px;
+}
+
+.product-catalog-page .product-catalog-section h2 {
+    margin: 0;
+    color: #735035;
+    font-size: clamp(18px, 2.5vw, 22px);
+}
+
+.product-catalog-page .product-catalog-past {
+    margin-top: 36px;
+    padding-top: 30px;
+    border-top: 2px solid #e8d8c4;
+}
+
 .product-catalog-page .product-catalog-list {
     display: grid;
     gap: 12px;
@@ -89,6 +105,42 @@
 .product-catalog-page .product-catalog-state-inactive {
     color: #6e543c;
     font-weight: normal;
+}
+
+.admin-catalog-section {
+    margin: 36px 0 20px;
+    padding: 24px;
+    border: 1px solid #e9d8c2;
+    border-radius: 14px;
+    background: #fffaf3;
+}
+
+.admin-catalog-section h2 { margin: 0 0 8px; }
+.admin-catalog-section p { color: #6e543c; line-height: 1.6; }
+.admin-catalog-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+.admin-catalog-form > label { display: grid; gap: 6px; min-width: 0; }
+.admin-catalog-form input:not([type="checkbox"]),
+.admin-catalog-form select { width: 100%; box-sizing: border-box; }
+.admin-catalog-form .admin-catalog-upload {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    cursor: pointer;
+}
+.admin-catalog-upload .ui-icon { width: 20px; height: 20px; }
+.admin-catalog-upload input { font-size: 13px; }
+.admin-catalog-form .admin-catalog-guest { display: flex; align-items: center; }
+.admin-catalog-preview { width: 88px; height: 88px; object-fit: cover; border-radius: 10px; }
+.admin-catalog-preview[hidden] { display: none; }
+
+@media (max-width: 600px) {
+    .admin-catalog-section { padding: 16px; }
+    .admin-catalog-form { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 600px) {

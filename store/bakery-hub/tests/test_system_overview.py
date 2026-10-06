@@ -118,6 +118,18 @@ def test_overview_has_readable_sections_and_valid_internal_links(client):
     assert document.select("script[src]") == []
 
 
+def test_overview_explains_catalog_vs_monthly_product_and_history(client):
+    document = _document(client.get('/system-overview'))
+    registration = document.select_one('#feature-products').get_text(' ', strip=True)
+    listing = document.select_one('#feature-product-catalog').get_text(' ', strip=True)
+    for phrase in ('18品', '初期価格', '自由入力', '0〜9,990円', 'request.files',
+                   'GitHub API', 'PR', 'PostgreSQL', 'DailySales', '画像なし'):
+        assert phrase in registration
+    for phrase in ('今月登録の商品', '過去に登録された商品', '最終登録年月',
+                   'business_today()', 'Dataset', 'DailySales'):
+        assert phrase in listing
+
+
 def test_overview_does_not_render_business_data_or_arbitrary_query_values(
     authenticated_client, admin_dataset,
 ):

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品カタログの申請 | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="product-page app-shell-page">
+{% include "_app_navigation.html" %}
+<main class="container">
+    <h1>商品カタログの申請を作成しました</h1>
+    <p>商品情報を確認してPRをmergeすると、次のデプロイ後にテンプレートから選べます。</p>
+    <p><a href="{{ pull_request_url }}" rel="noopener noreferrer">申請したPRを確認する</a></p>
+    <p><a href="{{ url_for('index') }}">商品登録へ戻る</a></p>
+</main>
+</body>
+</html>

@@ -17,15 +17,15 @@
         </svg>
         <span>商品一覧</span>
     </h1>
-    <p class="product-catalog-description">これまで登録した商品を、同名ごとに最新の価格・登録年月・状態で確認できます。</p>
+    <p class="product-catalog-description">今月の商品と、これまで扱った商品の最新価格・最終登録月を確認できます。</p>
 
-    {% if products %}
-    <ul class="product-catalog-list" aria-label="登録商品の一覧">
+    {% macro product_list(products, period_label) %}
+    <ul class="product-catalog-list" aria-label="{{ period_label }}">
         {% for product in products %}
         <li class="product-catalog-item">
-            {% set image = product_image_options.get(product.image_key) %}
+            {% set image = product_image_assets.get(product.image_key) %}
             {% if image %}
-            <img class="product-catalog-image" src="{{ url_for('static', filename='product_images/' ~ image.filename) }}" alt="{{ image.label }}" loading="lazy">
+            <img class="product-catalog-image" src="{{ url_for('static', filename='product_images/' ~ image.filename) }}" alt="{{ product.name }}" loading="lazy">
             {% else %}
             <span class="product-catalog-image-empty" aria-label="商品画像なし">画像なし</span>
             {% endif %}
@@ -37,21 +37,33 @@
                         <dd class="product-catalog-price">{{ "{:,}".format(product.price) }}円</dd>
                     </div>
                     <div>
-                        <dt>最新登録</dt>
-                        <dd class="product-catalog-period">{{ product.year }}年{{ product.month }}月</dd>
-                    </div>
-                    <div>
-                        <dt>状態</dt>
-                        <dd class="product-catalog-state{% if not product.is_active %} product-catalog-state-inactive{% endif %}">{{ '登録中' if product.is_active else '登録解除' }}</dd>
-                    </div>
+                         <dt>{{ period_label }}</dt>
+                         <dd class="product-catalog-period">{{ product.year }}年{{ product.month }}月</dd>
+                     </div>
                 </dl>
             </div>
         </li>
         {% endfor %}
     </ul>
-    {% else %}
-    <p class="product-catalog-empty">商品がまだありません。</p>
-    {% endif %}
+    {% endmacro %}
+
+    <section id="current-month-products" class="product-catalog-section" aria-labelledby="current-month-heading">
+        <h2 id="current-month-heading">今月登録の商品（{{ current_year }}年{{ current_month }}月）</h2>
+        {% if current_products %}
+            {{ product_list(current_products, '登録年月') }}
+        {% else %}
+            <p class="product-catalog-empty">今月登録の商品はありません。</p>
+        {% endif %}
+    </section>
+
+    <section id="past-products" class="product-catalog-section product-catalog-past" aria-labelledby="past-products-heading">
+        <h2 id="past-products-heading">過去に登録された商品</h2>
+        {% if past_products %}
+            {{ product_list(past_products, '最終登録') }}
+        {% else %}
+            <p class="product-catalog-empty">{% if current_products %}過去に登録された商品はありません。{% else %}商品がまだありません。{% endif %}</p>
+        {% endif %}
+    </section>
 </main>
 </body>
 </html>

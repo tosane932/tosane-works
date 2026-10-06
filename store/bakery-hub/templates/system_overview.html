@@ -139,28 +139,30 @@
             {% endfor %}
         </nav>
         <div class="overview-feature-grid">
-        {% call feature('products', '商品・メニュー登録', '年月ごとに商品名・価格と任意の画像を登録、編集します。フォームから外した既存商品は販売終了にし、過去の売上を残します。', 'GET /・POST /') %}
+        {% call feature('products', '商品・メニュー登録', '18品の標準テンプレートとAdminが申請した商品カタログから選び、月ごとの商品と売価を登録します。自由入力もできます。', 'GET /・POST /・POST /admin/product-catalog') %}
             <dt>Python / Flask</dt>
-            <dd><code>index()</code>が<code>request.args</code>から表示条件、<code>request.form.getlist()</code>から複数行を取得。<code>if</code>で年月・文字数・価格・商品IDを検証し、<code>for</code>で更新内容を組み立てます。</dd>
+            <dd><code>index()</code>が<code>request.args</code>から表示月、<code>request.form.getlist()</code>から複数行を取得。<code>if</code>で年月・文字数・売価（0〜9,990円、10円単位）・商品IDをサーバーでも検証し、<code>for</code>で更新内容を組み立てます。テンプレートの初期価格は入力開始値なので、登録前に売価を変更できます。テンプレート名は固定で、「新メニューを追加」なら自由入力できます。</dd>
             <dt>Database</dt>
-            <dd><code>Product</code>をDatasetと年月で絞り込みます。任意の<code>image_key</code>には画像ファイル名ではなくmanifestの識別子を保存します。旧商品はNULLのまま使えます。外した商品は<code>is_active=False</code>にする論理削除です。まとめてcommitし、DBエラー時はrollbackします。</dd>
+            <dd>カタログはテンプレートの元データで、標準18品は<code>product_images.py</code>と<code>static/product_images/</code>、Admin追加分は<code>product_catalog/admin_products.json</code>と<code>static/product_images/admin/</code>にあります。月次<code>Product</code>は別にPostgreSQLで管理し、カタログへの追加だけでは作成されません。<code>Product.image_key</code>は画像を識別し、差し替え後も旧画像の識別子をJSONに残します。<code>DailySales</code>はProductに紐付きます。月次登録ではDatasetと年月で絞り、外した商品は<code>is_active=False</code>とし、DBエラーならrollbackします。</dd>
             <dt>Frontend</dt>
-            <dd><code>index.html</code>のJinjaとHTML formで表示。画像候補は実在するローカルファイルをmanifestで管理し、Guestには許可された候補だけ、Adminには全候補を出します。サーバーでも同じ範囲を検証します。JavaScriptが行の追加・削除や年月切替を担当します。</dd>
+            <dd><code>index.html</code>のJinjaがテンプレートを並べ、JavaScriptが行の追加・削除、年月切替、商品名・代表画像・初期価格の設定を担当します。画像なしテンプレートは「画像なし」で登録できます。Adminだけの「商品カタログへ追加」フォームは<code>multipart/form-data</code>で商品名・初期価格・ひらがなの読み・任意画像を送ります。inline SVGの画像選択ボタンから選び、後から追加・差し替えも可能です。Guestには編集UIを出さず、サーバーも403で拒否します。</dd>
+            <dt>GitHubへの保存</dt>
+            <dd>Adminの申請は<code>request.files</code>でJPEG・PNG・WebPを受け、実画像・MIME・200KB上限を検証してWebPへ再符号化します。元ファイル名は保存名に使わずUUIDにします。GitHub APIでJSONと画像を1つのGit tree・commitにまとめ、専用branchからレビュー用PRを作ります。PR作成に失敗した場合はそのbranchを削除します。mainへは直接書かず、承認・mergeと次のDeploy後にテンプレートへ反映します。GitHub用secretの本番設定は別途必要です。</dd>
             <dt>pytest</dt>
-            <dd>名前・価格の境界、不正な年月、商品IDの重複、Dataset越境、画像keyの許可範囲と件数一致、未選択、販売終了後の履歴維持、保存失敗時の全変更rollbackを確認します。</dd>
+            <dd>月次登録の名前・価格・ID、Dataset越境、画像key、履歴維持とDB rollbackに加え、Admin申請の認可、画像なし、入力・画像検証、JSONと画像の同一commit、PR失敗時のbranch削除を確認します。GitHub APIはmockで検証します。</dd>
             <dt>確認するコード</dt>
-            <dd>{{ source_links(['app.py', 'models.py', 'templates/index.html', 'tests/test_products.py']) }}</dd>
+            <dd>{{ source_links(['app.py', 'models.py', 'product_images.py', 'product_catalog/admin_products.json', 'catalog_repository.py', 'templates/index.html', 'tests/test_admin_product_catalog.py', 'tests/test_catalog_repository.py', 'tests/test_products.py']) }}</dd>
         {% endcall %}
 
-        {% call feature('product-catalog', '商品一覧', '現在のDataset内でこれまで登録した商品を、同名ごとに最新Productの情報で確認する閲覧専用Catalogです。', 'GET /products') %}
+        {% call feature('product-catalog', '商品一覧', '今月の販売商品と、過去に扱った商品の最新履歴を振り返る閲覧専用Catalogです。', 'GET /products') %}
             <dt>Python / Flask</dt>
-            <dd><code>product_catalog()</code>が既存の認証と<code>require_current_dataset()</code>で利用者のDatasetを確認し、閲覧専用のHTMLを返します。</dd>
+            <dd><code>product_catalog()</code>が<code>require_current_dataset()</code>で利用者のDatasetを確認し、<code>business_today()</code>でAsia/Tokyo基準の年月を決めて閲覧専用HTMLを返します。</dd>
             <dt>Database</dt>
-            <dd>その領域の<code>Product</code>だけを取得。登録年・月・IDの降順で並べ、同じ商品名は最初の1件を代表として表示します。年月ごとのProductと売上は変更しません。</dd>
+            <dd>そのDatasetの<code>Product</code>だけを年・月・IDの降順で取得。今月の<code>is_active=True</code>を現在商品にし、過去月のProductから同名の最新履歴を選びます。今月inactiveでも前月の履歴を確認できます。<code>set</code>で同名の重複を避けます。GET時にProduct・DailySalesは変更しません。</dd>
             <dt>Frontend</dt>
-            <dd><code>products.html</code>のJinjaで代表Productの画像・商品名・最新価格・最新登録年月・状態を表示します。画像は<code>image_key</code>からmanifest経由で解決し、未設定・不明・素材不足なら「画像なし」を表示します。「登録中／登録解除」は代表Productの<code>is_active</code>に対応します。スマホでは情報を縦並びにします。</dd>
+            <dd><code>products.html</code>のJinjaで「今月登録の商品」と「過去に登録された商品」を分け、画像・商品名・最新価格・登録年月／最終登録年月を表示します。過去Productの<code>is_active=True</code>を現在の「登録中」とは表示しません。過去のProductと画像識別子は保持します。カタログへ追加しただけの商品は、月次Productを作るまでここには出ません。</dd>
             <dt>pytest</dt>
-            <dd>管理者・Guest A・Guest Bそれぞれの同名代表選択、最新画像、Dataset越境の防止、並び順、空状態、期限切れGuestの拒否、商品と売上が変わらないことを確認します。</dd>
+            <dd>固定した10月の日付で今月・過去の区分、inactive時の過去履歴、最新価格と年月、同名重複なし、Dataset分離、画像なし、GETで商品と売上が変わらないことを確認します。</dd>
             <dt>確認するコード</dt>
             <dd>{{ source_links(['app.py', 'templates/products.html', 'tests/test_product_catalog.py']) }}</dd>
         {% endcall %}
@@ -282,6 +284,7 @@
             <dt><code>class</code> / <code>import</code></dt><dd><code>models.py</code>の<code>Product(db.Model)</code>などがデータ構造を表すclassです。<code>app.py</code>は<code>from models import Product</code>などで別ファイルの定義を使います。</dd>
             <dt>GET / POST</dt><dd>GETは画面や集計の取得、POSTは入力送信や操作に使用。<a href="#feature-ai">AI取得</a>も利用回数を消費するためPOSTです。Session復元時のGuest活動日時更新など、GETに伴う共通処理もあります。</dd>
             <dt>request / response</dt><dd><code>request.args</code>はURLの条件、<code>request.form</code>はフォーム、<code>request.get_json()</code>はJSONを読む入口。応答にはHTML、JSON、リダイレクトやエラーのHTTP状態コードがあります。</dd>
+            <dt>JSON / GitとDB</dt><dd><a href="#feature-products">商品カタログ</a>のAdmin追加分はJSONと静的画像をGitHubのPRで管理し、merge・Deploy後にテンプレートへ反映します。月次ProductとそのDailySalesはPostgreSQLに保存します。Admin専用POSTでは<code>request.form</code>で商品情報、<code>request.files</code>で任意画像を受け、認証・認可・検証の後にGitHub APIへ申請します。</dd>
             <dt>Sessionは2つを区別</dt><dd>Flaskの<code>session</code>は<a href="#feature-auth">認証状態</a>を引き継ぐための仕組み。SQLAlchemyの<code>db.session</code>はDB読み書きの作業単位です。Flaskの標準Session Cookieは署名で改ざんを検知しますが、暗号化された秘密の保管庫ではありません。</dd>
             <dt>CRUD</dt><dd>Create（作成）・Read（読み取り）・Update（更新）・Delete（削除）。<a href="#feature-memos">店舗メモ</a>で一通り確認できます。商品は履歴を残す販売終了、メモはゴミ箱と完全削除を分けています。</dd>
             <dt>transaction / rollback</dt><dd>関連する変更をひとまとまりで確定・取消する仕組み。<a href="#feature-sales">売上入力</a>では複数行を保存してからcommitし、DB例外ならrollbackします。</dd>
