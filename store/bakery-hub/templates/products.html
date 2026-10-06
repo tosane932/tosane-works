@@ -17,7 +17,7 @@
         </svg>
         <span>商品一覧</span>
     </h1>
-    <p class="product-catalog-description">登録年月ごとの商品を、登録解除した商品も含めて確認できます。</p>
+    <p class="product-catalog-description">これまで登録した商品を、同名ごとに最新の価格・登録年月・状態で確認できます。</p>
 
     {% if products %}
     <ul class="product-catalog-list" aria-label="登録商品の一覧">
@@ -27,11 +27,11 @@
                 <h2 class="product-catalog-name">{{ product.name }}</h2>
                 <dl class="product-catalog-details">
                     <div>
-                        <dt>価格</dt>
+                        <dt>最新価格</dt>
                         <dd class="product-catalog-price">{{ "{:,}".format(product.price) }}円</dd>
                     </div>
                     <div>
-                        <dt>登録年月</dt>
+                        <dt>最新登録</dt>
                         <dd class="product-catalog-period">{{ product.year }}年{{ product.month }}月</dd>
                     </div>
                     <div>

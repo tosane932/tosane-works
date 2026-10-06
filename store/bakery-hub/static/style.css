@@ -2975,6 +2975,10 @@ body.app-shell-page {
     --app-menu-color: #9a641f;
 }
 
+.app-sidebar-link-catalog {
+    --app-menu-color: #8b4d3b;
+}
+
 .app-sidebar-link-sales {
     --app-menu-color: #477b59;
 }

@@ -152,15 +152,15 @@
             <dd>{{ source_links(['app.py', 'models.py', 'templates/index.html', 'tests/test_products.py']) }}</dd>
         {% endcall %}
 
-        {% call feature('product-catalog', '商品一覧', '現在のDataset内の商品を、過去の年月・登録解除済みも含めて確認する閲覧専用の一覧です。', 'GET /products') %}
+        {% call feature('product-catalog', '商品一覧', '現在のDataset内でこれまで登録した商品を、同名ごとに最新Productの情報で確認する閲覧専用Catalogです。', 'GET /products') %}
             <dt>Python / Flask</dt>
             <dd><code>product_catalog()</code>が既存の認証と<code>require_current_dataset()</code>で利用者のDatasetを確認し、閲覧専用のHTMLを返します。</dd>
             <dt>Database</dt>
-            <dd>その領域の<code>Product</code>だけを取得。登録年・月の降順、同年月はIDの昇順で安定して並べます。商品や売上は更新しません。</dd>
+            <dd>その領域の<code>Product</code>だけを取得。登録年・月・IDの降順で並べ、同じ商品名は最初の1件を代表として表示します。年月ごとのProductと売上は変更しません。</dd>
             <dt>Frontend</dt>
-            <dd><code>products.html</code>のJinjaで商品名・価格・登録年月・状態を表示します。「登録中／登録解除」は<code>is_active</code>に対応し、現在の月に販売中という意味ではありません。スマホでは縦並びにし、画像・編集・再利用は追加していません。</dd>
+            <dd><code>products.html</code>のJinjaで代表Productの商品名・最新価格・最新登録年月・状態を表示します。「登録中／登録解除」は代表Productの<code>is_active</code>に対応し、現在の月に販売中という意味ではありません。スマホでは縦並びにし、画像・編集・再利用は追加していません。</dd>
             <dt>pytest</dt>
-            <dd>管理者・Guest A・Guest Bそれぞれの表示内容、Dataset越境の防止、並び順、空状態、期限切れGuestの拒否、商品と売上が変わらないことを確認します。</dd>
+            <dd>管理者・Guest A・Guest Bそれぞれの同名代表選択、Dataset越境の防止、並び順、空状態、期限切れGuestの拒否、商品と売上が変わらないことを確認します。</dd>
             <dt>確認するコード</dt>
             <dd>{{ source_links(['app.py', 'templates/products.html', 'tests/test_product_catalog.py']) }}</dd>
         {% endcall %}

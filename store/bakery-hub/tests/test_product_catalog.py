@@ -133,6 +133,8 @@ def test_catalog_displays_name_price_period_and_both_states(
     document = _document(_get(flask_app, _client_for(flask_app, admin_dataset)))
     rows = document.select(".product-catalog-item")
     assert len(rows) == 2
+    assert rows[0].select_one(".product-catalog-price").find_previous("dt").get_text(strip=True) == "最新価格"
+    assert rows[0].select_one(".product-catalog-period").find_previous("dt").get_text(strip=True) == "最新登録"
     assert rows[0].select_one(".product-catalog-name").get_text(strip=True) == "登録中のパン"
     assert rows[0].select_one(".product-catalog-price").get_text(strip=True) == "1,234円"
     assert rows[0].select_one(".product-catalog-period").get_text(strip=True) == "2026年8月"
@@ -143,7 +145,7 @@ def test_catalog_displays_name_price_period_and_both_states(
     assert rows[1].select_one(".product-catalog-state").get_text(strip=True) == "登録解除"
 
 
-def test_catalog_orders_by_year_month_desc_then_id_asc(flask_app, admin_dataset):
+def test_catalog_orders_by_year_month_desc_then_id_desc(flask_app, admin_dataset):
     # 登録順・名前順・年だけ/月だけの順では通らない配置。
     records = [
         (2025, 12, "前年12月"),
@@ -159,8 +161,123 @@ def test_catalog_orders_by_year_month_desc_then_id_asc(flask_app, admin_dataset)
     db.session.commit()
     document = _document(_get(flask_app, _client_for(flask_app, admin_dataset)))
     assert [n.get_text(strip=True) for n in document.select(".product-catalog-name")] == [
-        "最新月", "同月Z先行ID", "同月A後続ID", "前年12月", "最古年",
+        "最新月", "同月A後続ID", "同月Z先行ID", "前年12月", "最古年",
     ]
+
+
+@pytest.mark.parametrize(
+    ("latest_active", "older_price", "expected_state"),
+    [(True, 250, "登録中"), (False, 400, "登録解除")],
+)
+def test_catalog_uses_latest_same_name_product_without_changing_history(
+    flask_app, admin_dataset, latest_active, older_price, expected_state,
+):
+    older = Product(
+        dataset=admin_dataset, year=2025, month=12,
+        name="クロワッサン", price=older_price, is_active=not latest_active,
+    )
+    middle = Product(
+        dataset=admin_dataset, year=2026, month=3,
+        name="クロワッサン", price=280, is_active=not latest_active,
+    )
+    latest = Product(
+        dataset=admin_dataset, year=2026, month=10,
+        name="クロワッサン", price=300, is_active=latest_active,
+    )
+    # 登録順と年月順を逆にして、IDだけで代表を選ぶ誤実装を検出する。
+    db.session.add_all([latest, older, middle])
+    db.session.flush()
+    assert latest.id < older.id < middle.id
+    db.session.add(DailySales(
+        product_id=older.id,
+        date=datetime.date(2025, 12, 10),
+        quantity=5,
+    ))
+    db.session.commit()
+    before = _snapshot()
+
+    document = _document(_get(flask_app, _client_for(flask_app, admin_dataset)))
+    rows = document.select(".product-catalog-item")
+    assert len(rows) == 1
+    assert rows[0].select_one(".product-catalog-name").get_text(strip=True) == "クロワッサン"
+    assert rows[0].select_one(".product-catalog-price").get_text(strip=True) == "300円"
+    assert rows[0].select_one(".product-catalog-period").get_text(strip=True) == "2026年10月"
+    assert rows[0].select_one(".product-catalog-state").get_text(strip=True) == expected_state
+    assert f"{older_price}円" not in rows[0].get_text()
+    assert "280円" not in rows[0].get_text()
+    assert _snapshot() == before
+
+
+def test_catalog_same_name_same_month_uses_highest_id(flask_app, admin_dataset):
+    earlier = Product(
+        dataset=admin_dataset, year=2026, month=10,
+        name="クロワッサン", price=290, is_active=False,
+    )
+    db.session.add(earlier)
+    db.session.flush()
+    later = Product(
+        dataset=admin_dataset, year=2026, month=10,
+        name="クロワッサン", price=300, is_active=True,
+    )
+    db.session.add(later)
+    db.session.commit()
+    assert earlier.id < later.id
+
+    document = _document(_get(flask_app, _client_for(flask_app, admin_dataset)))
+    rows = document.select(".product-catalog-item")
+    assert len(rows) == 1
+    assert rows[0].select_one(".product-catalog-name").get_text(strip=True) == "クロワッサン"
+    assert rows[0].select_one(".product-catalog-price").get_text(strip=True) == "300円"
+    assert rows[0].select_one(".product-catalog-period").get_text(strip=True) == "2026年10月"
+    assert rows[0].select_one(".product-catalog-state").get_text(strip=True) == "登録中"
+
+
+@pytest.mark.parametrize("principal", ["admin", "guest_a", "guest_b"])
+def test_catalog_same_name_representative_stays_within_current_dataset(
+    flask_app, admin_dataset, principal,
+):
+    datasets = {
+        "admin": admin_dataset,
+        "guest_a": _guest_dataset(),
+        "guest_b": _guest_dataset(),
+    }
+    db.session.add_all([datasets["guest_a"], datasets["guest_b"]])
+    for key, dataset in datasets.items():
+        is_current = key == principal
+        db.session.add(Product(
+            dataset=dataset,
+            year=2025 if is_current else 2026,
+            month=12 if is_current else 10,
+            name="クロワッサン",
+            price=250 if is_current else 900,
+            is_active=is_current,
+        ))
+    db.session.commit()
+    before = _snapshot()
+
+    document = _document(_get(flask_app, _client_for(flask_app, datasets[principal])))
+    rows = document.select(".product-catalog-item")
+    assert len(rows) == 1
+    assert rows[0].select_one(".product-catalog-name").get_text(strip=True) == "クロワッサン"
+    assert rows[0].select_one(".product-catalog-price").get_text(strip=True) == "250円"
+    assert rows[0].select_one(".product-catalog-period").get_text(strip=True) == "2025年12月"
+    assert rows[0].select_one(".product-catalog-state").get_text(strip=True) == "登録中"
+    assert "900円" not in rows[0].get_text()
+    assert _snapshot() == before
+
+
+def test_catalog_groups_only_exactly_matching_names(flask_app, admin_dataset):
+    for name in ("Croissant", "croissant", "食パン"):
+        db.session.add(Product(
+            dataset=admin_dataset, year=2026, month=10,
+            name=name, price=300,
+        ))
+    db.session.commit()
+
+    document = _document(_get(flask_app, _client_for(flask_app, admin_dataset)))
+    names = [name.get_text(strip=True) for name in document.select(".product-catalog-name")]
+    assert len(names) == 3
+    assert set(names) == {"食パン", "croissant", "Croissant"}
 
 
 @pytest.mark.parametrize("kind", ["admin", "guest"])
