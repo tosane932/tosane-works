@@ -173,7 +173,7 @@ def test_guest_advice_keeps_top_thirty_complete_names_and_bounded_prompt(
     _add_sales(guest, names)
     # 最大数量の商品を最後に作り、単に先頭30件を取る実装を検出する。
     last_sale = DailySales.query.order_by(DailySales.id.desc()).first()
-    last_sale.quantity = 10_000
+    last_sale.quantity = 1_000
     db.session.commit()
     client = _guest_client(flask_app, guest)
     generate = _mock_gemini(monkeypatch)
@@ -181,7 +181,7 @@ def test_guest_advice_keeps_top_thirty_complete_names_and_bounded_prompt(
     response = post_ai(client, "/api/ai-advice")
 
     assert response.status_code == 200
-    expected = [(names[-1], 10_000)] + [(name, 1) for name in names[:-1]][:29]
+    expected = [(names[-1], 1_000)] + [(name, 1) for name in names[:-1]][:29]
     prompt = generate.call_args.kwargs["contents"]
     assert prompt == build_sales_prompt(
         ", ".join(f"{name}: {qty}個" for name, qty in expected)
@@ -215,12 +215,12 @@ def test_guest_summary_maximum_valid_quantity_is_not_truncated(flask_app, monkey
     guest = _create_guest_dataset()
     generate = _mock_gemini(monkeypatch)
     monkeypatch.setattr(app_module, "_reserve_guest_ai_usage", Mock(return_value=True))
-    ranked = [("あ" * 100, 9_300_000)]
+    ranked = [("あ" * 100, 930_000)]
 
     app_module._generate_ai_advice(ranked, guest)
 
     assert generate.call_args.kwargs["contents"] == build_sales_prompt(
-        f'{"あ" * 100}: 9300000個'
+        f'{"あ" * 100}: 930000個'
     )
 
 

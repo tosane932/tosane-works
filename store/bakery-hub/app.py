@@ -160,11 +160,12 @@ GUEST_AI_USAGE_LIMIT = 3
 PRODUCTS_PER_POST_LIMIT = 30
 GUEST_PRODUCT_LIFETIME_LIMIT = 30
 PRODUCT_NAME_MAX_LENGTH = 100
-PRODUCT_PRICE_MAX = 1_000_000
+PRODUCT_PRICE_MAX = 9_990
+PRODUCT_PRICE_STEP = 10
 PRODUCT_YEAR_MIN = 2000
 PRODUCT_YEAR_MAX = 2100
 SALES_PER_POST_LIMIT = 30
-SALES_QUANTITY_MAX = 10_000
+SALES_QUANTITY_MAX = 1_000
 # 各Productは1年月に所属し、売上は1日1行・最大10,000個。
 # 1商品につき最大31日、同名を全30商品で合算した数量を上限とする。
 GUEST_AI_AGGREGATE_QUANTITY_MAX = (
@@ -1299,6 +1300,7 @@ def index():
         product_prices = request.form.getlist("prod_price")
         product_ids = request.form.getlist("product_id")
         image_keys = request.form.getlist("prod_image_key")
+        template_keys = request.form.getlist("prod_template_key")
 
         if not (
             len(product_ids) == len(product_names) == len(product_prices)
@@ -1313,6 +1315,15 @@ def index():
         if not image_keys:
             image_keys = [""] * len(product_names)
 
+        if template_keys and len(template_keys) != len(product_names):
+            logger.warning(
+                "Rejected product update with mismatched template field lengths."
+            )
+            return "商品テンプレートの件数が一致しません。", 400
+
+        if not template_keys:
+            template_keys = [""] * len(product_names)
+
         if current_user.is_guest and len(product_ids) > PRODUCTS_PER_POST_LIMIT:
             logger.warning("Rejected product update with too many products.")
             return "商品は1回につき30件まで登録できます。", 400
@@ -1320,11 +1331,12 @@ def index():
         products_data = []
         seen_product_ids = set()
 
-        for product_id, name, price, image_key in zip(
+        for product_id, name, price, image_key, template_key in zip(
             product_ids,
             product_names,
             product_prices,
             image_keys,
+            template_keys,
         ):
             existing_product = None
             normalized_name = name.strip()
@@ -1367,13 +1379,49 @@ def index():
                 price,
                 PRODUCT_PRICE_MAX,
             )
-            if price_value is None:
+            if price_value is None or price_value % PRODUCT_PRICE_STEP != 0:
                 logger.warning("Rejected product update with invalid price.")
-                return "価格は0から1000000の整数で入力してください。", 400
+                return "売価は0〜9,990円の10円単位で入力してください。", 400
 
             if image_key and image_key not in product_image_options:
                 logger.warning("Rejected product update with unapproved image key.")
                 return "商品画像が正しくありません。", 400
+
+            template_option = None
+            if template_key:
+                template_option = product_image_options.get(template_key)
+                if template_option is None:
+                    logger.warning(
+                        "Rejected product update with unapproved template key."
+                    )
+                    return "商品テンプレートが正しくありません。", 400
+
+                if normalized_name != template_option["label"]:
+                    logger.warning(
+                        "Rejected product update with mismatched template name."
+                    )
+                    return "商品名とテンプレートが一致しません。", 400
+
+            if current_user.is_guest:
+                if template_option is not None:
+                    if image_key != template_key:
+                        logger.warning(
+                            "Rejected Guest product update with mismatched "
+                            "template image."
+                        )
+                        return "商品名と商品画像の組み合わせが正しくありません。", 400
+
+                elif image_key:
+                    image_option = product_image_options.get(image_key)
+                    if (
+                        image_option is None
+                        or normalized_name != image_option["label"]
+                    ):
+                        logger.warning(
+                            "Rejected Guest product update combining a free "
+                            "product name with a template image."
+                        )
+                        return "自由入力の商品にはテンプレート画像を指定できません。", 400
 
             products_data.append({
                 "id": parsed_product_id,
@@ -1785,7 +1833,7 @@ def input_sales():
             )
             if quantity_value is None:
                 logger.warning("Rejected sales input with invalid quantity.")
-                return "販売数量は0から10000の整数で入力してください。", 400
+                return "販売数量は0〜1,000個の整数で入力してください。", 400
 
             validated_sales.append((product_id_int, quantity_value))
 

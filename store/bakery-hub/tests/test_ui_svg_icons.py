@@ -47,7 +47,7 @@ def test_product_registration_fixed_ui_uses_semantic_svg_icons(
     _assert_labeled_icon(
         document.select_one("button.btn-add"),
         "plus",
-        "新メニューを追加する",
+        "新メニューを追加",
     )
     _assert_labeled_icon(
         document.select_one("button.btn-menu-register"),

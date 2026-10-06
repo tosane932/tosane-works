@@ -109,7 +109,12 @@
             {% endfor %}
         </div>
         {% else %}
-        <p class="material-order-empty">未完了の材料はありません。</p>
+        <p class="material-order-empty">
+            未完了の材料はありません。
+            {% if not completed_items %}
+            <span class="shop-tools-empty-example">例：無塩バター 3箱</span>
+            {% endif %}
+        </p>
         {% endif %}
     </section>
 

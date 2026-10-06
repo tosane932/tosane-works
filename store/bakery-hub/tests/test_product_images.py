@@ -71,7 +71,7 @@ def test_admin_can_choose_guest_and_admin_images(
     product = Product.query.filter_by(dataset_id=admin_dataset.id).one()
     assert product.image_key == "pastry_admin_01"
     form = BeautifulSoup(authenticated_client.get("/").get_data(as_text=True), "html.parser")
-    assert {option["value"] for option in form.select('[name="prod_image_key"] option')} >= {
+    assert {option["value"] for option in form.select('[name="prod_template_key"] option')} >= {
         "", "bread_01", "pastry_admin_01",
     }
 
@@ -79,7 +79,7 @@ def test_admin_can_choose_guest_and_admin_images(
 def test_guest_can_choose_only_guest_image(flask_app, csrf_post, image_options):
     client, dataset = _guest_client(flask_app)
     form = BeautifulSoup(client.get("/").get_data(as_text=True), "html.parser")
-    choices = {option["value"] for option in form.select('[name="prod_image_key"] option')}
+    choices = {option["value"] for option in form.select('[name="prod_template_key"] option')}
     assert "bread_01" in choices
     assert "pastry_admin_01" not in choices
     response = csrf_post(client, "/", _form(key="bread_01"))
@@ -189,7 +189,7 @@ def test_manifest_entry_without_file_is_neither_shown_nor_accepted(
     }
     form = BeautifulSoup(authenticated_client.get("/").get_data(as_text=True), "html.parser")
     assert "missing_01" not in {
-        option["value"] for option in form.select('[name="prod_image_key"] option')
+        option["value"] for option in form.select('[name="prod_template_key"] option')
     }
     response = csrf_post(authenticated_client, "/", _form(key="missing_01"))
     assert response.status_code == 400
@@ -236,3 +236,92 @@ def test_catalog_unknown_or_missing_image_uses_placeholder(
     assert document.select_one(".product-catalog-image") is None
     assert document.select_one(".product-catalog-image-empty").get_text(strip=True) == "画像なし"
     assert "secret" not in response.get_data(as_text=True)
+
+
+def test_guest_template_selection_accepts_matching_name_and_image(
+    flask_app, csrf_post, image_options,
+):
+    client, dataset = _guest_client(flask_app)
+    data = _form(name="食パン", key="bread_01")
+    data["prod_template_key"] = "bread_01"
+
+    response = csrf_post(client, "/", data)
+
+    assert response.status_code == 200
+    product = Product.query.filter_by(dataset_id=dataset.id).one()
+    assert (product.name, product.image_key) == ("食パン", "bread_01")
+
+
+@pytest.mark.parametrize(
+    ("name", "image_key", "template_key"),
+    [
+        ("自由な商品名", "bread_01", "bread_01"),
+        ("食パン", "croissant_01", "bread_01"),
+        ("自由な商品名", "bread_01", ""),
+    ],
+)
+def test_guest_rejects_invalid_name_image_template_combinations_without_writes(
+    flask_app,
+    csrf_post,
+    image_options,
+    name,
+    image_key,
+    template_key,
+):
+    client, dataset = _guest_client(flask_app)
+    before = _snapshot()
+
+    data = _form(name=name, key=image_key)
+    data["prod_template_key"] = template_key
+
+    response = csrf_post(client, "/", data)
+
+    assert response.status_code == 400
+    assert _snapshot() == before
+    assert Product.query.filter_by(dataset_id=dataset.id).count() == 0
+
+
+def test_guest_free_name_without_image_is_allowed(
+    flask_app, csrf_post, image_options,
+):
+    client, dataset = _guest_client(flask_app)
+    data = _form(name="自由な新商品", key="")
+    data["prod_template_key"] = ""
+
+    response = csrf_post(client, "/", data)
+
+    assert response.status_code == 200
+    product = Product.query.filter_by(dataset_id=dataset.id).one()
+    assert product.name == "自由な新商品"
+    assert product.image_key is None
+
+
+def test_admin_template_name_can_use_another_approved_image(
+    admin_dataset,
+    authenticated_client,
+    csrf_post,
+    image_options,
+):
+    data = _form(name="食パン", key="croissant_01")
+    data["prod_template_key"] = "bread_01"
+
+    response = csrf_post(authenticated_client, "/", data)
+
+    assert response.status_code == 200
+    product = Product.query.filter_by(dataset_id=admin_dataset.id).one()
+    assert product.name == "食パン"
+    assert product.image_key == "croissant_01"
+
+
+
+def test_product_form_uses_single_template_selector_for_images(
+    authenticated_client,
+    image_options,
+):
+    response = authenticated_client.get("/")
+    document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+
+    assert response.status_code == 200
+    assert document.select('select[name="prod_template_key"]')
+    assert not document.select('select[name="prod_image_key"]')
+    assert document.select('input[type="hidden"][name="prod_image_key"]')
