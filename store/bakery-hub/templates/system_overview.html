@@ -134,7 +134,7 @@
         <h2>2. メニュー・機能別の仕組み</h2>
         <p>役割を確認してから詳細を開くと、Python・DB・画面・テストのつながりを追えます。ファイル名のリンクはGitHubのmainを開きます。</p>
         <nav class="overview-contents" aria-label="機能別の目次">
-            {% for id, label in [('products', '商品登録'), ('sales', '売上入力'), ('dashboard', '売上分析'), ('materials', '材料発注'), ('memos', '店舗メモ'), ('tasks', 'タスク'), ('guest', 'Guest Demo'), ('auth', 'ログイン'), ('ai', 'AI')] %}
+            {% for id, label in [('products', '商品登録'), ('product-catalog', '商品一覧'), ('sales', '売上入力'), ('dashboard', '売上分析'), ('materials', '材料発注'), ('memos', '店舗メモ'), ('tasks', 'タスク'), ('guest', 'Guest Demo'), ('auth', 'ログイン'), ('ai', 'AI')] %}
             <a href="#feature-{{ id }}">{{ label }}</a>
             {% endfor %}
         </nav>
@@ -150,6 +150,19 @@
             <dd>名前・価格の境界、不正な年月、商品IDの重複、Dataset越境、販売終了後の履歴維持、保存失敗時の全変更rollbackを確認します。同名の商品を一律禁止するテストではありません。</dd>
             <dt>確認するコード</dt>
             <dd>{{ source_links(['app.py', 'models.py', 'templates/index.html', 'tests/test_products.py']) }}</dd>
+        {% endcall %}
+
+        {% call feature('product-catalog', '商品一覧', '現在のDataset内でこれまで登録した商品を、同名ごとに最新Productの情報で確認する閲覧専用Catalogです。', 'GET /products') %}
+            <dt>Python / Flask</dt>
+            <dd><code>product_catalog()</code>が既存の認証と<code>require_current_dataset()</code>で利用者のDatasetを確認し、閲覧専用のHTMLを返します。</dd>
+            <dt>Database</dt>
+            <dd>その領域の<code>Product</code>だけを取得。登録年・月・IDの降順で並べ、同じ商品名は最初の1件を代表として表示します。年月ごとのProductと売上は変更しません。</dd>
+            <dt>Frontend</dt>
+            <dd><code>products.html</code>のJinjaで代表Productの商品名・最新価格・最新登録年月・状態を表示します。「登録中／登録解除」は代表Productの<code>is_active</code>に対応し、現在の月に販売中という意味ではありません。スマホでは縦並びにし、画像・編集・再利用は追加していません。</dd>
+            <dt>pytest</dt>
+            <dd>管理者・Guest A・Guest Bそれぞれの同名代表選択、Dataset越境の防止、並び順、空状態、期限切れGuestの拒否、商品と売上が変わらないことを確認します。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['app.py', 'templates/products.html', 'tests/test_product_catalog.py']) }}</dd>
         {% endcall %}
 
         {% call feature('sales', '日次売上入力', '商品ごとの販売数量を日付別に保存し、同じ商品・日付の入力は数量を更新します。', 'GET /input・POST /input') %}

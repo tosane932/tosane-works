@@ -78,7 +78,7 @@ def test_overview_remains_public_for_every_session_state(
 
 
 @pytest.mark.parametrize("path", [
-    "/", "/input", "/dashboard", "/material-orders",
+    "/", "/products", "/input", "/dashboard", "/material-orders",
     "/shop-tools/memo", "/shop-tools/memo/trash", "/shop-tools/tasks",
 ])
 def test_existing_pages_link_to_overview_without_losing_navigation(
@@ -90,7 +90,7 @@ def test_existing_pages_link_to_overview_without_losing_navigation(
     assert link.get_text(strip=True) == "システム概要"
     assert link.get("aria-current") is None
     assert [item["href"] for item in navigation.select("a")] == [
-        "/", "/input", "/dashboard", "/material-orders", "/system-overview",
+        "/", "/products", "/input", "/dashboard", "/material-orders", "/system-overview",
     ]
     assert len(navigation.select('a[aria-current="page"]')) == 1
 
@@ -101,7 +101,7 @@ def test_overview_has_readable_sections_and_valid_internal_links(client):
     for section_id in ("flow", "features", "basics", "technologies", "tests"):
         assert main.select_one(f"section#{section_id} > h2")
     for feature_id in (
-        "products", "sales", "dashboard", "materials", "memos", "tasks",
+        "products", "product-catalog", "sales", "dashboard", "materials", "memos", "tasks",
         "guest", "auth", "ai",
     ):
         card = main.select_one(f"article#feature-{feature_id}")

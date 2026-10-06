@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品一覧 | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="product-catalog-page app-shell-page">
+{% include "_app_navigation.html" %}
+
+<main class="container">
+    <h1>
+        <svg class="ui-icon ui-icon-page-heading" data-icon="list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+            <path d="M8 6h13M8 12h13M8 18h13"></path>
+            <path d="M3 6h.01M3 12h.01M3 18h.01"></path>
+        </svg>
+        <span>商品一覧</span>
+    </h1>
+    <p class="product-catalog-description">これまで登録した商品を、同名ごとに最新の価格・登録年月・状態で確認できます。</p>
+
+    {% if products %}
+    <ul class="product-catalog-list" aria-label="登録商品の一覧">
+        {% for product in products %}
+        <li class="product-catalog-item">
+            <div class="product-catalog-content">
+                <h2 class="product-catalog-name">{{ product.name }}</h2>
+                <dl class="product-catalog-details">
+                    <div>
+                        <dt>最新価格</dt>
+                        <dd class="product-catalog-price">{{ "{:,}".format(product.price) }}円</dd>
+                    </div>
+                    <div>
+                        <dt>最新登録</dt>
+                        <dd class="product-catalog-period">{{ product.year }}年{{ product.month }}月</dd>
+                    </div>
+                    <div>
+                        <dt>状態</dt>
+                        <dd class="product-catalog-state{% if not product.is_active %} product-catalog-state-inactive{% endif %}">{{ '登録中' if product.is_active else '登録解除' }}</dd>
+                    </div>
+                </dl>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="product-catalog-empty">商品がまだありません。</p>
+    {% endif %}
+</main>
+</body>
+</html>

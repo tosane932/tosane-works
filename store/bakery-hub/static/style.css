@@ -1,3 +1,83 @@
+/* 商品一覧：他画面のレイアウトに影響しない閲覧用スタイル */
+.product-catalog-page .container {
+    max-width: 980px;
+}
+
+.product-catalog-page .product-catalog-description,
+.product-catalog-page .product-catalog-empty {
+    color: #6e543c;
+    line-height: 1.7;
+}
+
+.product-catalog-page .product-catalog-list {
+    display: grid;
+    gap: 12px;
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.product-catalog-page .product-catalog-item {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid #f1ebd9;
+    border-radius: 12px;
+}
+
+.product-catalog-page .product-catalog-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+}
+
+.product-catalog-page .product-catalog-name {
+    min-width: 0;
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.product-catalog-page .product-catalog-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    margin: 0;
+    font-size: 14px;
+}
+
+.product-catalog-page .product-catalog-details dt {
+    margin-bottom: 4px;
+    color: #6e543c;
+    font-size: 12px;
+}
+
+.product-catalog-page .product-catalog-details dd {
+    margin: 0;
+}
+
+.product-catalog-page .product-catalog-price,
+.product-catalog-page .product-catalog-state {
+    font-weight: bold;
+}
+
+.product-catalog-page .product-catalog-state-inactive {
+    color: #6e543c;
+    font-weight: normal;
+}
+
+@media (max-width: 600px) {
+    .product-catalog-page .container {
+        padding: 20px 16px;
+    }
+
+    .product-catalog-page .product-catalog-content {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+    }
+}
+
 /* ========================================
    🎨 ページ全体 共通スタイル    index.html
 ======================================== */
@@ -2893,6 +2973,10 @@ body.app-shell-page {
 
 .app-sidebar-link-products {
     --app-menu-color: #9a641f;
+}
+
+.app-sidebar-link-catalog {
+    --app-menu-color: #8b4d3b;
 }
 
 .app-sidebar-link-sales {

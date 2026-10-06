@@ -11,6 +11,7 @@ from models import Dataset, db
 
 APP_ROUTES = {
     "products": "/",
+    "product-catalog": "/products",
     "sales": "/input",
     "dashboard": "/dashboard",
     "shop-tools": "/material-orders",
@@ -18,6 +19,7 @@ APP_ROUTES = {
 
 APP_SIDEBAR_ITEMS = {
     "products": ("商品・メニュー登録", "package-plus"),
+    "product-catalog": ("商品一覧", "list"),
     "sales": ("日次売上入力", "clipboard-pen-line"),
     "dashboard": ("売上データ分析", "chart-column"),
     "shop-tools": ("店舗メモツール", "wrench"),
@@ -242,6 +244,7 @@ def test_sidebar_category_colors_use_contrasting_white_foreground():
     ).read_text()
     category_colors = {
         ".app-sidebar-link-products": "#9a641f",
+        ".app-sidebar-link-catalog": "#8b4d3b",
         ".app-sidebar-link-sales": "#477b59",
         ".app-sidebar-link-dashboard": "#bc4848",
         ".app-sidebar-link-shop-tools": "#48739c",
@@ -262,6 +265,22 @@ def test_sidebar_category_colors_use_contrasting_white_foreground():
         category_rule = _css_rule_body(style_source, selector)
         assert f"--app-menu-color: {color};" in category_rule
         assert _contrast_with_white(color) >= 4.5
+
+
+def test_catalog_navigation_uses_its_own_color_class(
+    authenticated_client, admin_dataset,
+):
+    document = BeautifulSoup(
+        authenticated_client.get("/products").get_data(as_text=True),
+        "html.parser",
+    )
+    registration = document.select_one('#app-sidebar a[data-page="products"]')
+    catalog = document.select_one('#app-sidebar a[data-page="product-catalog"]')
+    assert "app-sidebar-link-products" in registration.get("class", [])
+    assert "app-sidebar-link-catalog" in catalog.get("class", [])
+    assert "app-sidebar-link-products" not in catalog.get("class", [])
+    assert catalog.get("aria-current") == "page"
+    assert registration.get("aria-current") is None
 
 
 def test_mobile_sidebar_links_restore_press_shift_with_overflow_room():

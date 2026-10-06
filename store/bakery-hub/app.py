@@ -1518,6 +1518,29 @@ def index():
         current_year=today.year,
     )
 
+
+@app.route("/products", methods=["GET"])
+@admin_or_guest_required
+def product_catalog():
+    """現在のDataset内で同名商品の最新Productを代表表示する。"""
+    current_dataset = require_current_dataset()
+    products = (
+        Product.query
+        .filter_by(dataset_id=current_dataset.id)
+        .order_by(Product.year.desc(), Product.month.desc(), Product.id.desc())
+        .all()
+    )
+    catalog_products = []
+    seen_names = set()
+    for product in products:
+        if product.name in seen_names:
+            continue
+        seen_names.add(product.name)
+        catalog_products.append(product)
+
+    return render_template("products.html", products=catalog_products)
+
+
 def _get_optional_integer_query_parameter(name):
     value = request.args.get(name)
     if not value:
