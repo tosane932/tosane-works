@@ -5573,6 +5573,7 @@ body.shop-task-composer-open .shop-tools-fab-group {
 /* === Task direct text editing === */
 
 .shop-task-mobile-title {
+    display: none;
     margin: 8px 4px 18px;
     color: #405b49;
     font-size: 24px;
@@ -7655,5 +7656,12 @@ body.shop-task-reorder-lock .shop-task-card {
 
     .system-overview-page h2 {
         font-size: 19px;
+    }
+}
+
+/* PC: 縦スクロールバー有無によるページ中央位置のズレを防ぐ */
+@media (min-width: 901px) {
+    html {
+        scrollbar-gutter: stable;
     }
 }
