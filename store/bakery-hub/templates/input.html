@@ -131,7 +131,7 @@
                             name="quantity"
                             class="qty-input"
                             min="0"
-                            max="10000"
+                            max="1000"
                             value="{{ today_sales.get(product.id, 0) }}"
                             required
                         >
@@ -235,6 +235,48 @@
                 greetingButtonLabel.textContent = 'もう一度ひとことを聞く';
             });
     }
+
+    /* quantity-japanese-validation */
+    function updateQuantityValidity(input) {
+        if (!input) return;
+
+        if (input.value === '') {
+            input.setCustomValidity('販売数量を入力してください。');
+            return;
+        }
+
+        const value = input.valueAsNumber;
+
+        if (
+            !Number.isFinite(value) ||
+            !Number.isInteger(value) ||
+            value < 0 ||
+            value > 1000
+        ) {
+            input.setCustomValidity(
+                '販売数量は0〜1,000個の整数で入力してください。'
+            );
+        } else {
+            input.setCustomValidity('');
+        }
+    }
+
+    document.querySelectorAll('.qty-input').forEach((input) => {
+        updateQuantityValidity(input);
+
+        input.addEventListener('input', () => {
+            updateQuantityValidity(input);
+        });
+
+        input.addEventListener('change', () => {
+            updateQuantityValidity(input);
+
+            if (!input.checkValidity()) {
+                input.reportValidity();
+            }
+        });
+    });
+
 </script>
 </body>
 </html>

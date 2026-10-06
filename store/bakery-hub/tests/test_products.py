@@ -361,8 +361,11 @@ def test_product_form_exposes_name_and_price_limits(
 ):
     response = authenticated_client.get("/?year=2026&month=6")
     document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
-    product_name_inputs = document.select('input[name="prod_name"]')
+    product_name_inputs = document.select('input[type="text"][name="prod_name"]')
     product_price_inputs = document.select('input[name="prod_price"]')
+    product_name_template_input = document.select_one(
+        '#custom-product-name-field-template input[name="prod_name"]'
+    )
     script_text = "\n".join(
         script.get_text()
         for script in document.find_all("script")
@@ -376,11 +379,12 @@ def test_product_form_exposes_name_and_price_limits(
     )
     assert product_price_inputs
     assert all(
-        product_input.get("max") == "1000000"
+        product_input.get("max") == "9990"
         for product_input in product_price_inputs
     )
-    assert 'maxlength="100"' in script_text
-    assert 'max="1000000"' in script_text
+    assert product_name_template_input is not None
+    assert product_name_template_input.get("maxlength") == "100"
+    assert 'max="9990"' in script_text
 
 
 def test_admin_product_get_excludes_guest_dataset_product(
@@ -899,7 +903,7 @@ def test_product_post_rejects_unknown_product_id_without_changes(
     csrf_post,
 ):
     payload = _valid_product_payload(product_records)
-    payload["product_id"].append("999999")
+    payload["product_id"].append("999099")
     payload["prod_name"].append("不明商品")
     payload["prod_price"].append("400")
 
@@ -1012,7 +1016,7 @@ def test_product_post_accepts_thirty_products(
         ("商" * 98) + f"{index:02d}"
         for index in range(30)
     ]
-    payload["prod_price"] = ["1000000"] * 30
+    payload["prod_price"] = ["9990"] * 30
 
     response = csrf_post(
         guest_client,
@@ -1027,7 +1031,7 @@ def test_product_post_accepts_thirty_products(
         month=1,
     ).count() == 30
     assert all(
-        len(product.name) == 100 and product.price == 1_000_000
+        len(product.name) == 100 and product.price == 9_990
         for product in Product.query.filter_by(
             dataset_id=guest_dataset.id,
             year=2040,
@@ -1182,7 +1186,7 @@ def test_guest_at_lifetime_limit_can_update_and_deactivate_existing_products(
             "month": "1",
             "product_id": [str(target_product.id)],
             "prod_name": ["更新後商品"],
-            "prod_price": ["999"],
+            "prod_price": ["990"],
         },
     )
 
@@ -1191,7 +1195,7 @@ def test_guest_at_lifetime_limit_can_update_and_deactivate_existing_products(
     db.session.refresh(target_product)
     db.session.refresh(omitted_product)
     assert target_product.name == "更新後商品"
-    assert target_product.price == 999
+    assert target_product.price == 990
     assert target_product.is_active is True
     assert omitted_product.is_active is False
 
@@ -1282,7 +1286,7 @@ def test_product_post_rejects_name_outside_length_limit_without_changes(
 @pytest.mark.parametrize(
     "invalid_price",
     [
-        pytest.param("1000001", id="above-max"),
+        pytest.param("10000", id="above-max"),
         pytest.param("9" * 5000, id="very-long"),
     ],
 )
@@ -1325,7 +1329,7 @@ def test_product_post_rejects_year_outside_limit_without_changes(
     ("year", "name", "price"),
     [
         pytest.param("2000", "商", "0", id="minimums"),
-        pytest.param("2100", "商" * 100, "1000000", id="maximums"),
+        pytest.param("2100", "商" * 100, "9990", id="maximums"),
     ],
 )
 def test_product_post_accepts_input_limit_boundaries(
@@ -1356,3 +1360,88 @@ def test_product_post_accepts_input_limit_boundaries(
     ).one()
     assert product.name == name
     assert product.price == int(price)
+
+def test_template_picker_exposes_default_prices(
+    authenticated_client,
+    product_records,
+):
+    response = authenticated_client.get("/?year=2026&month=6")
+    document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+
+    expected = {
+        "loafbread": "200",
+        "melonpan": "140",
+        "croissant": "120",
+        "cornet": "150",
+        "hotdog": "220",
+        "fluffy_pumpkin_bread": "180",
+        "curry_bread": "220",
+        "mushroom_teriyaki_chicken": "280",
+        "mushroom_and_bacon_gratin_bread": "260",
+        "caramel_apple_danish": "240",
+        "chestnut_paste_and_butter": "220",
+        "sweetpotato_and_cheese_frenchbread": "240",
+        "cinnamon_baked_apple_bread": "220",
+        "chestnut_danish_with_innerskin": "260",
+        "candied_sweet_potato_croissant": "250",
+        "ham_cheese_deli_sandwich": "320",
+        "purple_sweetpotato_anpan": "180",
+        "roasted_sweetpotato_creambun": "200",
+    }
+
+    options = {
+        option.get("value"): option.get("data-default-price")
+        for option in document.select(
+            '#template-product-name-field-template '
+            'select[name="prod_template_key"] option'
+        )
+        if option.get("value")
+    }
+
+    script_text = "\n".join(
+        script.get_text()
+        for script in document.find_all("script")
+    )
+
+    assert response.status_code == 200
+    assert options == expected
+    assert "selected.dataset.defaultPrice" in script_text
+    assert "priceInput.value = selected.dataset.defaultPrice;" in script_text
+
+
+
+def test_product_price_ui_uses_yen_prefix_and_ten_yen_step(
+    authenticated_client,
+    product_records,
+):
+    response = authenticated_client.get("/?year=2026&month=6")
+    document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+
+    price_inputs = document.select('input[name="prod_price"]')
+    wrappers = document.select(".price-input-wrap")
+
+    script_text = "\n".join(
+        script.get_text()
+        for script in document.find_all("script")
+    )
+
+    assert response.status_code == 200
+    assert price_inputs
+    assert len(wrappers) == len(price_inputs)
+
+    assert all(
+        price_input.get("max") == "9990"
+        for price_input in price_inputs
+    )
+    assert all(
+        price_input.get("step") == "10"
+        for price_input in price_inputs
+    )
+
+    assert all(
+        wrapper.select_one(".price-prefix") is not None
+        and wrapper.select_one(".price-prefix").get_text(strip=True) == "¥"
+        for wrapper in wrappers
+    )
+
+    assert "売価は0〜9,990円の10円単位で入力してください。" in script_text

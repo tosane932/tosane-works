@@ -2041,7 +2041,7 @@ def test_mobile_memo_ui_exposes_autosave_gesture_and_action_controls(
     ) in style_source
 
 
-def test_memo_list_removes_duplicate_header_and_keeps_svg_trash_link(
+def test_memo_list_keeps_desktop_tool_header_and_svg_trash_link(
     authenticated_client,
     admin_dataset,
 ):
@@ -2055,7 +2055,17 @@ def test_memo_list_removes_duplicate_header_and_keeps_svg_trash_link(
         "html.parser",
     )
 
-    assert document.select_one(".shop-tools-header") is None
+    tool_header = document.select_one(".shop-tools-header")
+    assert tool_header is not None
+    assert "shop-tools-header-mobile-hidden" in tool_header.get("class", [])
+    assert tool_header.select_one(".shop-tools-brand").get_text(
+        " ", strip=True
+    ) == "店舗メモツール"
+
+    tool_heading = tool_header.select_one("h1")
+    assert tool_heading is not None
+    assert tool_heading.get_text(" ", strip=True) == "メモ"
+    assert tool_heading.select_one('svg[data-icon="notebook-pen"]') is not None
 
     heading_row = document.select_one(".shop-memo-list-heading-row")
     controls = heading_row.select_one(".shop-memo-list-controls")

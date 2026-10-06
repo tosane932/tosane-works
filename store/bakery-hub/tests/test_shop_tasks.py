@@ -114,9 +114,14 @@ def test_admin_can_view_task_ui_and_empty_state(
     assert document.select_one('.shop-tools-header svg[data-icon="list-todo"]')
     assert document.select_one('form[action="/shop-tools/tasks"]')
     assert document.select_one('input[name="title"][maxlength="100"]')
-    assert document.select_one(".shop-task-empty").get_text(
-        " ", strip=True
-    ) == "タスクはまだありません 追加ボタンから登録できます。"
+    empty_state = document.select_one(".shop-task-empty")
+    assert empty_state is not None
+    assert empty_state.select_one("strong").get_text(strip=True) == "タスクはまだありません"
+    assert "追加ボタンから登録できます。" in empty_state.get_text(" ", strip=True)
+
+    empty_example = empty_state.select_one(".shop-tools-empty-example")
+    assert empty_example is not None
+    assert empty_example.get_text(strip=True) == "例：明日の予約分を準備"
     assert "準備中" not in document.get_text()
     assert "✅" not in document.get_text()
 

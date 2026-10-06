@@ -196,11 +196,12 @@ def test_sales_quantity_input_keeps_current_value_and_selects_on_focus(
         "入力済みの数値は上書きされます。"
     )
     assert quantity_input.get("value") == "5"
-    assert quantity_input.get("max") == "10000"
+    assert quantity_input.get("max") == "1000"
     assert "querySelectorAll('.qty-input')" in script_text
     assert "addEventListener('focus'" in script_text
     assert "requestAnimationFrame" in script_text
     assert "quantityInput.select()" in script_text
+    assert "販売数量は0〜1,000個の整数で入力してください。" in script_text
 
 
 def test_sales_input_month_rollover_shows_only_frozen_current_month_product(
@@ -931,7 +932,7 @@ def test_sales_post_rejects_more_than_thirty_products_atomically(
 @pytest.mark.parametrize(
     "invalid_quantity",
     [
-        pytest.param("10001", id="above-max"),
+        pytest.param("1001", id="above-max"),
         pytest.param("9" * 5000, id="very-long"),
     ],
 )
@@ -974,7 +975,7 @@ def test_sales_post_accepts_quantity_limit_boundaries(
                 str(sales_records.existing_product_id),
                 str(sales_records.new_product_id),
             ],
-            "quantity": ["0", "10000"],
+            "quantity": ["0", "1000"],
         },
     )
 
@@ -986,4 +987,4 @@ def test_sales_post_accepts_quantity_limit_boundaries(
     assert DailySales.query.filter_by(
         product_id=sales_records.new_product_id,
         date=sales_records.date,
-    ).one().quantity == 10000
+    ).one().quantity == 1000

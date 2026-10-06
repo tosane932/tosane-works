@@ -19,16 +19,79 @@
      </script>
 </head>
 {% macro image_selector(selected_key=none) %}
+{% set image_option = product_image_options.get(selected_key) if selected_key else none %}
 <div class="product-image-field">
-    <label>商品画像（任意）
-        <select name="prod_image_key" class="product-image-select touch-control-no-select">
-            <option value="">画像を指定しない</option>
-            {% for key, option in product_image_options.items() %}
-            <option value="{{ key }}" data-image-url="{{ url_for('static', filename='product_images/' ~ option.filename) }}"{% if key == selected_key %} selected{% endif %}>{{ option.label }}</option>
-            {% endfor %}
-        </select>
-    </label>
-    <img class="product-image-preview" alt="選択した商品画像"{% if selected_key in product_image_options %} src="{{ url_for('static', filename='product_images/' ~ product_image_options[selected_key].filename) }}"{% else %} hidden{% endif %}>
+    <input
+        type="hidden"
+        name="prod_image_key"
+        class="product-image-key"
+        value="{{ selected_key if image_option else '' }}">
+    <img
+        class="product-image-preview"
+        alt="選択した商品画像"
+        {% if image_option %}
+        src="{{ url_for('static', filename='product_images/' ~ image_option.filename) }}"
+        {% else %}
+        hidden
+        {% endif %}>
+</div>
+{% endmacro %}
+
+{% macro fixed_template_product(selected_key) %}
+{% set option = product_image_options.get(selected_key) %}
+<div class="product-name-field">
+    <input
+        type="hidden"
+        name="prod_name"
+        class="template-product-name"
+        value="{{ option.label if option else '' }}">
+    <input
+        type="hidden"
+        name="prod_template_key"
+        value="{{ selected_key if option else '' }}">
+    <div class="template-product-label">
+        {{ option.label if option else '' }}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro template_product_picker() %}
+<div class="product-name-field">
+    <input
+        type="hidden"
+        name="prod_name"
+        class="template-product-name"
+        value="">
+    <select
+        name="prod_template_key"
+        class="product-template-select touch-control-no-select"
+        aria-label="商品テンプレート"
+        required>
+        <option value="">テンプレートを選択</option>
+        {% for key, option in product_image_options.items() %}
+        <option
+            value="{{ key }}"
+            data-product-name="{{ option.label }}"
+            data-default-price="{{ option.default_price }}"
+            data-image-url="{{ url_for('static', filename='product_images/' ~ option.filename) }}">
+            {{ option.label }}
+        </option>
+        {% endfor %}
+    </select>
+</div>
+{% endmacro %}
+
+{% macro custom_product_name_input(value="", placeholder="商品名を入力") %}
+<div class="product-name-field">
+    <input
+        type="text"
+        name="prod_name"
+        class="input-name custom-product-name"
+        value="{{ value }}"
+        placeholder="{{ placeholder }}"
+        maxlength="100"
+        required>
+    <input type="hidden" name="prod_template_key" value="">
 </div>
 {% endmacro %}
 <body class="product-page app-shell-page">
@@ -137,26 +200,28 @@
 
                     <input type="hidden" name="product_id" value="{{ p.id }}">
 
-                    <input
-                        type="text"
-                        name="prod_name"
-                        class="input-name"
-                        value="{{ p.name }}"
-                        placeholder="商品名"
-                        maxlength="100"
-                        required>
+                    {% set template_key = p.image_key
+    if p.image_key in product_image_options
+    and product_image_options[p.image_key].label == p.name
+    else none %}
 
-                    <input
+{% if template_key %}
+    {{ fixed_template_product(template_key) }}
+{% else %}
+    {{ custom_product_name_input(p.name) }}
+{% endif %}
+
+                    <div class="price-input-wrap"><span class="price-prefix" aria-hidden="true">¥</span><input
                         type="number"
                         name="prod_price"
                         class="input-price"
                         value="{{ p.price }}"
-                        placeholder="単価"
+                        placeholder="売価を入力"
                         min="0"
-                        max="1000000"
-                        required>
+                        max="9990" step="10"
+                        required></div>
 
-                    {{ image_selector(p.image_key) }}
+                    {{ image_selector(template_key) }}
 
                     <button
                         type="button"
@@ -178,48 +243,72 @@
 
                 <div class="menu-row">
                     <input type="hidden" name="product_id" value="">
-                    <input type="text" name="prod_name" class="input-name" value="食パン" placeholder="商品名" maxlength="100" required>
-                    <input type="number" name="prod_price" class="input-price" value="200" placeholder="単価" min="0" max="1000000" required>
-                    {{ image_selector() }}
+                    {{ fixed_template_product("loafbread") }}
+                    <div class="price-input-wrap"><span class="price-prefix" aria-hidden="true">¥</span><input type="number" name="prod_price" class="input-price" value="200" placeholder="売価を入力" min="0" max="9990" step="10" required></div>
+                    {{ image_selector("loafbread") }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="食パンを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
                 <div class="menu-row">
                     <input type="hidden" name="product_id" value="">
-                    <input type="text" name="prod_name" class="input-name" value="メロンパン" placeholder="商品名" maxlength="100" required>
-                    <input type="number" name="prod_price" class="input-price" value="140" placeholder="単価" min="0" max="1000000" required>
-                    {{ image_selector() }}
+                    {{ fixed_template_product("melonpan") }}
+                    <div class="price-input-wrap"><span class="price-prefix" aria-hidden="true">¥</span><input type="number" name="prod_price" class="input-price" value="140" placeholder="売価を入力" min="0" max="9990" step="10" required></div>
+                    {{ image_selector("melonpan") }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="メロンパンを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
                 <div class="menu-row">
                     <input type="hidden" name="product_id" value="">
-                    <input type="text" name="prod_name" class="input-name" value="クロワッサン" placeholder="商品名" maxlength="100" required>
-                    <input type="number" name="prod_price" class="input-price" value="120" placeholder="単価" min="0" max="1000000" required>
-                    {{ image_selector() }}
+                    {{ fixed_template_product("croissant") }}
+                    <div class="price-input-wrap"><span class="price-prefix" aria-hidden="true">¥</span><input type="number" name="prod_price" class="input-price" value="120" placeholder="売価を入力" min="0" max="9990" step="10" required></div>
+                    {{ image_selector("croissant") }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="クロワッサンを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
                 <div class="menu-row">
                     <input type="hidden" name="product_id" value="">
-                    <input type="text" name="prod_name" class="input-name" value="コロネ" placeholder="商品名" maxlength="100" required>
-                    <input type="number" name="prod_price" class="input-price" value="150" placeholder="単価" min="0" max="1000000" required>
-                    {{ image_selector() }}
+                    {{ fixed_template_product("cornet") }}
+                    <div class="price-input-wrap"><span class="price-prefix" aria-hidden="true">¥</span><input type="number" name="prod_price" class="input-price" value="150" placeholder="売価を入力" min="0" max="9990" step="10" required></div>
+                    {{ image_selector("cornet") }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="コロネを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
                 <div class="menu-row">
                     <input type="hidden" name="product_id" value="">
-                    <input type="text" name="prod_name" class="input-name" value="ホットドッグ" placeholder="商品名" maxlength="100" required>
-                    <input type="number" name="prod_price" class="input-price" value="220" placeholder="単価" min="0" max="1000000" required>
-                    {{ image_selector() }}
+                    {{ fixed_template_product("hotdog") }}
+                    <div class="price-input-wrap"><span class="price-prefix" aria-hidden="true">¥</span><input type="number" name="prod_price" class="input-price" value="220" placeholder="売価を入力" min="0" max="9990" step="10" required></div>
+                    {{ image_selector("hotdog") }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="ホットドッグを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
             {% endif %}
             </div>
-            <button type="button" class="btn btn-add touch-control-no-select" onclick="addRow()">
-                <svg class="ui-icon ui-icon-control" data-icon="plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+            <div class="product-add-actions">
+            <button
+                type="button"
+                class="btn btn-add touch-control-no-select"
+                onclick="addRow()">
+                <svg class="ui-icon ui-icon-control" data-icon="plus"
+                     viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round"
+                     focusable="false" aria-hidden="true">
                     <path d="M5 12h14"></path>
                     <path d="M12 5v14"></path>
                 </svg>
-                <span>新メニューを追加する</span>
+                <span>新メニューを追加</span>
             </button>
+
+            <button
+                type="button"
+                class="btn btn-add touch-control-no-select"
+                onclick="addTemplateRow()">
+                <svg class="ui-icon ui-icon-control" data-icon="plus"
+                     viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round"
+                     focusable="false" aria-hidden="true">
+                    <path d="M5 12h14"></path>
+                    <path d="M12 5v14"></path>
+                </svg>
+                <span>テンプレートから追加</span>
+            </button>
+        </div>
         </div>
 
         <button type="submit" class="btn btn-submit btn-menu-register touch-control-no-select">
@@ -233,24 +322,88 @@
     </form>
 </div>
 
+<template id="custom-product-name-field-template">
+    {{ custom_product_name_input("", "商品名を入力") }}
+</template>
+
+<template id="template-product-name-field-template">
+    {{ template_product_picker() }}
+</template>
 <template id="product-image-field-template">{{ image_selector() }}</template>
 
 <script>
     // 🌟 パパっと追加・消去するための軽快なJavaScript
-    function addRow() {
-        const container = document.getElementById('menu-container');
+    function buildProductRow(className, nameTemplateId) {
         const div = document.createElement('div');
-        div.className = 'menu-row';
+        div.className = `menu-row ${className}`;
+
         div.innerHTML = `
             <input type="hidden" name="product_id" value="">
-            <input type="text" name="prod_name" class="input-name" placeholder="新商品名" maxlength="100" required>
-            <input type="number" name="prod_price" class="input-price" placeholder="単価" min="0" max="1000000" required>
-            <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="この商品行を削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
+            <div class="price-input-wrap"><span class="price-prefix" aria-hidden="true">¥</span><input
+                type="number"
+                name="prod_price"
+                class="input-price"
+                placeholder="売価を入力"
+                min="0"
+                max="9990" step="10"
+                required></div>
+            <button
+                type="button"
+                class="btn btn-del touch-control-no-select"
+                onclick="removeRow(this)"
+                aria-label="この商品行を削除">
+                <svg class="ui-icon ui-icon-control"
+                     data-icon="trash-2"
+                     viewBox="0 0 24 24"
+                     fill="none"
+                     stroke="currentColor"
+                     stroke-width="2"
+                     stroke-linecap="round"
+                     stroke-linejoin="round"
+                     focusable="false"
+                     aria-hidden="true">
+                    <path d="M3 6h18"></path>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <path d="M10 11v6"></path>
+                    <path d="M14 11v6"></path>
+                </svg>
+            </button>
         `;
-        div.querySelector('.btn-del').before(
-            document.getElementById('product-image-field-template').content.cloneNode(true)
+
+        div.querySelector('.price-input-wrap').before(
+            document
+                .getElementById(nameTemplateId)
+                .content
+                .cloneNode(true)
         );
-        container.appendChild(div);
+
+        div.querySelector('.btn-del').before(
+            document
+                .getElementById('product-image-field-template')
+                .content
+                .cloneNode(true)
+        );
+
+        return div;
+    }
+
+    function addRow() {
+        document.getElementById('menu-container').appendChild(
+            buildProductRow(
+                'custom-product-row',
+                'custom-product-name-field-template'
+            )
+        );
+    }
+
+    function addTemplateRow() {
+        document.getElementById('menu-container').appendChild(
+            buildProductRow(
+                'template-picker-row',
+                'template-product-name-field-template'
+            )
+        );
     }
 
     function removeRow(button) {
@@ -269,17 +422,119 @@
 
     monthSelect.addEventListener("change", loadMaster);
 
-    document.getElementById('menu-container').addEventListener('change', (event) => {
-        if (!event.target.matches('.product-image-select')) return;
-        const preview = event.target.closest('.product-image-field').querySelector('.product-image-preview');
-        const imageUrl = event.target.selectedOptions[0].dataset.imageUrl;
-        if (imageUrl) {
-            preview.src = imageUrl;
+    const menuContainer = document.getElementById('menu-container');
+
+    function clearProductTemplateImage(row) {
+        const imageKey = row.querySelector('.product-image-key');
+        const preview = row.querySelector('.product-image-preview');
+
+        imageKey.value = '';
+        preview.removeAttribute('src');
+        preview.hidden = true;
+    }
+
+    function applyProductTemplate(row, select) {
+        const selected = select.selectedOptions[0];
+        const nameInput = row.querySelector('.template-product-name');
+        const priceInput = row.querySelector('.input-price');
+        const imageKey = row.querySelector('.product-image-key');
+        const preview = row.querySelector('.product-image-preview');
+
+        if (!selected.value) {
+            nameInput.value = '';
+            if (priceInput) priceInput.value = '';
+            clearProductTemplateImage(row);
+            return;
+        }
+
+        nameInput.value = selected.dataset.productName;
+        if (priceInput && selected.dataset.defaultPrice) {
+            priceInput.value = selected.dataset.defaultPrice;
+        }
+        imageKey.value = selected.value;
+
+        if (selected.dataset.imageUrl) {
+            preview.src = selected.dataset.imageUrl;
             preview.hidden = false;
         } else {
             preview.removeAttribute('src');
             preview.hidden = true;
         }
+    }
+
+    menuContainer.addEventListener('change', (event) => {
+        if (!event.target.matches('.product-template-select')) return;
+
+        const row = event.target.closest('.menu-row');
+        if (!row) return;
+
+        applyProductTemplate(row, event.target);
+    });
+
+    // テンプレート名を書き換えたら、新しい自由入力商品として画像連携も解除
+    menuContainer.addEventListener('input', (event) => {
+        if (!event.target.matches('.input-name')) return;
+
+        const row = event.target.closest('.menu-row');
+        if (!row) return;
+
+        const templateSelect = row.querySelector('.product-template-select');
+        if (!templateSelect.value) return;
+
+        const selected = templateSelect.selectedOptions[0];
+
+        if (event.target.value !== selected.dataset.productName) {
+            templateSelect.value = '';
+            clearProductTemplateImage(row);
+        }
+    });
+
+
+    /* product-price-limit-validation */
+    function updateProductPriceValidity(input) {
+        if (!input) return;
+
+        if (input.value === '') {
+            input.setCustomValidity('売価を入力してください。');
+            return;
+        }
+
+        const value = input.valueAsNumber;
+
+        if (!Number.isFinite(value)) {
+            input.setCustomValidity('売価は数字で入力してください。');
+        } else if (
+            value < 0 ||
+            value > 9990 ||
+            value % 10 !== 0
+        ) {
+            input.setCustomValidity(
+                '売価は0〜9,990円の10円単位で入力してください。'
+            );
+        } else {
+            input.setCustomValidity('');
+        }
+    }
+
+    document.getElementById('menu-container').addEventListener('input' , (event) => {
+        if (!event.target.matches('.input-price')) return;
+        updateProductPriceValidity(event.target);
+    });
+
+    document.getElementById('menu-container').addEventListener('change', (event) => {
+        if (!event.target.matches('.input-price')) return;
+
+        updateProductPriceValidity(event.target);
+
+        if (!event.target.checkValidity()) {
+            event.target.reportValidity();
+        }
+    });
+
+
+    /* initialize-product-price-validity */
+    document.querySelectorAll('.input-price').forEach((input) => {
+        updateProductPriceValidity(input);
     });
 
 </script>

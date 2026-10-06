@@ -2,7 +2,30 @@
 
 {% block title %}メモ | 店舗メモツール{% endblock %}
 
-{% block tool_header_region %}{% endblock %}
+{% block tool_header_class %} shop-tools-header-mobile-hidden{% endblock %}
+
+{% block tool_heading %}
+<span class="shop-tools-heading-icon" aria-hidden="true">
+    <svg
+        data-icon="notebook-pen"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        focusable="false"
+        aria-hidden="true">
+        <path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"></path>
+        <path d="M2 6h4"></path>
+        <path d="M2 10h4"></path>
+        <path d="M2 14h4"></path>
+        <path d="M2 18h4"></path>
+        <path d="M21.38 5.62a1 1 0 0 0-3-3L12 9l-1 4 4-1Z"></path>
+    </svg>
+</span>
+<span>メモ</span>
+{% endblock %}
 
 {% block content %}
     {% if error %}
@@ -315,7 +338,10 @@
         {% elif search_query %}
         <p class="shop-memo-empty">検索条件に一致するメモはありません。検索文字を変えるか、×ボタンで検索を解除してください。</p>
         {% else %}
-        <p class="shop-memo-empty">まだメモはありません。＋ボタンから最初のメモを追加できます。</p>
+        <p class="shop-memo-empty">
+            まだメモはありません。＋ボタンから最初のメモを追加できます。
+            <span class="shop-tools-empty-example">例：雨の日は夕方の来店が少なめ</span>
+        </p>
         {% endif %}
     </section>
 
