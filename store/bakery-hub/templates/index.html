@@ -18,6 +18,19 @@
      }
      </script>
 </head>
+{% macro image_selector(selected_key=none) %}
+<div class="product-image-field">
+    <label>商品画像（任意）
+        <select name="prod_image_key" class="product-image-select touch-control-no-select">
+            <option value="">画像を指定しない</option>
+            {% for key, option in product_image_options.items() %}
+            <option value="{{ key }}" data-image-url="{{ url_for('static', filename='product_images/' ~ option.filename) }}"{% if key == selected_key %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <img class="product-image-preview" alt="選択した商品画像"{% if selected_key in product_image_options %} src="{{ url_for('static', filename='product_images/' ~ product_image_options[selected_key].filename) }}"{% else %} hidden{% endif %}>
+</div>
+{% endmacro %}
 <body class="product-page app-shell-page">
 {% include "_app_navigation.html" %}
 
@@ -112,6 +125,9 @@
 
         <div class="section">
             <div class="section-title">② 今月のメニューと価格（初日単価）を設定</div>
+            {% if not product_image_options %}
+            <p class="product-image-unavailable">現在選べる商品画像はありません。画像なしで登録できます。</p>
+            {% endif %}
             <div class="menu-list" id="menu-container">
             
             {% if products %}
@@ -140,6 +156,8 @@
                         max="1000000"
                         required>
 
+                    {{ image_selector(p.image_key) }}
+
                     <button
                         type="button"
                         class="btn btn-del touch-control-no-select"
@@ -162,30 +180,35 @@
                     <input type="hidden" name="product_id" value="">
                     <input type="text" name="prod_name" class="input-name" value="食パン" placeholder="商品名" maxlength="100" required>
                     <input type="number" name="prod_price" class="input-price" value="200" placeholder="単価" min="0" max="1000000" required>
+                    {{ image_selector() }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="食パンを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
                 <div class="menu-row">
                     <input type="hidden" name="product_id" value="">
                     <input type="text" name="prod_name" class="input-name" value="メロンパン" placeholder="商品名" maxlength="100" required>
                     <input type="number" name="prod_price" class="input-price" value="140" placeholder="単価" min="0" max="1000000" required>
+                    {{ image_selector() }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="メロンパンを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
                 <div class="menu-row">
                     <input type="hidden" name="product_id" value="">
                     <input type="text" name="prod_name" class="input-name" value="クロワッサン" placeholder="商品名" maxlength="100" required>
                     <input type="number" name="prod_price" class="input-price" value="120" placeholder="単価" min="0" max="1000000" required>
+                    {{ image_selector() }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="クロワッサンを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
                 <div class="menu-row">
                     <input type="hidden" name="product_id" value="">
                     <input type="text" name="prod_name" class="input-name" value="コロネ" placeholder="商品名" maxlength="100" required>
                     <input type="number" name="prod_price" class="input-price" value="150" placeholder="単価" min="0" max="1000000" required>
+                    {{ image_selector() }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="コロネを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
                 <div class="menu-row">
                     <input type="hidden" name="product_id" value="">
                     <input type="text" name="prod_name" class="input-name" value="ホットドッグ" placeholder="商品名" maxlength="100" required>
                     <input type="number" name="prod_price" class="input-price" value="220" placeholder="単価" min="0" max="1000000" required>
+                    {{ image_selector() }}
                     <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="ホットドッグを削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
                 </div>
             {% endif %}
@@ -210,6 +233,8 @@
     </form>
 </div>
 
+<template id="product-image-field-template">{{ image_selector() }}</template>
+
 <script>
     // 🌟 パパっと追加・消去するための軽快なJavaScript
     function addRow() {
@@ -222,6 +247,9 @@
             <input type="number" name="prod_price" class="input-price" placeholder="単価" min="0" max="1000000" required>
             <button type="button" class="btn btn-del touch-control-no-select" onclick="removeRow(this)" aria-label="この商品行を削除"><svg class="ui-icon ui-icon-control" data-icon="trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg></button>
         `;
+        div.querySelector('.btn-del').before(
+            document.getElementById('product-image-field-template').content.cloneNode(true)
+        );
         container.appendChild(div);
     }
 
@@ -240,6 +268,19 @@
     }
 
     monthSelect.addEventListener("change", loadMaster);
+
+    document.getElementById('menu-container').addEventListener('change', (event) => {
+        if (!event.target.matches('.product-image-select')) return;
+        const preview = event.target.closest('.product-image-field').querySelector('.product-image-preview');
+        const imageUrl = event.target.selectedOptions[0].dataset.imageUrl;
+        if (imageUrl) {
+            preview.src = imageUrl;
+            preview.hidden = false;
+        } else {
+            preview.removeAttribute('src');
+            preview.hidden = true;
+        }
+    });
 
 </script>
 </body>

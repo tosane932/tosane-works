@@ -181,7 +181,7 @@ def test_postgresql_migrations_reach_head_and_preserve_existing_data():
 
             product = db.session.execute(
                 text(
-                    "SELECT id, dataset_id, name, price "
+                    "SELECT id, dataset_id, name, price, image_key "
                     "FROM products WHERE id = 101"
                 )
             ).one()
@@ -196,6 +196,11 @@ def test_postgresql_migrations_reach_head_and_preserve_existing_data():
             assert product.dataset_id is not None
             assert product.name == "既存商品"
             assert product.price == 200
+            assert product.image_key is None
+            assert next(
+                column for column in inspector.get_columns("products")
+                if column["name"] == "image_key"
+            )["nullable"] is True
             assert sale.id == 201
             assert sale.product_id == 101
             assert sale.quantity == 5

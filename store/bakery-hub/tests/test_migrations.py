@@ -81,7 +81,12 @@ def test_empty_database_upgrades_from_base_to_head(tmp_path):
             "name",
             "price",
             "is_active",
+            "image_key",
         }.issubset(product_columns)
+        assert next(
+            column for column in inspector.get_columns("products")
+            if column["name"] == "image_key"
+        )["nullable"] is True
 
         daily_sales_columns = {
             column["name"]
@@ -486,3 +491,71 @@ def test_shop_memo_pin_migration_round_trip_preserves_existing_sqlite_data(
             == ["dataset_id", "deleted_at", "updated_at", "id"]
             for index in inspector.get_indexes("shop_memos")
         )
+
+
+def test_product_image_key_migration_round_trip_preserves_products_and_sales(tmp_path):
+    database_path = tmp_path / "product_image_key_round_trip.sqlite"
+    migration_app = Flask("product_image_key_round_trip")
+    migration_app.config.update(
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{database_path}",
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    )
+    db.init_app(migration_app)
+    Migrate(migration_app, db, directory=str(MIGRATIONS_DIR))
+
+    with migration_app.app_context():
+        upgrade(directory=str(MIGRATIONS_DIR), revision="f8c1d2e3a4b5")
+        admin_dataset_id = db.session.execute(
+            text("SELECT id FROM datasets WHERE system_key = 'admin'")
+        ).scalar_one()
+        db.session.execute(
+            text(
+                "INSERT INTO products (id, dataset_id, year, month, name, price, is_active) "
+                "VALUES (906, :dataset_id, 2025, 12, '既存商品', 250, 1)"
+            ),
+            {"dataset_id": admin_dataset_id},
+        )
+        db.session.execute(text(
+            "INSERT INTO daily_sales (id, product_id, date, quantity) "
+            "VALUES (907, 906, '2025-12-10', 3)"
+        ))
+        db.session.commit()
+
+        def product_and_sales():
+            return (
+                db.session.execute(text(
+                    "SELECT id, dataset_id, year, month, name, price, is_active "
+                    "FROM products WHERE id = 906"
+                )).one(),
+                db.session.execute(text(
+                    "SELECT id, product_id, date, quantity FROM daily_sales WHERE id = 907"
+                )).one(),
+            )
+
+        before = product_and_sales()
+        upgrade(directory=str(MIGRATIONS_DIR), revision="head")
+        assert db.session.execute(text(
+            "SELECT image_key FROM products WHERE id = 906"
+        )).scalar_one() is None
+        assert product_and_sales() == before
+        db.session.execute(text(
+            "UPDATE products SET image_key = 'bread_01' WHERE id = 906"
+        ))
+        db.session.commit()
+
+        downgrade(directory=str(MIGRATIONS_DIR), revision="f8c1d2e3a4b5")
+        assert "image_key" not in {
+            column["name"] for column in inspect(db.engine).get_columns("products")
+        }
+        assert product_and_sales() == before
+
+        upgrade(directory=str(MIGRATIONS_DIR), revision="head")
+        column = next(
+            column for column in inspect(db.engine).get_columns("products")
+            if column["name"] == "image_key"
+        )
+        assert column["nullable"] is True
+        assert db.session.execute(text(
+            "SELECT image_key FROM products WHERE id = 906"
+        )).scalar_one() is None
+        assert product_and_sales() == before

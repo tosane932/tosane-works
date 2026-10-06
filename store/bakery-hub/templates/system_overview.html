@@ -139,15 +139,15 @@
             {% endfor %}
         </nav>
         <div class="overview-feature-grid">
-        {% call feature('products', '商品・メニュー登録', '年月ごとに商品名・価格を登録、編集します。フォームから外した既存商品は販売終了にし、過去の売上を残します。', 'GET /・POST /') %}
+        {% call feature('products', '商品・メニュー登録', '年月ごとに商品名・価格と任意の画像を登録、編集します。フォームから外した既存商品は販売終了にし、過去の売上を残します。', 'GET /・POST /') %}
             <dt>Python / Flask</dt>
             <dd><code>index()</code>が<code>request.args</code>から表示条件、<code>request.form.getlist()</code>から複数行を取得。<code>if</code>で年月・文字数・価格・商品IDを検証し、<code>for</code>で更新内容を組み立てます。</dd>
             <dt>Database</dt>
-            <dd><code>Product</code>をDatasetと年月で絞り込みます。新規行を追加し、既存行を更新。外した商品は<code>is_active=False</code>にする論理削除です。まとめてcommitし、DBエラー時はrollbackします。</dd>
+            <dd><code>Product</code>をDatasetと年月で絞り込みます。任意の<code>image_key</code>には画像ファイル名ではなくmanifestの識別子を保存します。旧商品はNULLのまま使えます。外した商品は<code>is_active=False</code>にする論理削除です。まとめてcommitし、DBエラー時はrollbackします。</dd>
             <dt>Frontend</dt>
-            <dd><code>index.html</code>のJinjaとHTML formで表示。テンプレート内のJavaScriptが行の追加・削除や年月切替を担当します。</dd>
+            <dd><code>index.html</code>のJinjaとHTML formで表示。画像候補は実在するローカルファイルをmanifestで管理し、Guestには許可された候補だけ、Adminには全候補を出します。サーバーでも同じ範囲を検証します。JavaScriptが行の追加・削除や年月切替を担当します。</dd>
             <dt>pytest</dt>
-            <dd>名前・価格の境界、不正な年月、商品IDの重複、Dataset越境、販売終了後の履歴維持、保存失敗時の全変更rollbackを確認します。同名の商品を一律禁止するテストではありません。</dd>
+            <dd>名前・価格の境界、不正な年月、商品IDの重複、Dataset越境、画像keyの許可範囲と件数一致、未選択、販売終了後の履歴維持、保存失敗時の全変更rollbackを確認します。</dd>
             <dt>確認するコード</dt>
             <dd>{{ source_links(['app.py', 'models.py', 'templates/index.html', 'tests/test_products.py']) }}</dd>
         {% endcall %}
@@ -158,9 +158,9 @@
             <dt>Database</dt>
             <dd>その領域の<code>Product</code>だけを取得。登録年・月・IDの降順で並べ、同じ商品名は最初の1件を代表として表示します。年月ごとのProductと売上は変更しません。</dd>
             <dt>Frontend</dt>
-            <dd><code>products.html</code>のJinjaで代表Productの商品名・最新価格・最新登録年月・状態を表示します。「登録中／登録解除」は代表Productの<code>is_active</code>に対応し、現在の月に販売中という意味ではありません。スマホでは縦並びにし、画像・編集・再利用は追加していません。</dd>
+            <dd><code>products.html</code>のJinjaで代表Productの画像・商品名・最新価格・最新登録年月・状態を表示します。画像は<code>image_key</code>からmanifest経由で解決し、未設定・不明・素材不足なら「画像なし」を表示します。「登録中／登録解除」は代表Productの<code>is_active</code>に対応します。スマホでは情報を縦並びにします。</dd>
             <dt>pytest</dt>
-            <dd>管理者・Guest A・Guest Bそれぞれの同名代表選択、Dataset越境の防止、並び順、空状態、期限切れGuestの拒否、商品と売上が変わらないことを確認します。</dd>
+            <dd>管理者・Guest A・Guest Bそれぞれの同名代表選択、最新画像、Dataset越境の防止、並び順、空状態、期限切れGuestの拒否、商品と売上が変わらないことを確認します。</dd>
             <dt>確認するコード</dt>
             <dd>{{ source_links(['app.py', 'templates/products.html', 'tests/test_product_catalog.py']) }}</dd>
         {% endcall %}

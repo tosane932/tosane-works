@@ -18,10 +18,34 @@
 }
 
 .product-catalog-page .product-catalog-item {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
     min-width: 0;
     padding: 18px;
     border: 1px solid #f1ebd9;
     border-radius: 12px;
+}
+
+.product-catalog-page .product-catalog-image,
+.product-catalog-page .product-catalog-image-empty {
+    width: 88px;
+    height: 88px;
+    border-radius: 10px;
+}
+
+.product-catalog-page .product-catalog-image {
+    display: block;
+    object-fit: cover;
+}
+
+.product-catalog-page .product-catalog-image-empty {
+    display: grid;
+    place-items: center;
+    background: #f6f1e8;
+    color: #806c57;
+    font-size: 12px;
 }
 
 .product-catalog-page .product-catalog-content {
@@ -75,6 +99,82 @@
     .product-catalog-page .product-catalog-content {
         grid-template-columns: minmax(0, 1fr);
         gap: 12px;
+    }
+
+    .product-catalog-page .product-catalog-item {
+        grid-template-columns: 64px minmax(0, 1fr);
+        gap: 12px;
+    }
+
+    .product-catalog-page .product-catalog-image,
+    .product-catalog-page .product-catalog-image-empty {
+        width: 64px;
+        height: 64px;
+    }
+}
+
+.product-page .menu-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(110px, 1fr) auto;
+}
+
+.product-page .product-image-unavailable {
+    margin: 0 0 12px;
+    color: #6e543c;
+    font-size: 13px;
+}
+
+.product-page .menu-row .btn-del {
+    grid-column: 3;
+    grid-row: 1;
+}
+
+.product-page .product-image-field {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #6e543c;
+    font-size: 13px;
+}
+
+.product-page .product-image-select {
+    min-height: 44px;
+    max-width: 230px;
+    margin-left: 8px;
+}
+
+.product-page .product-image-preview {
+    width: 44px;
+    height: 44px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.product-page .product-image-preview[hidden] {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    .product-page .menu-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .product-page .menu-row .input-name {
+        grid-column: 1 / -1;
+    }
+
+    .product-page .menu-row .btn-del {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    .product-page .product-image-field {
+        grid-row: 3;
+    }
+
+    .product-page .product-image-select {
+        max-width: min(60vw, 230px);
     }
 }
 
