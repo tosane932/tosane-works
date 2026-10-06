@@ -23,6 +23,12 @@
     <ul class="product-catalog-list" aria-label="登録商品の一覧">
         {% for product in products %}
         <li class="product-catalog-item">
+            {% set image = product_image_options.get(product.image_key) %}
+            {% if image %}
+            <img class="product-catalog-image" src="{{ url_for('static', filename='product_images/' ~ image.filename) }}" alt="{{ image.label }}" loading="lazy">
+            {% else %}
+            <span class="product-catalog-image-empty" aria-label="商品画像なし">画像なし</span>
+            {% endif %}
             <div class="product-catalog-content">
                 <h2 class="product-catalog-name">{{ product.name }}</h2>
                 <dl class="product-catalog-details">

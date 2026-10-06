@@ -48,6 +48,7 @@ from material_orders import create_material_orders_blueprint
 from prompts import build_sales_prompt
 from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
+from product_images import available_product_images
 
 
 def _load_direct_run_environment(dotenv_path=None):
@@ -1271,6 +1272,9 @@ def index():
         current_dataset = None
 
     today = business_today()
+    product_image_options = available_product_images(
+        app.static_folder, is_guest=current_user.is_guest,
+    )
 
     if request.method == "POST":
         if not current_user.is_authenticated:
@@ -1294,12 +1298,20 @@ def index():
         product_names = request.form.getlist("prod_name")
         product_prices = request.form.getlist("prod_price")
         product_ids = request.form.getlist("product_id")
+        image_keys = request.form.getlist("prod_image_key")
 
         if not (
             len(product_ids) == len(product_names) == len(product_prices)
         ):
             logger.warning("Rejected product update with mismatched field lengths.")
             return "商品データの件数が一致しません。", 400
+
+        # 画像フィールドがない旧フォームも受け入れ、既存画像を保持する。
+        if image_keys and len(image_keys) != len(product_names):
+            logger.warning("Rejected product update with mismatched image field lengths.")
+            return "商品画像の件数が一致しません。", 400
+        if not image_keys:
+            image_keys = [""] * len(product_names)
 
         if current_user.is_guest and len(product_ids) > PRODUCTS_PER_POST_LIMIT:
             logger.warning("Rejected product update with too many products.")
@@ -1308,10 +1320,11 @@ def index():
         products_data = []
         seen_product_ids = set()
 
-        for product_id, name, price in zip(
+        for product_id, name, price, image_key in zip(
             product_ids,
             product_names,
-            product_prices
+            product_prices,
+            image_keys,
         ):
             existing_product = None
             normalized_name = name.strip()
@@ -1358,11 +1371,16 @@ def index():
                 logger.warning("Rejected product update with invalid price.")
                 return "価格は0から1000000の整数で入力してください。", 400
 
+            if image_key and image_key not in product_image_options:
+                logger.warning("Rejected product update with unapproved image key.")
+                return "商品画像が正しくありません。", 400
+
             products_data.append({
                 "id": parsed_product_id,
                 "product": existing_product,
                 "name": normalized_name,
                 "price": price_value,
+                "image_key": image_key or None,
             })
 
         if not products_data:
@@ -1387,6 +1405,7 @@ def index():
                 selected_month=month,
                 registered_months=registered_months,
                 current_year=today.year,
+                product_image_options=product_image_options,
             )
 
         # 💡既存商品の価格更新と新商品の追加をログに残す
@@ -1448,6 +1467,8 @@ def index():
                     existing_product = prod["product"]
                     existing_product.name = prod["name"]
                     existing_product.price = prod["price"]
+                    if prod["image_key"] is not None:
+                        existing_product.image_key = prod["image_key"]
                     existing_product.is_active = True
 
                 else:
@@ -1458,7 +1479,8 @@ def index():
                             year=year,
                             month=month,
                             name=prod["name"],
-                            price=prod["price"]
+                            price=prod["price"],
+                            image_key=prod["image_key"],
                         )
                     )
 
@@ -1516,6 +1538,7 @@ def index():
         selected_month=month,
         registered_months=registered_months,
         current_year=today.year,
+        product_image_options=product_image_options,
     )
 
 
@@ -1538,7 +1561,12 @@ def product_catalog():
         seen_names.add(product.name)
         catalog_products.append(product)
 
-    return render_template("products.html", products=catalog_products)
+    return render_template(
+        "products.html", products=catalog_products,
+        product_image_options=available_product_images(
+            app.static_folder, is_guest=current_user.is_guest,
+        ),
+    )
 
 
 def _get_optional_integer_query_parameter(name):

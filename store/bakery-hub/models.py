@@ -349,6 +349,7 @@ class Product(db.Model):
     month = db.Column(db.Integer, nullable=False)
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Integer, nullable=False)
+    image_key = db.Column(db.String(100), nullable=True)
     dataset = db.relationship("Dataset", back_populates="products")
     
     is_active = db.Column(
