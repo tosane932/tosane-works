@@ -147,7 +147,7 @@
             <dt>Frontend</dt>
             <dd><code>index.html</code>のJinjaがテンプレートを並べ、JavaScriptが行の追加・削除、年月切替、商品名・代表画像・初期価格の設定を担当します。画像なしテンプレートは「画像なし」で登録できます。Adminだけの「商品カタログへ追加」フォームは<code>multipart/form-data</code>で商品名・初期価格・ひらがなの読み・任意画像を送ります。inline SVGの画像選択ボタンから選び、後から追加・差し替えも可能です。Guestには編集UIを出さず、サーバーも403で拒否します。</dd>
             <dt>GitHubへの保存</dt>
-            <dd>Adminの申請は<code>request.files</code>でJPEG・PNG・WebPを受け、実画像・MIME・200KB上限を検証してWebPへ再符号化します。元ファイル名は保存名に使わずUUIDにします。GitHub APIでJSONと画像を1つのGit tree・commitにまとめ、専用branchからレビュー用PRを作ります。PR作成に失敗した場合はそのbranchを削除します。mainへは直接書かず、承認・mergeと次のDeploy後にテンプレートへ反映します。GitHub用secretの本番設定は別途必要です。</dd>
+            <dd>Adminの申請は<code>request.files</code>でJPEG・PNG・WebPを受け、実画像・MIME・入力10MiB上限を検証し、品質を保って必要なら縮小してからWebPへ再符号化します。保存画像は500KiB以下です。元ファイル名は保存名に使わずUUIDにします。GitHub APIでJSONと画像を1つのGit tree・commitにまとめ、専用branchからレビュー用PRを作ります。PR作成に失敗した場合はそのbranchを削除します。mainへは直接書かず、承認・mergeと次のDeploy後にテンプレートへ反映します。GitHub用secretの本番設定は別途必要です。</dd>
             <dt>pytest</dt>
             <dd>月次登録の名前・価格・ID、Dataset越境、画像key、履歴維持とDB rollbackに加え、Admin申請の認可、画像なし、入力・画像検証、JSONと画像の同一commit、PR失敗時のbranch削除を確認します。GitHub APIはmockで検証します。</dd>
             <dt>確認するコード</dt>

@@ -52,6 +52,7 @@ from product_images import available_product_images, available_product_image_ass
 from catalog_repository import (
     CatalogPublishError,
     InvalidCatalogImage,
+    MAX_UPLOAD_IMAGE_BYTES,
     publish_catalog_change,
     validate_image,
 )
@@ -108,6 +109,15 @@ app.config["GUEST_CREATION_RATE_LIMIT_WINDOW_SECONDS"] = (
 app.config["GUEST_ACTIVE_DATASET_LIMIT"] = (
     config.GUEST_ACTIVE_DATASET_LIMIT
 )
+
+
+@app.before_request
+def allow_catalog_image_request_size():
+    """CSRFがmultipartを読む前に、このPOSTだけ画像とformの容量を確保する。"""
+    if request.endpoint == "submit_product_catalog" and request.method == "POST":
+        request.max_content_length = MAX_UPLOAD_IMAGE_BYTES + 16 * 1024
+
+
 csrf = CSRFProtect(app)
 db.init_app(app)
 

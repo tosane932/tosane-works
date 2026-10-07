@@ -1,12 +1,17 @@
 import io
 import datetime
 import json
+import random
+import struct
+import zlib
 
 import pytest
 from bs4 import BeautifulSoup
 from PIL import Image
+from werkzeug.datastructures import FileStorage
 
 import app as app_module
+import catalog_repository
 import product_images
 from models import Dataset, Product, db
 
@@ -14,6 +19,24 @@ from models import Dataset, Product, db
 def _png():
     output = io.BytesIO()
     Image.new('RGB', (8, 8), 'orange').save(output, format='PNG')
+    return output.getvalue()
+
+
+def _png_with_size(size):
+    """CRCが正しい付加chunkで入力サイズだけを増やす。画像素材は追加しない。"""
+    source = _png()
+    payload = b'\0' * (size - len(source) - 12)
+    kind = b'vpAg'
+    chunk = (struct.pack('>I', len(payload)) + kind + payload
+             + struct.pack('>I', zlib.crc32(kind + payload) & 0xffffffff))
+    return source[:-12] + chunk + source[-12:]
+
+
+def _noisy_jpeg():
+    image = Image.frombytes('RGB', (1536, 1536),
+                            random.Random(17).randbytes(1536 * 1536 * 3))
+    output = io.BytesIO()
+    image.save(output, format='JPEG', quality=88)
     return output.getvalue()
 
 
@@ -109,15 +132,74 @@ def test_bad_uploads_are_rejected_before_publishing(
     assert response.status_code == 400
 
 
+@pytest.mark.parametrize('size', [200 * 1024 + 1, 10 * 1024 * 1024])
+def test_valid_image_larger_than_old_limit_and_at_new_boundary_is_accepted(
+    authenticated_client, admin_dataset, csrf_token, monkeypatch, size,
+):
+    published = []
+    monkeypatch.setattr(app_module, 'publish_catalog_change', lambda **kwargs: (
+        published.append(kwargs) or 'https://github.com/tosane932/tosane-works/pull/126'
+    ))
+    response = _post(authenticated_client, csrf_token, _form(
+        catalog_image=(io.BytesIO(_png_with_size(size)), 'large.png', 'image/png'),
+    ))
+    assert response.status_code == 200
+    assert published[0]['image'][0] == 'webp'
+    assert 0 < len(published[0]['image'][1]) <= 500 * 1024
+
+
 def test_oversize_upload_is_rejected_before_publishing(
     authenticated_client, admin_dataset, csrf_token, monkeypatch,
 ):
     monkeypatch.setattr(app_module, 'publish_catalog_change',
                         lambda **kwargs: pytest.fail('publish called'))
     response = _post(authenticated_client, csrf_token, _form(
-        catalog_image=(io.BytesIO(b'x' * (200 * 1024 + 1)), 'large.png', 'image/png'),
+        catalog_image=(io.BytesIO(_png_with_size(10 * 1024 * 1024 + 1)),
+                       'large.png', 'image/png'),
     ))
     assert response.status_code == 400
+
+
+def test_catalog_request_overhead_remains_bounded(
+    authenticated_client, admin_dataset, csrf_token, monkeypatch,
+):
+    monkeypatch.setattr(app_module, 'publish_catalog_change',
+                        lambda **kwargs: pytest.fail('publish called'))
+    response = _post(authenticated_client, csrf_token, _form(
+        catalog_image=(io.BytesIO(_png_with_size(10 * 1024 * 1024)),
+                       'large.png', 'image/png'),
+        oversized_padding='x' * (16 * 1024),
+    ))
+    assert response.status_code == 413
+
+
+def test_large_photo_is_resized_at_same_quality_to_fit_stored_limit():
+    source = _noisy_jpeg()
+    assert 200 * 1024 < len(source) <= 10 * 1024 * 1024
+    converted = catalog_repository.validate_image(FileStorage(
+        stream=io.BytesIO(source), filename='photo.jpg', content_type='image/jpeg',
+    ))
+    assert converted[0] == 'webp'
+    assert 0 < len(converted[1]) <= 500 * 1024
+    with Image.open(io.BytesIO(converted[1])) as image:
+        assert image.format == 'WEBP'
+        assert image.size[0] < 1536
+
+
+def test_encoded_output_above_500_kib_is_rejected(monkeypatch):
+    original_save = Image.Image.save
+
+    def too_large(self, fp, format=None, **kwargs):
+        if format == 'WEBP':
+            fp.write(b'x' * (500 * 1024 + 1))
+            return
+        return original_save(self, fp, format=format, **kwargs)
+
+    monkeypatch.setattr(Image.Image, 'save', too_large)
+    with pytest.raises(catalog_repository.InvalidCatalogImage, match='500'):
+        catalog_repository.validate_image(FileStorage(
+            stream=io.BytesIO(_png()), filename='photo.png', content_type='image/png',
+        ))
 
 
 def test_guest_and_anonymous_cannot_publish(

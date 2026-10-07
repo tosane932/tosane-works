@@ -16,7 +16,8 @@ REPOSITORY = "tosane932/tosane-works"
 API_ROOT = f"https://api.github.com/repos/{REPOSITORY}"
 CATALOG_PATH = "store/bakery-hub/product_catalog/admin_products.json"
 IMAGE_DIRECTORY = "store/bakery-hub/static/product_images/admin"
-MAX_IMAGE_BYTES = 200 * 1024
+MAX_UPLOAD_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_STORED_IMAGE_BYTES = 500 * 1024
 MAX_IMAGE_PIXELS = 4096 * 4096
 IMAGE_FORMATS = {
     ".jpg": ("JPEG", "image/jpeg"),
@@ -43,9 +44,9 @@ def validate_image(file):
     expected = IMAGE_FORMATS.get(suffix)
     if expected is None or file.mimetype != expected[1]:
         raise InvalidCatalogImage("JPEG・PNG・WebP画像を選択してください。")
-    raw = file.stream.read(MAX_IMAGE_BYTES + 1)
-    if not raw or len(raw) > MAX_IMAGE_BYTES:
-        raise InvalidCatalogImage("画像は200KB以下にしてください。")
+    raw = file.stream.read(MAX_UPLOAD_IMAGE_BYTES + 1)
+    if not raw or len(raw) > MAX_UPLOAD_IMAGE_BYTES:
+        raise InvalidCatalogImage("画像は10MiB以下にしてください。")
     try:
         with Image.open(io.BytesIO(raw)) as original:
             if original.format != expected[0] or getattr(original, "n_frames", 1) != 1:
@@ -56,15 +57,20 @@ def validate_image(file):
         with Image.open(io.BytesIO(raw)) as decoded:
             image = ImageOps.exif_transpose(decoded)
             image.load()
-            result = io.BytesIO()
             mode = "RGBA" if "A" in image.getbands() or "transparency" in image.info else "RGB"
-            image.convert(mode).save(result, format="WEBP", quality=82)
+            converted = image.convert(mode)
+            for max_dimension in (None, 1200, 960, 768):
+                candidate = converted if max_dimension is None else converted.copy()
+                if max_dimension is not None:
+                    candidate.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+                result = io.BytesIO()
+                candidate.save(result, format="WEBP", quality=82)
+                encoded = result.getvalue()
+                if 0 < len(encoded) <= MAX_STORED_IMAGE_BYTES:
+                    return "webp", encoded
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as error:
         raise InvalidCatalogImage("正しい画像を選択してください。") from error
-    encoded = result.getvalue()
-    if not encoded or len(encoded) > MAX_IMAGE_BYTES:
-        raise InvalidCatalogImage("変換後の画像が200KBを超えました。")
-    return "webp", encoded
+    raise InvalidCatalogImage("変換後の画像が500KiBを超えました。")
 
 
 def _api(method, path, token, *, expected, payload=None, params=None):
