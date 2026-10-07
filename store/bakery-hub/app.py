@@ -48,7 +48,14 @@ from material_orders import create_material_orders_blueprint
 from prompts import build_sales_prompt
 from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
-from product_images import available_product_images
+from product_images import available_product_images, available_product_image_assets
+from catalog_repository import (
+    CatalogPublishError,
+    InvalidCatalogImage,
+    MAX_UPLOAD_IMAGE_BYTES,
+    publish_catalog_change,
+    validate_image,
+)
 
 
 def _load_direct_run_environment(dotenv_path=None):
@@ -102,6 +109,15 @@ app.config["GUEST_CREATION_RATE_LIMIT_WINDOW_SECONDS"] = (
 app.config["GUEST_ACTIVE_DATASET_LIMIT"] = (
     config.GUEST_ACTIVE_DATASET_LIMIT
 )
+
+
+@app.before_request
+def allow_catalog_image_request_size():
+    """CSRFがmultipartを読む前に、このPOSTだけ画像とformの容量を確保する。"""
+    if request.endpoint == "submit_product_catalog" and request.method == "POST":
+        request.max_content_length = MAX_UPLOAD_IMAGE_BYTES + 16 * 1024
+
+
 csrf = CSRFProtect(app)
 db.init_app(app)
 
@@ -1276,6 +1292,9 @@ def index():
     product_image_options = available_product_images(
         app.static_folder, is_guest=current_user.is_guest,
     )
+    product_image_assets = available_product_image_assets(
+        app.static_folder, is_guest=current_user.is_guest,
+    )
 
     if request.method == "POST":
         if not current_user.is_authenticated:
@@ -1383,7 +1402,7 @@ def index():
                 logger.warning("Rejected product update with invalid price.")
                 return "売価は0〜9,990円の10円単位で入力してください。", 400
 
-            if image_key and image_key not in product_image_options:
+            if image_key and image_key not in product_image_assets:
                 logger.warning("Rejected product update with unapproved image key.")
                 return "商品画像が正しくありません。", 400
 
@@ -1404,7 +1423,11 @@ def index():
 
             if current_user.is_guest:
                 if template_option is not None:
-                    if image_key != template_key:
+                    expected_image_key = (
+                        template_option.get("image_key", template_key)
+                        if template_option.get("filename") else ""
+                    )
+                    if image_key != expected_image_key:
                         logger.warning(
                             "Rejected Guest product update with mismatched "
                             "template image."
@@ -1412,7 +1435,7 @@ def index():
                         return "商品名と商品画像の組み合わせが正しくありません。", 400
 
                 elif image_key:
-                    image_option = product_image_options.get(image_key)
+                    image_option = product_image_assets.get(image_key)
                     if (
                         image_option is None
                         or normalized_name != image_option["label"]
@@ -1454,6 +1477,11 @@ def index():
                 registered_months=registered_months,
                 current_year=today.year,
                 product_image_options=product_image_options,
+                product_image_assets=product_image_assets,
+                admin_catalog_options={
+                    key: option for key, option in product_image_options.items()
+                    if key.startswith("admin_")
+                } if current_user.is_admin else {},
             )
 
         # 💡既存商品の価格更新と新商品の追加をログに残す
@@ -1587,31 +1615,100 @@ def index():
         registered_months=registered_months,
         current_year=today.year,
         product_image_options=product_image_options,
+        product_image_assets=product_image_assets,
+        admin_catalog_options={
+            key: option for key, option in product_image_options.items()
+            if key.startswith("admin_")
+        } if current_user.is_admin else {},
     )
+
+
+@app.route("/admin/product-catalog", methods=["POST"])
+@admin_required
+def submit_product_catalog():
+    """検証済みの商品申請を専用branchのPRとして公開する。"""
+    require_current_dataset()
+    label = request.form.get("catalog_label", "").strip()
+    reading = request.form.get("catalog_reading", "").strip()
+    price = _parse_bounded_nonnegative_integer(
+        request.form.get("catalog_default_price"), PRODUCT_PRICE_MAX,
+    )
+    edit_key = request.form.get("catalog_edit_key", "").strip() or None
+    guest_allowed = request.form.get("catalog_guest_allowed") == "on"
+    if (
+        not 1 <= len(label) <= PRODUCT_NAME_MAX_LENGTH
+        or price is None or price % PRODUCT_PRICE_STEP
+        or not 1 <= len(reading) <= 100
+        or any(not ('\u3040' <= char <= '\u309f' or char == 'ー') for char in reading)
+        or (edit_key is not None and (
+            len(edit_key) != 38 or not edit_key.startswith("admin_")
+            or any(char not in "0123456789abcdef" for char in edit_key[6:])
+        ))
+        or request.form.get("catalog_guest_allowed", "") not in ("", "on")
+    ):
+        return "商品カタログの入力内容が正しくありません。", 400
+
+    upload = request.files.get("catalog_image")
+    try:
+        image = validate_image(upload) if upload is not None and upload.filename else None
+        url = publish_catalog_change(
+            label=label, default_price=price, reading=reading, image=image,
+            edit_key=edit_key, guest_allowed=guest_allowed,
+        )
+    except InvalidCatalogImage as error:
+        return str(error), 400
+    except ValueError as error:
+        return str(error), 400
+    except CatalogPublishError:
+        logger.exception("Failed to submit product catalog PR.")
+        return "商品カタログの申請を保存できませんでした。", 503
+    return render_template("catalog_submitted.html", pull_request_url=url)
 
 
 @app.route("/products", methods=["GET"])
 @admin_or_guest_required
 def product_catalog():
-    """現在のDataset内で同名商品の最新Productを代表表示する。"""
+    """今月の登録商品と、過去月の最新履歴をDataset内で表示する。"""
     current_dataset = require_current_dataset()
+    today = business_today()
     products = (
         Product.query
         .filter_by(dataset_id=current_dataset.id)
         .order_by(Product.year.desc(), Product.month.desc(), Product.id.desc())
         .all()
     )
-    catalog_products = []
-    seen_names = set()
+    current_products = []
+    past_products = []
+    current_names = set()
     for product in products:
+        if (
+            product.year == today.year
+            and product.month == today.month
+            and product.is_active
+            and product.name not in current_names
+        ):
+            current_names.add(product.name)
+            current_products.append(product)
+
+    seen_names = set(current_names)
+    for product in products:
+        if (product.year, product.month) >= (today.year, today.month):
+            continue
         if product.name in seen_names:
             continue
         seen_names.add(product.name)
-        catalog_products.append(product)
+        past_products.append(product)
 
     return render_template(
-        "products.html", products=catalog_products,
+        "products.html",
+        current_products=current_products,
+        past_products=past_products,
+        current_year=today.year,
+        current_month=today.month,
         product_image_options=available_product_images(
+            app.static_folder, is_guest=current_user.is_guest,
+        ),
+        product_image_assets=available_product_image_assets(
             app.static_folder, is_guest=current_user.is_guest,
         ),
     )

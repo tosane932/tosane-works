@@ -8,6 +8,11 @@ import app as app_module
 from models import DailySales, Dataset, Product, db
 
 
+@pytest.fixture(autouse=True)
+def fixed_catalog_today(monkeypatch):
+    monkeypatch.setattr(app_module, "business_today", lambda: datetime.date(2026, 10, 7))
+
+
 def _guest_dataset():
     now = datetime.datetime.now(datetime.timezone.utc)
     return Dataset(
@@ -120,7 +125,7 @@ def test_catalog_ignores_external_dataset_and_period_parameters(
         assert f"CATALOG_{key}" not in document.get_text()
 
 
-def test_catalog_displays_name_price_period_and_both_states(
+def test_catalog_displays_past_name_price_and_period_without_current_status(
     flask_app, admin_dataset,
 ):
     db.session.add_all([
@@ -134,15 +139,16 @@ def test_catalog_displays_name_price_period_and_both_states(
     rows = document.select(".product-catalog-item")
     assert len(rows) == 2
     assert rows[0].select_one(".product-catalog-price").find_previous("dt").get_text(strip=True) == "最新価格"
-    assert rows[0].select_one(".product-catalog-period").find_previous("dt").get_text(strip=True) == "最新登録"
+    assert rows[0].select_one(".product-catalog-period").find_previous("dt").get_text(strip=True) == "最終登録"
     assert rows[0].select_one(".product-catalog-name").get_text(strip=True) == "登録中のパン"
     assert rows[0].select_one(".product-catalog-price").get_text(strip=True) == "1,234円"
     assert rows[0].select_one(".product-catalog-period").get_text(strip=True) == "2026年8月"
-    assert rows[0].select_one(".product-catalog-state").get_text(strip=True) == "登録中"
+    assert rows[0].select_one(".product-catalog-state") is None
+    assert "状態" not in [dt.get_text(strip=True) for dt in rows[0].select("dt")]
     assert rows[1].select_one(".product-catalog-name").get_text(strip=True) == "登録解除したパン"
     assert rows[1].select_one(".product-catalog-price").get_text(strip=True) == "0円"
     assert rows[1].select_one(".product-catalog-period").get_text(strip=True) == "2025年12月"
-    assert rows[1].select_one(".product-catalog-state").get_text(strip=True) == "登録解除"
+    assert rows[1].select_one(".product-catalog-state") is None
 
 
 def test_catalog_orders_by_year_month_desc_then_id_desc(flask_app, admin_dataset):
@@ -166,11 +172,13 @@ def test_catalog_orders_by_year_month_desc_then_id_desc(flask_app, admin_dataset
 
 
 @pytest.mark.parametrize(
-    ("latest_active", "older_price", "expected_state"),
-    [(True, 250, "登録中"), (False, 400, "登録解除")],
+    ("latest_active", "older_price", "expected_price", "expected_period"),
+    [(True, 250, "300円", "2026年10月"),
+     (False, 400, "280円", "2026年3月")],
 )
 def test_catalog_uses_latest_same_name_product_without_changing_history(
-    flask_app, admin_dataset, latest_active, older_price, expected_state,
+    flask_app, admin_dataset, latest_active, older_price,
+    expected_price, expected_period,
 ):
     older = Product(
         dataset=admin_dataset, year=2025, month=12,
@@ -200,11 +208,13 @@ def test_catalog_uses_latest_same_name_product_without_changing_history(
     rows = document.select(".product-catalog-item")
     assert len(rows) == 1
     assert rows[0].select_one(".product-catalog-name").get_text(strip=True) == "クロワッサン"
-    assert rows[0].select_one(".product-catalog-price").get_text(strip=True) == "300円"
-    assert rows[0].select_one(".product-catalog-period").get_text(strip=True) == "2026年10月"
-    assert rows[0].select_one(".product-catalog-state").get_text(strip=True) == expected_state
+    assert rows[0].select_one(".product-catalog-price").get_text(strip=True) == expected_price
+    assert rows[0].select_one(".product-catalog-period").get_text(strip=True) == expected_period
+    assert rows[0].find_parent("section")["id"] == (
+        "current-month-products" if latest_active else "past-products"
+    )
     assert f"{older_price}円" not in rows[0].get_text()
-    assert "280円" not in rows[0].get_text()
+    assert ("300円" if not latest_active else "280円") not in rows[0].get_text()
     assert _snapshot() == before
 
 
@@ -229,7 +239,7 @@ def test_catalog_same_name_same_month_uses_highest_id(flask_app, admin_dataset):
     assert rows[0].select_one(".product-catalog-name").get_text(strip=True) == "クロワッサン"
     assert rows[0].select_one(".product-catalog-price").get_text(strip=True) == "300円"
     assert rows[0].select_one(".product-catalog-period").get_text(strip=True) == "2026年10月"
-    assert rows[0].select_one(".product-catalog-state").get_text(strip=True) == "登録中"
+    assert rows[0].find_parent("section")["id"] == "current-month-products"
 
 
 @pytest.mark.parametrize("principal", ["admin", "guest_a", "guest_b"])
@@ -261,7 +271,8 @@ def test_catalog_same_name_representative_stays_within_current_dataset(
     assert rows[0].select_one(".product-catalog-name").get_text(strip=True) == "クロワッサン"
     assert rows[0].select_one(".product-catalog-price").get_text(strip=True) == "250円"
     assert rows[0].select_one(".product-catalog-period").get_text(strip=True) == "2025年12月"
-    assert rows[0].select_one(".product-catalog-state").get_text(strip=True) == "登録中"
+    assert rows[0].find_parent("section")["id"] == "past-products"
+    assert "登録中" not in rows[0].get_text()
     assert "900円" not in rows[0].get_text()
     assert _snapshot() == before
 
@@ -336,7 +347,8 @@ def test_catalog_is_read_only_and_preserves_inactive_product_sales(
     client = _client_for(flask_app, admin_dataset)
     document = _document(_get(flask_app, client))
     assert "履歴あり商品" in document.get_text()
-    assert document.select_one(".product-catalog-state").get_text(strip=True) == "登録解除"
+    assert document.select_one("#past-products .product-catalog-period").get_text(strip=True) == "2025年12月"
+    assert "登録中" not in document.select_one("#past-products").get_text()
     # CSRF不足の400ではなく、正規tokenでPOST自体が未対応か確認。
     with flask_app.app_context():
         token = csrf_token(client, "/products")

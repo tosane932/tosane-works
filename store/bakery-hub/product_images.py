@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import re
+import json
 
 
 # 画像素材が承認・配置されたら、ここへ key: filename / label / guest_allowed を追加する。
@@ -137,6 +138,33 @@ PRODUCT_IMAGE_OPTIONS = {
 
 _KEY_PATTERN = re.compile(r"[a-z0-9_]{1,100}\Z")
 _ALLOWED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+ADMIN_CATALOG_PATH = Path(__file__).with_name("product_catalog") / "admin_products.json"
+_ADMIN_IMAGE_PATTERN = re.compile(r"admin/[0-9a-f]{32}\.webp\Z")
+
+
+def load_admin_catalog():
+    """デプロイ済みのAdminカタログを読み取る。編集はGitHub PR経由。"""
+    with ADMIN_CATALOG_PATH.open(encoding="utf-8") as source:
+        catalog = json.load(source)
+    if not isinstance(catalog, dict) or not isinstance(catalog.get("products"), dict):
+        raise ValueError("Invalid product catalog")
+    if not isinstance(catalog.get("images"), dict):
+        raise ValueError("Invalid product image catalog")
+    return catalog
+
+
+def _safe_image_path(directory, filename):
+    if not isinstance(filename, str):
+        return None
+    if "/" in filename:
+        if not _ADMIN_IMAGE_PATTERN.fullmatch(filename):
+            return None
+    elif Path(filename).name != filename or Path(filename).suffix.lower() not in _ALLOWED_SUFFIXES:
+        return None
+    path = (directory / filename).resolve()
+    if not path.is_relative_to(directory) or not path.is_file():
+        return None
+    return path
 
 
 def _product_option_sort_key(item):
@@ -152,21 +180,41 @@ def _product_option_sort_key(item):
 
 
 def available_product_images(static_folder, *, is_guest):
-    """実在する安全なファイルだけを権限別に返す。"""
+    """標準18品と承認済みAdmin商品をテンプレートとして返す。"""
     directory = (Path(static_folder) / "product_images").resolve()
     available = {}
-    for key, option in PRODUCT_IMAGE_OPTIONS.items():
+    catalog = load_admin_catalog()
+    candidates = {**PRODUCT_IMAGE_OPTIONS, **catalog["products"]}
+    for key, option in candidates.items():
         if not isinstance(key, str) or not _KEY_PATTERN.fullmatch(key):
+            continue
+        if not isinstance(option, dict):
             continue
         if is_guest and not option["guest_allowed"]:
             continue
-        filename = option["filename"]
-        if not isinstance(filename, str) or Path(filename).name != filename:
-            continue
-        if Path(filename).suffix.lower() not in _ALLOWED_SUFFIXES:
-            continue
-        path = (directory / filename).resolve()
-        if path.parent != directory or not path.is_file():
+        filename = option.get("filename")
+        if filename is not None and _safe_image_path(directory, filename) is None:
             continue
         available[key] = option
     return dict(sorted(available.items(), key=_product_option_sort_key))
+
+
+def available_product_image_assets(static_folder, *, is_guest):
+    """月次Productに固定された画像keyを、差し替え後も解決する。"""
+    directory = (Path(static_folder) / "product_images").resolve()
+    assets = {
+        key: option for key, option in PRODUCT_IMAGE_OPTIONS.items()
+        if (not is_guest or option.get("guest_allowed"))
+        and _safe_image_path(directory, option.get("filename")) is not None
+    }
+    catalog = load_admin_catalog()
+    for key, option in catalog["images"].items():
+        if not isinstance(key, str) or not _KEY_PATTERN.fullmatch(key):
+            continue
+        filename = option.get("filename") if isinstance(option, dict) else None
+        owner = catalog["products"].get(option.get("product_key")) if isinstance(option, dict) else None
+        if is_guest and (not isinstance(owner, dict) or not owner.get("guest_allowed")):
+            continue
+        if _safe_image_path(directory, filename) is not None:
+            assets[key] = {"filename": filename, "label": option.get("label", "商品画像")}
+    return assets
