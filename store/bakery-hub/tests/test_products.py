@@ -14,6 +14,7 @@ def _product_snapshot():
     return [
         (
             product.id,
+            product.dataset_id,
             product.year,
             product.month,
             product.name,
@@ -355,11 +356,17 @@ def test_product_registration_keeps_current_year_after_validation_error(
     assert selected_month is not None
 
 
+@pytest.mark.parametrize("month", [6, 8], ids=["default-rows", "saved-rows"])
 def test_product_form_exposes_name_and_price_limits(
     authenticated_client,
     product_records,
+    monkeypatch,
+    month,
 ):
-    response = authenticated_client.get("/?year=2026&month=6")
+    monkeypatch.setattr(
+        app_module, "business_today", lambda: datetime.date(2026, 8, 10)
+    )
+    response = authenticated_client.get(f"/?month={month}")
     document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
     product_name_inputs = document.select('input[type="text"][name="prod_name"]')
     product_price_inputs = document.select('input[name="prod_price"]')
@@ -378,6 +385,10 @@ def test_product_form_exposes_name_and_price_limits(
         for product_input in product_name_inputs
     )
     assert product_price_inputs
+    assert all(
+        product_input.get("min") == "0"
+        for product_input in product_price_inputs
+    )
     assert all(
         product_input.get("max") == "9990"
         for product_input in product_price_inputs
@@ -1329,6 +1340,7 @@ def test_product_post_rejects_year_outside_limit_without_changes(
     ("year", "name", "price"),
     [
         pytest.param("2000", "商", "0", id="minimums"),
+        pytest.param("2026", "商" * 99, "9980", id="just-below-maximums"),
         pytest.param("2100", "商" * 100, "9990", id="maximums"),
     ],
 )
@@ -1445,3 +1457,191 @@ def test_product_price_ui_uses_yen_prefix_and_ten_yen_step(
     )
 
     assert "売価は0〜9,990円の10円単位で入力してください。" in script_text
+
+@pytest.mark.parametrize("viewer", ["admin", "guest-a", "guest-b"])
+def test_product_registered_months_exclude_other_datasets_and_years(
+    flask_app,
+    authenticated_client,
+    admin_dataset,
+    monkeypatch,
+    viewer,
+):
+    monkeypatch.setattr(
+        app_module, "business_today", lambda: datetime.date(2026, 8, 10)
+    )
+    guest_a = _create_guest_dataset()
+    guest_b = _create_guest_dataset()
+    datasets = {"admin": admin_dataset, "guest-a": guest_a, "guest-b": guest_b}
+    months = {"admin": 1, "guest-a": 2, "guest-b": 3}
+    for owner, dataset in datasets.items():
+        db.session.add_all([
+            Product(
+                dataset=dataset, year=2026, month=months[owner],
+                name=f"{owner}の商品", price=100,
+            ),
+            Product(
+                dataset=dataset, year=2025, month=12,
+                name=f"{owner}の過年度商品", price=100,
+            ),
+        ])
+    db.session.commit()
+    products_before = _product_snapshot()
+    test_client = (
+        authenticated_client
+        if viewer == "admin"
+        else _guest_client(flask_app, datasets[viewer])
+    )
+
+    # fixtureの長寿命contextで、別clientの認証キャッシュを再利用しない。
+    with flask_app.app_context():
+        response = test_client.get("/?month=8")
+
+    assert response.status_code == 200
+    document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+    registered_months = {
+        int(option["value"])
+        for option in document.select("#month-select option")
+        if "（登録済み）" in option.get_text()
+    }
+    assert registered_months == {months[viewer]}
+    assert _product_snapshot() == products_before
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param("商", id="one-character"),
+        pytest.param("商" * 49, id="49-characters"),
+        pytest.param("商" * 50, id="50-characters"),
+        pytest.param("商" * 100, id="100-characters"),
+        pytest.param("トリュフパン", id="japanese"),
+        pytest.param("タラバ蟹の味噌煮パン", id="long-japanese"),
+        pytest.param("Bread", id="english"),
+        pytest.param("12345", id="digits"),
+        pytest.param("ＢＲＥＡＤ１２３", id="full-width"),
+        pytest.param("☠️デスソースパン", id="emoji-variation-selector"),
+        pytest.param("💩パン", id="emoji"),
+        pytest.param("💩" * 50, id="50-emoji-codepoints"),
+        pytest.param("💩" * 100, id="100-emoji-codepoints"),
+        pytest.param("&<>\"'★", id="symbols-and-quotes"),
+        pytest.param("<em>HTML風商品名</em>", id="html-like"),
+        pytest.param("<script data-product-probe>x</script>", id="script-like"),
+        pytest.param("<img data-product-probe src=x onerror=alert(1)>", id="event-like"),
+    ],
+)
+def test_product_names_round_trip_through_edit_sales_and_scoped_display(
+    flask_app,
+    authenticated_client,
+    admin_dataset,
+    monkeypatch,
+    csrf_post,
+    name,
+):
+    today = datetime.date(2026, 8, 10)
+    monkeypatch.setattr(app_module, "business_today", lambda: today)
+    guest_a = _create_guest_dataset()
+    guest_b = _create_guest_dataset()
+    foreign_ids = []
+    for dataset, foreign_name in [
+        (admin_dataset, "ADMIN_ONLY_SENTINEL"),
+        (guest_b, "GUEST_B_ONLY_SENTINEL"),
+    ]:
+        product = Product(
+            dataset=dataset, year=2026, month=8, name=foreign_name, price=300,
+        )
+        db.session.add(product)
+        db.session.flush()
+        foreign_ids.append(product.id)
+        db.session.add(DailySales(product_id=product.id, date=today, quantity=9))
+    db.session.commit()
+    products_before = _product_snapshot()
+    sales_before = _sales_snapshot()
+
+    # 別clientの認証・CSRFキャッシュを引き継がない実request相当のcontext。
+    with flask_app.app_context():
+        guest_client = _guest_client(flask_app, guest_a)
+        payload = {
+            "year": "2026", "month": "8", "product_id": [""],
+            "prod_name": [name], "prod_price": ["250"],
+        }
+        response = csrf_post(guest_client, "/", payload)
+        assert response.status_code == 200
+        product = Product.query.filter_by(dataset_id=guest_a.id).one()
+        product_id = product.id
+        assert product.name == name
+        assert product.price == 250
+        assert product.is_active is True
+
+        response = guest_client.get("/?month=8")
+        assert response.status_code == 200
+        document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+        assert document.select_one('input[name="prod_name"]')["value"] == name
+        assert document.select("[data-product-probe], input[name=prod_name] em") == []
+
+        edited_name = name[:-1] + "改"
+        payload.update({
+            "product_id": [str(product_id)],
+            "prod_name": [edited_name], "prod_price": ["9980"],
+        })
+        response = csrf_post(guest_client, "/", payload)
+        assert response.status_code == 200
+        db.session.expire_all()
+        product = Product.query.filter_by(dataset_id=guest_a.id).one()
+        assert product.id == product_id
+        assert product.name == edited_name
+        assert product.price == 9980
+        assert product.is_active is True
+
+        response = guest_client.get("/?month=8")
+        assert response.status_code == 200
+        document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+        assert document.select_one('input[name="prod_name"]')["value"] == edited_name
+        assert document.select("[data-product-probe]") == []
+
+        response = guest_client.get("/input")
+        assert response.status_code == 200
+        document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+        assert [node.get_text(strip=True) for node in document.select(".product-name")] == [edited_name]
+        assert document.select("[data-product-probe], .product-name em") == []
+        response = csrf_post(guest_client, "/input", {
+            "date": today.isoformat(), "product_id": [str(product_id)],
+            "quantity": ["5"],
+        })
+        assert response.status_code == 200
+        sale = DailySales.query.filter_by(product_id=product_id).one()
+        assert sale.date == today
+        assert sale.quantity == 5
+
+        response = guest_client.get("/dashboard?year=2026&month=8")
+        assert response.status_code == 200
+        document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+        assert [node.get_text() for node in document.select(".prod-name")] == [edited_name]
+        assert document.select("[data-product-probe], .prod-name em") == []
+        response = guest_client.get("/api/dashboard-data?year=2026&month=8")
+        assert response.status_code == 200
+        assert response.get_json()["ranked_sales"] == [[edited_name, 5]]
+        assert response.get_json()["chart_labels"] == [edited_name]
+        assert response.get_json()["today_sales"] == 9980 * 5
+
+    for other_client, foreign_name in [
+        (authenticated_client, "ADMIN_ONLY_SENTINEL"),
+        (_guest_client(flask_app, guest_b), "GUEST_B_ONLY_SENTINEL"),
+    ]:
+        with flask_app.app_context():
+            response = other_client.get("/?month=8")
+            assert response.status_code == 200
+            document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+            assert [node["value"] for node in document.select('#menu-container .menu-row input[name="prod_name"]')] == [foreign_name]
+            response = other_client.get("/input")
+            assert response.status_code == 200
+            document = BeautifulSoup(response.get_data(as_text=True), "html.parser")
+            assert [node.get_text(strip=True) for node in document.select(".product-name")] == [foreign_name]
+            response = other_client.get("/api/dashboard-data?year=2026&month=8")
+            assert response.status_code == 200
+            assert response.get_json()["ranked_sales"] == [[foreign_name, 9]]
+
+    db.session.expire_all()
+    assert [row for row in _product_snapshot() if row[0] in foreign_ids] == products_before
+    assert [row for row in _sales_snapshot() if row[1] in foreign_ids] == sales_before
+    assert Product.query.filter_by(dataset_id=guest_a.id).count() == 1
+    assert DailySales.query.count() == 3
