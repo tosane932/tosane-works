@@ -16,7 +16,7 @@
 
 ![Bakery Hub](img/bakery-hub-banner.png)
 
-ベーカリー店舗の売上管理・分析から、AIによる経営アドバイス、材料発注、店舗メモ、タスク管理までを一元化したWebアプリケーションです。
+18種の商品テンプレートによる月次商品管理・履歴Catalog、日次売上管理・分析から、AIによる経営アドバイス、材料発注、店舗メモ、タスク管理までを一元化したWebアプリケーションです。
 
 **Python / Flask / PostgreSQL / Docker / pytest / GitHub Actions / Gemini API**
 
@@ -34,7 +34,7 @@
   <img src="demo/mobile_task.jpg" alt="タスク管理" width="32%">
 </p>
 
-[▶ Live Demo](https://bakery-salesdata.onrender.com/) ・ [📖 詳細README](store/bakery-hub/README.md)
+[▶ Live Demo](https://bakery-salesdata.onrender.com/) ・ [📖 詳細README](store/bakery-hub/README.md) ・ [📘 公開システム概要](https://bakery-salesdata.onrender.com/system-overview)
 
 ---
 
@@ -92,3 +92,15 @@ Tosane Works
 ```
 
 各プロダクトは、依存関係・テスト・Docker・デプロイ設定などを可能な限り独立して管理しています。
+
+---
+
+## 📝 Bakery Hubの最近の開発・検証記録
+
+2026年10月には商品管理・Catalogの改善に加え、CodexとCosmic Rayでpytestの検知力を再監査し、正式なテストをmainへ反映しました。
+
+| 記事 | タイトル・リンク |
+|---|---|
+| 第1記事 | [🥐Bakery Hubの商品管理を作り直した｜18商品テンプレート・履歴Catalog・Admin登録まで](https://qiita.com/tosane932/items/e62462c105efdc8a5d5e) |
+| 第2記事 | [🧪pytestが通るだけでは安心できない｜CodexとCosmic Rayで2度目のMutation Testing](https://qiita.com/tosane932/items/070c26c8cab19a226a30) |
+| 第3記事 | [🧪Codexで挑んだ1,286件のMutation Testing｜pytest再監査からmain反映までの5日間](https://qiita.com/tosane932/items/52dbc54dc2de3748bb72) |
