@@ -4,7 +4,7 @@
 
 > **現場の「困った」を、Pythonで「最適解」へ。**
 
-**Bakery Hub** は、ベーカリーの商品登録・日次売上入力・売上分析に加え、  
+**Bakery Hub** は、18種のテンプレートによる月次商品登録・商品履歴Catalog・日次売上入力・売上分析に加え、  
 材料発注リスト・店舗メモ・タスクまで一つの画面で扱える業務支援Webアプリケーションです。
 
 必要なときだけGemini APIへ経営アドバイスを依頼できます。
@@ -52,6 +52,8 @@ Geminiへ経営アドバイスを依頼する
 ```
 
 という実際の業務フローを操作できます。
+
+商品登録は標準18種のテンプレート選択と自由入力に対応しています。Admin専用のCatalog商品申請・画像アップロードはGuestには公開しません。
 
 店舗メモツールでは、現在 **材料発注・メモ・タスク** を利用できます。  
 タスクでは、追加・完了 / 未完了・削除・複数選択・長押し並び替えを操作できます。
@@ -116,7 +118,8 @@ Guestの商品数
 
 ```text
 売上管理
-├── 商品・メニュー登録
+├── 商品・メニュー登録（標準18種のテンプレート / 自由入力）
+├── 商品一覧（今月 / 過去の履歴Catalog）
 ├── 日次売上入力
 ├── 売上分析Dashboard
 └── Geminiによる経営アドバイス
@@ -149,7 +152,7 @@ AdminとGuestは同じ業務画面を利用できますが、
 ```text
 ログイン / Guest Demo開始
         ↓
-商品メニューと価格を登録する
+テンプレートまたは自由入力で対象月の商品を登録する
         ↓
 本日の販売個数を入力・更新する
         ↓
@@ -166,10 +169,19 @@ AdminとGuestは同じ業務画面を利用できますが、
 
 ことを重視しています。
 
+### 📘 公開「システム概要」
+
+[システム概要を読む（ログイン不要）](https://bakery-salesdata.onrender.com/system-overview)
+
+商品登録・売上入力・Dashboard・材料発注・店舗メモ・タスク・Guest Demo・ログイン・AIの9機能について、Python / Flask / SQLAlchemy / JavaScript / pytestの役割を実装と結びつけて説明しています。処理フロー、理解度チェック8問、トラブル逆引き8項目も掲載。未ログイン・Admin・Guestのいずれでも閲覧できます（PR #72 / #73）。
+
 ---
 
 ## ✨ 技術的な見どころ
 
+- 標準18種の商品テンプレート（商品名・代表画像・初期価格）と自由入力
+- 月ごとのProductと履歴Catalogを区別し、今月 / 過去をDatasetごとに表示
+- Admin専用のCatalog商品申請をGitHub PR経由でレビュー・反映（任意画像の検証・WebP化）
 - PostgreSQL / SQLAlchemyによるデータ永続化
 - Flask-Migrate / AlembicによるDB変更管理
 - DatasetによるAdmin / Guest / Guest間のデータ分離
@@ -184,7 +196,7 @@ AdminとGuestは同じ業務画面を利用できますが、
 - 店舗メモは作成・編集時の1行目をタイトルとして扱い、独立カード + 1行本文プレビューで一覧表示
 - 店舗メモの検索・pin・複製・autosave・ゴミ箱・復元・完全削除・Undo・swipe操作
 - Dataset単位のタスク（追加・完了 / 未完了・削除・複数選択・長押し並び替え）
-- Dashboardの棒グラフ周辺UIとPC / Mobileレイアウトを調整
+- Dashboardの棒グラフ周辺UIとPC / Mobileレイアウトを調整（スマホのグラフ上下端からページスクロールへ引き継ぎ）
 - タスク並び替えは実カード追従 + placeholder + FLIPで周囲カードをアニメーション
 - HTTP / HTTPS絶対URLだけを安全にlinkifyし、DBにはplain textを保存
 - Bakery Hubブランド、inline SVG、カテゴリカラーによる共通Navigation
@@ -196,12 +208,13 @@ AdminとGuestは同じ業務画面を利用できますが、
 - Session CookieのSecure / HttpOnly / SameSite設定
 - Security Headers / HSTS
 - GitHub ActionsによるSQLite + PostgreSQL 16の二層CI
-- Falsification / Manual Mutation Testing
+- Falsification / Mutation Testing（2026年8月の手動11件、10月のCodex + Cosmic Rayによる1,286件の再監査）
+- 学習用の公開「システム概要」（9機能・理解度チェック・トラブル逆引き）
 - 月替わり・年替わり事故の回帰テスト
 - 本日の売上金額KPI（日本時間・表示期間とは独立した当日集計）
 - PC Dashboardの主要領域を1画面内で確認しやすくするコンパクトな配置
 - Tosane WorksのWeb Portfolio入口として、ログイン画面に3カテゴリの作品導線を配置
-- 2026-09-30の[GitHub Actions Bakery Hub Tests #234](https://github.com/tosane932/tosane-works/actions/runs/36668156708)（commit `e64d0d6`）：通常pytest **756 passed / 18 skipped**、`test` / `postgres-integration` ともに成功
+- 2026-10-07の[PR #81](https://github.com/tosane932/tosane-works/pull/81)で正式pytestだけをmainへ反映：出荷前のfull pytest **1,009 collected / 991 passed / 18 skipped / 0 failed / 9 warnings**
 
 ---
 
@@ -209,9 +222,9 @@ AdminとGuestは同じ業務画面を利用できますが、
 
 ### 1. 商品メニューと価格を登録する
 
-対象月の商品名と価格を登録します。
+対象月の商品名と価格を登録します。標準18種から選ぶと商品名・代表画像・初期価格が設定され、自由入力での商品追加も可能です。
 
-登録済み商品については、商品IDを基準に名称・価格を更新します。
+登録済み商品の更新は商品IDを基準に行います。テンプレート商品は商品名を固定表示し、実際の売価は初期価格と分けて管理します。
 
 販売終了商品は物理削除せず、
 
@@ -223,7 +236,7 @@ is_active = False
 
 これにより、販売終了後も過去の売上履歴を維持できます。
 
-Guest Demoでは、1 Datasetにつき最大30商品まで登録できます。
+Guest Demoでは、1 Datasetにつき最大30商品まで登録できます。商品名は1〜100文字、売価は0〜9,990円の10円単位です。日次売上の販売数量は0〜1,000個を扱います。
 
 ---
 
@@ -324,6 +337,23 @@ DailySalesが存在する月
 
 ---
 
+## 🥐 商品テンプレート・履歴Catalog・Admin申請（2026年10月）
+
+| 機能 | 現在の仕様 |
+|---|---|
+| 商品テンプレート | 標準18種を選ぶと商品名・画像・初期価格を設定。自由入力も可能 |
+| 月次Product | 対象年月・Datasetごとに登録。Catalogの追加だけでは作成しない |
+| 商品一覧 | 今月の有効商品と過去月の最新履歴を分けて表示。同名商品は今月側を優先 |
+| 履歴保持 | 過去のProduct・価格・画像key・DailySalesを保持し、一覧取得時にDBを更新しない |
+| Admin商品カタログ | Admin専用フォームで商品名・初期価格・ひらがなの読み・任意画像を申請 |
+| 審査・反映 | GitHubへ専用branchとPRを作成。レビュー・merge後、設定されたデプロイで反映 |
+| 画像 | JPEG / PNG / WebPを検証し、必要に応じて縮小してWebPで保存。画像なしも選べる |
+| Guest | Catalog申請・編集・画像アップロードは利用不可。Datasetの分離も維持 |
+
+**初期価格はテンプレートの基準値、実売価は月次Productの価格**です。両者を混同せず、過去の売上記録も消さない構成にしました。Adminからの申請は、実行中のRenderコンテナを直接書き換えるのではなくGitHub PRで変更を確認する方式です（PR [#79](https://github.com/tosane932/tosane-works/pull/79) / [#80](https://github.com/tosane932/tosane-works/pull/80)）。本番でAdmin申請機能を利用するには、別途GitHub tokenなどの適切な設定が必要です。
+
+---
+
 ## 🧰 店舗メモツール
 
 売上管理とは別に、店舗内で頻繁に発生する小さな業務をまとめる領域です。
@@ -357,7 +387,9 @@ PR #64ではスマートフォン上部の余白と固定メニューボタン�
 | CSRF | Flask-WTF / CSRFProtect |
 | Session Cookie | Secure・HttpOnly・SameSite=Lax |
 | Security Header | HSTS・X-Frame-Optionsなど |
-| 商品管理 | 月別商品登録・名称・価格更新 |
+| 商品管理 | 標準18種テンプレート・自由入力・月次Product・実売価編集 |
+| 商品一覧 / Catalog | 今月の登録中商品と過去の履歴をDataset単位で表示 |
+| Admin Catalog申請 | GitHub PRを介したAdmin専用商品登録・任意画像アップロード |
 | 販売終了 | `is_active`による論理削除 |
 | 日次売上 | 商品別販売数・同日データ上書き |
 | 状態表示 | 現在の登録済み個数を表示 |
@@ -368,6 +400,7 @@ PR #64ではスマートフォン上部の余白と固定メニューボタン�
 | URL表示 | HTTP / HTTPS絶対URLだけを安全に自動リンク化 |
 | Mobile UI | 長押し・swipe・Undo・FAB・responsive editor |
 | Navigation | Bakery Hubブランド・inline SVG・カテゴリカラー |
+| システム概要 | 公開教材ページ・9機能の技術説明・処理フロー・理解度チェック8問・トラブル逆引き8項目 |
 | Portfolio入口 | ログイン画面にStore / Information / Logisticsの作品・README・デモ導線 |
 | タスク | Dataset単位の追加・完了 / 未完了・削除・複数選択・長押し並び替え |
 | AI | Gemini APIによる日次支援・経営アドバイス |
@@ -376,7 +409,7 @@ PR #64ではスマートフォン上部の余白と固定メニューボタン�
 | XSS対策 | DOM API・Jinja2 autoescape・安全なlinkify |
 | Migration | Flask-Migrate / Alembic |
 | CI | GitHub Actions（SQLite + PostgreSQL 16） |
-| テスト | pytest・Falsification・Manual Mutation Testing |
+| テスト | pytest・Falsification・Mutation Testing（手動方式・Cosmic Ray） |
 
 ---
 
@@ -428,6 +461,7 @@ PR #64ではスマートフォン上部の余白と固定メニューボタン�
 - pytest
 - Falsification
 - Manual Mutation Testing
+- Cosmic Ray 8.7.0（監査用ツール、Codex経由で実行）
 - CSRF Protection
 - XSS Regression Testing
 - Dataset Isolation Testing
@@ -1192,6 +1226,9 @@ PR #49時点
 
 2026-09-30 / CI #234（commit e64d0d6）
 756 passed / 18 skipped
+
+2026-10-07 / PR #81 出荷前のfull pytest
+1,009 collected / 991 passed / 18 skipped / 0 failed / 9 warnings
 ```
 
 現在は、
@@ -1352,7 +1389,7 @@ year=today.year
 ---
 
 <details>
-<summary><strong>🧬 Falsification / Manual Mutation Testingを見る</strong></summary>
+<summary><strong>🧬 2026年8月のFalsification / 手動Mutation Testingを見る</strong></summary>
 
 <br>
 
@@ -1417,6 +1454,39 @@ Jinja2 autoescapeを実表示経路で確認
 > [**補足**]
 > アプリ全体のMutation Score 100%を意味するものではありません。  
 > 重要な仕様を代表する11条件を手動で選択して検証したものです。
+
+</details>
+
+---
+
+<details>
+<summary><strong>🧪 2026年10月のCodex / Cosmic Ray再監査を見る</strong></summary>
+
+<br>
+
+2026年10月3日〜7日、Phase 0〜25でMutation Testingの2回目の監査を実施しました。Codexへコード変更・pytest実行・記録・復元を任せ、Cosmic Ray 8.7.0も併用しました。監査方針・KILLEDの判定条件・終了Gateは人間側で管理しました。
+
+| 監査結果（重複除外） | 件数 |
+|---|---:|
+| 手動方式（Codexに実行を指示） | 60 |
+| Cosmic Ray | 1,226 |
+| **合計** | **1,286** |
+| KILLED | 1,190 |
+| SURVIVED | 68 |
+| ERROR | 27 |
+| TIMEOUT | 0 |
+| EQUIVALENT | 1 |
+
+保存済みの監査証拠で確認できるpytest追加は193ケースです（**PR #81での収集件数増分とは異なります**）。正式テストは「正常コードでGREEN → 対象Mutationによって狙ったassertでRED → 復元後GREEN」を確認しました。
+
+監査ブランチをそのままmainへmergeせず、PR #80反映後の最新版mainを基点に**正式pytestの7ファイルだけ**を移植しました（新規6ファイル、既存1ファイル）。監査専用DB・ログ・Mutationコードなどは反映していません。
+
+- [PR #81：pytestの強化をmainへ反映](https://github.com/tosane932/tosane-works/pull/81)（2026-10-07 merge）
+- 出荷前のfull pytest：**1,009 collected / 991 passed / 18 skipped / 0 failed / 9 warnings**
+- 9 warningsはSQLite migrationテストのPython 3.12 datetime adapter非推奨警告
+
+> [!IMPORTANT]
+> SURVIVED 68件とERROR 27件が残っています。Final Gateの成立は、すべての故障を検知できたという意味ではありません。また、今回の出荷検証では実ブラウザ・実PostgreSQL・本番DB・Render・実Gemini APIを検証していません。
 
 </details>
 
@@ -1970,6 +2040,16 @@ python app.py
 
 <br>
 
+### 2026-10：商品管理刷新・公開教材・Mutation監査
+
+- PR #72 / #73で公開「システム概要」を追加。9機能の技術解説、処理フロー、理解度チェック8問、逆引き8項目を掲載
+- PR #75でスマホ売上グラフの上下端からページスクロールへ引き継ぐ操作を改善
+- PR #76 / #77でCatalog基盤、商品画像keyとテンプレート選択の土台を整備
+- PR #79で標準18種の商品テンプレート・画像・初期価格、自由入力、Guest UIを改善
+- PR #80で今月 / 過去の履歴CatalogとAdmin専用商品カタログ申請・画像検証・GitHub PR連携を実装
+- Phase 0〜25で1,286件のMutationを監査（手動方式60・Cosmic Ray 1,226）。SURVIVED 68・ERROR 27は残存
+- PR #81で監査により強化した正式pytestだけを最新版mainへ反映（出荷前full pytest 991 passed / 18 skipped）
+
 ### 2026-09：Guest Demo・店舗業務ツール・Bakery Hub UI
 
 - 月替わり・年替わり事故を回帰テスト化
@@ -2088,7 +2168,7 @@ python app.py
 - JavaScriptの外部ファイル化
 - CSS構成の追加整理
 - E2Eテスト導入
-- 自動Mutation Testingツールの検討
+- Cosmic Ray監査で残ったSURVIVED / ERROR候補の追加調査と、必要なpytest強化
 - Mutation Score計測
 - cleanupのbatch化
 - 大量Dataset環境での性能検証
@@ -2099,19 +2179,34 @@ python app.py
 
 ## 🔗 関連リンク
 
-- [Tosane Works：作品一覧](https://github.com/tosane932/tosane-works)
-- [Qiita：開発記録・エラー解決記事](https://qiita.com/tosane932)
-- [オンラインデモ](https://bakery-salesdata.onrender.com/)
-- [GitHubリポジトリ](https://github.com/tosane932/tosane-works/tree/main/store/bakery-hub)
-- [商品を消しても売上履歴を壊さない論理削除の実装記録](https://qiita.com/tosane932/items/4825452f4bb73fd90ba8)
-- [Flask-Migrateの初期マイグレーション修復記録](https://qiita.com/tosane932/items/13c2ca0e17716594aa1e)
-- [📝店舗メモツール完成｜タスクの長押し・並び替えを“使いやすい動き”まで詰めた](https://qiita.com/tosane932/items/de92221331b5f6b5912b)
+### 2026年10月の開発・再監査 3記事
 
-### pytest強化シリーズ
+商品管理の改善から、Mutation Testingの再監査とmain反映までを3本の記事にまとめました。
 
-- [pytestを「事故防止台帳」として育てる 第1段階](https://qiita.com/tosane932/items/f3de1e190873a90de39f)
-- [pytestを「事故防止台帳」として育てる 第2段階](https://qiita.com/tosane932/items/b91261e7103df5792f7d)
-- [pytestを「事故防止台帳」として育てる 第3段階](https://qiita.com/tosane932/items/6d1ca5490979c8cf9d62)
-- [pytestを「事故防止台帳」として育てる 第4段階](https://qiita.com/tosane932/items/372270330e73583a227f)
-- [pytestを「事故防止台帳」として育てる 第5段階](https://qiita.com/tosane932/items/85fd24c7baa6fe7c76a7)
+| 記事 | タイトル・リンク |
+|---|---|
+| 第1記事 | [🥐Bakery Hubの商品管理を作り直した｜18商品テンプレート・履歴Catalog・Admin登録まで](https://qiita.com/tosane932/items/e62462c105efdc8a5d5e) |
+| 第2記事 | [🧪pytestが通るだけでは安心できない｜CodexとCosmic Rayで2度目のMutation Testing](https://qiita.com/tosane932/items/070c26c8cab19a226a30) |
+| 第3記事 | [🧪Codexで挑んだ1,286件のMutation Testing｜pytest再監査からmain反映までの5日間](https://qiita.com/tosane932/items/52dbc54dc2de3748bb72) |
 
+### プロジェクト・参考資料
+
+| 分類 | リンク |
+|---|---|
+| 🌐 Live Demo | [Bakery Hubをブラウザで操作](https://bakery-salesdata.onrender.com/) |
+| 📘 システム概要 | [公開の学習用ページ](https://bakery-salesdata.onrender.com/system-overview) |
+| 💻 ソースコード | [Bakery Hub](https://github.com/tosane932/tosane-works/tree/main/store/bakery-hub) |
+| 📁 ポートフォリオ | [Tosane Works](https://github.com/tosane932/tosane-works) |
+| 🔀 商品管理のPR | [#79](https://github.com/tosane932/tosane-works/pull/79) / [#80](https://github.com/tosane932/tosane-works/pull/80) |
+| 🔀 Mutation監査の出荷PR | [#81](https://github.com/tosane932/tosane-works/pull/81) |
+| 📖 2026年8月の初回Mutation Testing | [📝pytestを「事故防止台帳」として育てる 第5段階：GREENを疑い、Mutation Testingで「本当に守れているか」を検証した](https://qiita.com/tosane932/items/85fd24c7baa6fe7c76a7) |
+| 📝 過去の記事 | [論理削除](https://qiita.com/tosane932/items/4825452f4bb73fd90ba8) / [Flask-Migrate修復](https://qiita.com/tosane932/items/13c2ca0e17716594aa1e) / [店舗メモとTask](https://qiita.com/tosane932/items/de92221331b5f6b5912b) |
+| 📰 Qiita | [技術記事一覧](https://qiita.com/tosane932) |
+
+### pytest強化シリーズ（2026年8月）
+
+- [第1段階](https://qiita.com/tosane932/items/f3de1e190873a90de39f)
+- [第2段階](https://qiita.com/tosane932/items/b91261e7103df5792f7d)
+- [第3段階](https://qiita.com/tosane932/items/6d1ca5490979c8cf9d62)
+- [第4段階](https://qiita.com/tosane932/items/372270330e73583a227f)
+- [第5段階](https://qiita.com/tosane932/items/85fd24c7baa6fe7c76a7)
