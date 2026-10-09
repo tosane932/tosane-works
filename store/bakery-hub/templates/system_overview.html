@@ -16,6 +16,23 @@
     </details>
 </article>
 {%- endmacro %}
+{% macro python_lesson(id, title, meaning, use, reason, locations, feature_id, feature_label, snippet='') -%}
+<section class="python-lesson" id="python-{{ id }}">
+    <h4>{{ title }}</h4>
+    <dl class="overview-description">
+        <dt>これは何か</dt><dd>{{ meaning }}</dd>
+        <dt>Bakery Hubでは</dt><dd>{{ use }} <a href="#feature-{{ feature_id }}">{{ feature_label }}の仕組み</a></dd>
+        <dt>なぜ使うか</dt><dd>{{ reason }}</dd>
+        <dt>教材の住所</dt>
+        <dd><ul class="overview-source-list">
+            {% for path, symbol, line, scope in locations %}
+            <li><span>{{ scope }}：</span><a data-code-address data-source-file="{{ path }}" data-source-symbol="{{ symbol }}" data-source-scope="{{ scope }}" href="https://github.com/tosane932/tosane-works/blob/main/store/bakery-hub/{{ path }}#L{{ line }}"><code>{{ path }}</code> → <code>{{ symbol }}</code></a></li>
+            {% endfor %}
+        </ul></dd>
+    </dl>
+    {% if snippet %}<p class="overview-foundations python-source-snippet"><strong>実コードの一行</strong><br><code>{{ snippet }}</code></p>{% endif %}
+</section>
+{%- endmacro %}
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -43,10 +60,11 @@
         <a href="#flow">全体の流れ</a>
         <a href="#walkthrough">1つの処理を追う</a>
         <a href="#features">機能別の仕組み</a>
-        <a href="#basics">基礎を探す</a>
+        <a href="#basics">Python基礎・応用マップ</a>
         <a href="#technologies">共通技術</a>
         <a href="#tests">テストの目的</a>
         <a href="#quiz">理解度チェック</a>
+        <a href="#python-quiz">Python基礎チェック</a>
         <a href="#troubleshooting">困ったときの逆引き</a>
     </nav>
 
@@ -276,6 +294,577 @@
     <section class="overview-section" id="basics">
         <h2>3. 「基礎」はどこで使われる？</h2>
         <p>用語だけ覚えるより、該当する機能を開き「この処理を変えると何が起きるか」を考えてからコードを読んでみましょう。</p>
+        <p><strong>Python基礎・応用マップ</strong>：値 → 条件 → 繰り返し → 関数とデータ、の順に読むと処理を追いやすくなります。気になるカテゴリだけ開き、教材の住所からGitHubのmainへ進めます。</p>
+        <p class="overview-note">実装済みの使用例だけを掲載しています。業務処理・テスト・初期データ作成・migrationのどこにある例かを明示します。読める範囲の地図であり、Python全仕様を網羅する一覧ではありません。</p>
+        <nav class="overview-contents" aria-label="Python基礎・応用マップの目次">
+            <a href="#python-values">値・型・基本演算</a>
+            <a href="#python-conditions">条件分岐</a>
+            <a href="#python-loops">繰り返し</a>
+            <a href="#python-structures">データ構造</a>
+            <a href="#python-functions">関数</a>
+            <a href="#python-classes">クラス・オブジェクト</a>
+            <a href="#python-exceptions">例外処理</a>
+            <a href="#python-iteration">Pythonらしい反復・データ処理</a>
+            <a href="#python-strings">文字列処理</a>
+            <a href="#python-state">型と状態の確認</a>
+            <a href="#python-modules">モジュール・import</a>
+            <a href="#python-stdlib">標準ライブラリの道具</a>
+            <a href="#python-regex">正規表現</a>
+            <a href="#python-paths">pathlib・ファイルとパス</a>
+            <a href="#python-context">context manager・with・yield</a>
+            <a href="#python-decorators">デコレータ</a>
+            <a href="#python-dates">日付と時間</a>
+            <a href="#web-connections">Webアプリとの接続</a>
+            <a href="#python-help">学習の逆引き</a>
+        </nav>
+        <div class="overview-learning-list">
+            <article class="overview-card python-category" id="python-values">
+                <h3>値・型・基本演算</h3>
+                <p>入力文字、価格、数量、状態を、値と型から読み解きます。</p>
+                <details><summary>実コードの使い方を読む（3項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="assignment",
+                            title="変数・代入",
+                            meaning="変数は値に付ける名前です。=は右側の結果を左側の名前へ代入し、==による比較とは区別します。",
+                            use="商品登録のindex()は、name.strip()の結果をnormalized_nameへ代入します。",
+                            reason="受け取った入力と、検証・保存に使う整えた名前を区別して読めます。",
+                            locations=[["app.py", "index", 1283, "業務処理"]],
+                            feature_id="products",
+                            feature_label="商品・メニュー登録",
+                            snippet="normalized_name = name.strip()"
+                        ) }}
+                        {{ python_lesson(
+                            id="primitive-types",
+                            title="str / int / bool・型変換",
+                            meaning="strは文字列、intは整数、boolはTrue / Falseの状態。型変換は値を別の型として扱える形にすることです。",
+                            use="_parse_bounded_nonnegative_integer()は数字の文字列を検証してintへ変換。タスクの_parse_boolean()はboolまたは文字列の0 / 1を状態へ変換します。",
+                            reason="文字列の数量をそのまま計算せず、受け付けた値を整数や状態として扱います。変換できたことだけで入力が妥当とは限りません。",
+                            locations=[["app.py", "_parse_bounded_nonnegative_integer", 224, "業務処理"], ["shop_tasks.py", "_parse_boolean", 37, "業務処理"]],
+                            feature_id="sales",
+                            feature_label="日次売上入力",
+                            snippet="return int(normalized_value)"
+                        ) }}
+                        {{ python_lesson(
+                            id="operators",
+                            title="比較・算術演算子・真偽値",
+                            meaning="< / <= / == / !=は比較、+ / - / * / %などは計算です。比較の結果や空でない値を条件判断に使います。",
+                            use="index()は商品名の長さを範囲比較し、価格を%で割った余りから10円単位か判断します。",
+                            reason="価格の大小だけでなく、許可した単位かも保存前に確認できます。%は割り算の余りです。",
+                            locations=[["app.py", "index", 1283, "業務処理"]],
+                            feature_id="products",
+                            feature_label="商品・メニュー登録",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-conditions">
+                <h3>条件分岐</h3>
+                <p>条件ごとに処理を選び、不正な値や権限のない操作を止めます。</p>
+                <details><summary>実コードの使い方を読む（2項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="if-guards",
+                            title="if / elif / else・and / or / not",
+                            meaning="ifは条件が成り立つ場合、elifは別の条件、elseはそれ以外を選びます。and / or / notは条件を組み合わせます。",
+                            use="require_current_dataset()は管理者、Guest、それ以外を分け、管理者領域またはそのGuestの領域だけを解決します。",
+                            reason="認証済みというだけで全利用者のデータを返さず、操作してよいDatasetを確定するための分岐です。",
+                            locations=[["app.py", "require_current_dataset", 447, "業務処理"]],
+                            feature_id="guest",
+                            feature_label="Guest Demo",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="identity",
+                            title="is / is not・Noneの判定",
+                            meaning="isは同じオブジェクトかを確認します。値の一致を確認する==とは役割が違い、Noneの有無はis None / is not Noneで調べます。",
+                            use="index()は既存商品を見つけられなければexisting_product is Noneで拒否。入力された商品IDがあるかも別に検証します。",
+                            reason="見つからない商品を別の商品として更新しないためです。Noneと数量0・空文字は同じ状態ではありません。",
+                            locations=[["app.py", "index", 1283, "業務処理"]],
+                            feature_id="products",
+                            feature_label="商品・メニュー登録",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-loops">
+                <h3>繰り返し</h3>
+                <p>全行の確認と、条件に応じて続ける処理を区別します。</p>
+                <details><summary>実コードの使い方を読む（2項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="for-rows",
+                            title="for",
+                            meaning="forは反復できるデータから要素を取り出し、順番に処理します。",
+                            use="input_sales()は商品IDと数量の各組を確認し、検証済みの売上をまとめて保存します。",
+                            reason="1行目だけでなく全商品を検証し、不正な行を含む送信を保存前に拒否するためです。",
+                            locations=[["app.py", "input_sales", 1874, "業務処理"]],
+                            feature_id="sales",
+                            feature_label="日次売上入力",
+                            snippet="for product_id, quantity in zip(product_ids, quantities):"
+                        ) }}
+                        {{ python_lesson(
+                            id="while-control",
+                            title="while / break / continue",
+                            meaning="whileは条件が成り立つ間の繰り返し。continueは次の周回へ進み、breakは繰り返しを終えます。",
+                            use="_split_url_suffix()はURL候補の末尾の句読点や余分な閉じ括弧を1文字ずつ取り分け、不要な末尾がなくなればbreakします。",
+                            reason="メモの文末記号をURLの一部にせず、リンクと後ろの文章を分けます。このリンク化処理はゴミ箱の表示に使われます。",
+                            locations=[["shop_memos.py", "_split_url_suffix", 113, "業務処理"]],
+                            feature_id="memos",
+                            feature_label="店舗メモ・ゴミ箱",
+                            snippet="url = url[:-1]"
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-structures">
+                <h3>データ構造</h3>
+                <p>並べる、対応させる、重複を除く、複数の値を返すための入れ物です。</p>
+                <details><summary>実コードの使い方を読む（3項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="lists-dicts",
+                            title="list / dict・get() / items()",
+                            meaning="listは順番を持つ要素の集まり。dictはキーと値の対応です。get()はキーから値を取得し、items()はキーと値の組を取り出します。",
+                            use="input_sales()は検証済み行をlistへ。dashboard()は商品名と数量のdictをitems()で取り出して並べ替えます。",
+                            reason="複数行の順序と商品名から数量への対応を、それぞれに適した構造で表せます。dict.get()とFlaskのrequest.args.get()は同じライブラリの機能ではありません。",
+                            locations=[["app.py", "input_sales", 1874, "業務処理"], ["app.py", "dashboard", 1751, "業務処理"]],
+                            feature_id="dashboard",
+                            feature_label="売上データ分析",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="sets-membership",
+                            title="set・重複除去・in / not in",
+                            meaning="setは同じ値を重複して持たない集合です。in / not inは要素が含まれるかを確認します。",
+                            use="input_sales()のseen_product_idsで同じ商品IDの二重送信を拒否。商品一覧のproduct_catalog()でもsetで同名履歴の重複を避けます。",
+                            reason="同じ売上を送信内で二度扱うことと、一覧の重複表示を防ぎます。目的により同名判定とID判定を使い分けます。",
+                            locations=[["app.py", "input_sales", 1874, "業務処理"], ["app.py", "product_catalog", 1670, "業務処理"]],
+                            feature_id="sales",
+                            feature_label="日次売上入力",
+                            snippet="seen_product_ids = set()"
+                        ) }}
+                        {{ python_lesson(
+                            id="tuples-unpack",
+                            title="tuple・アンパック",
+                            meaning="tupleは複数の値をひと組にします。アンパックは、その組を複数の名前へ分けて受け取る書き方です。",
+                            use="_validate_title()は整えたタイトル、元の入力、エラーをまとめて返します。create_task()は3つの名前へ受け取ります。",
+                            reason="検証結果と入力欄へ戻す値を一度の関数呼び出しで渡せます。何番目が何を表すか、返す側と受け取る側を見比べます。",
+                            locations=[["shop_tasks.py", "_validate_title", 23, "業務処理"], ["shop_tasks.py", "create_shop_tasks_blueprint.create_task", 147, "業務処理"]],
+                            feature_id="tasks",
+                            feature_label="タスク",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-functions">
+                <h3>関数</h3>
+                <p>入力から戻り値まで、処理のまとまりを追います。</p>
+                <details><summary>実コードの使い方を読む（2項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="function-flow",
+                            title="def・引数・return・デフォルト引数・helper",
+                            meaning="defで処理を定義し、引数で必要な値を受け取り、returnで結果を返します。デフォルト引数は省略時の値です。helperは処理を分けた補助関数の呼び方です。",
+                            use="dashboard()から_get_sales_from_db(current_dataset, target_year=None, target_month=None, *, row_limit=None)を呼び、集計dictを受け取ります。*の後の引数は名前付きで渡します。",
+                            reason="画面処理とDB取得を分け、対象領域・期間・必要な上限を呼び出し側から明示できます。returnはその関数の処理を終了します。",
+                            locations=[["app.py", "_get_sales_from_db", 2131, "業務処理"], ["app.py", "dashboard", 1751, "業務処理"]],
+                            feature_id="dashboard",
+                            feature_label="売上データ分析",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="type-hints",
+                            title="型ヒント",
+                            meaning="引数や戻り値がどの型を想定するかを読み手や解析ツールへ示す注釈です。注釈を書くだけで実行時の型チェックは行われません。",
+                            use="prompts.pyのbuild_sales_prompt(sales_summary: str) -> strは、販売数量の説明文字列を受け取り、AIへ渡す文字列を返します。",
+                            reason="入力と出力の意図を読みやすくします。現在のアプリ全体に広く導入されているわけではなく、入力検証の代わりにもなりません。",
+                            locations=[["prompts.py", "build_sales_prompt", 4, "業務処理"]],
+                            feature_id="ai",
+                            feature_label="AIアドバイス",
+                            snippet="def build_sales_prompt(sales_summary: str) -> str:"
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-classes">
+                <h3>クラス・オブジェクト</h3>
+                <p>インスタンスの属性と、継承して使う機能を確認します。</p>
+                <details><summary>実コードの使い方を読む（2項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="user-objects",
+                            title="class・instance・__init__・self・属性・継承・property",
+                            meaning="classから作る個々のオブジェクトがインスタンス。__init__で初期化し、selfからそのインスタンスの属性へアクセスします。継承は既存classの仕組みを引き継ぐことです。",
+                            use="AdminUserとGuestUserはFlask-LoginのUserMixinを継承。GuestUser.__init__()がdataset_idを持たせ、@propertyのidがguest:で始まる識別子を返します。",
+                            reason="Guestごとに領域を持たせ、認証へ渡す識別子を属性のように取得します。propertyは保存済みのDB列を作る機能ではありません。",
+                            locations=[["app.py", "AdminUser", 152, "業務処理"], ["app.py", "GuestUser", 158, "業務処理"], ["app.py", "GuestUser.id", 166, "業務処理"]],
+                            feature_id="auth",
+                            feature_label="ログイン・Guest認証",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="models",
+                            title="PythonのclassとSQLAlchemy Model",
+                            meaning="Pythonのclassを基礎に、SQLAlchemyがテーブル・列・関連付け・DBへの読み書きの仕組みを組み立てています。普通のclassを定義するだけでDBへ保存されるわけではありません。",
+                            use="models.pyのProduct(db.Model)とDailySales(db.Model)は、商品と日別実績の列・関係を定義しています。",
+                            reason="商品のオブジェクトを扱うPythonと、永続化するDBの構造をつなぎます。db.sessionへの追加やcommitと、単なる属性の代入を区別します。",
+                            locations=[["models.py", "Product", 333, "業務処理"], ["models.py", "DailySales", 365, "業務処理"]],
+                            feature_id="products",
+                            feature_label="商品登録・売上保存",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-exceptions">
+                <h3>例外処理</h3>
+                <p>失敗の種類を分け、半端な保存や後片付け漏れを防ぎます。</p>
+                <details><summary>実コードの使い方を読む（3項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="try-rollback",
+                            title="try / except・rollback",
+                            meaning="tryで処理を試し、指定した例外が起きるとexceptで対応します。rollbackはPython構文ではなく、SQLAlchemyの変更取消処理です。",
+                            use="input_sales()は日付・商品IDの変換失敗を拒否し、DB保存中のSQLAlchemyErrorではdb.session.rollback()して失敗を返します。",
+                            reason="エラー応答だけを返して一部の売上を残すことを避けます。Pythonの例外処理がDBのtransactionを守る呼び出しにつながります。",
+                            locations=[["app.py", "input_sales", 1874, "業務処理"]],
+                            feature_id="sales",
+                            feature_label="日次売上入力",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="raise-custom",
+                            title="raise・独自例外・例外のつながり",
+                            meaning="raiseは例外を発生させます。独自classで失敗の種類を定義できます。raise ... from errorは元の原因と新しい例外を結び付けます。",
+                            use="商品画像のvalidate_image()はInvalidCatalogImageを発生させ、通信処理はCatalogPublishErrorを使います。GuestCapacityFullは満員と他の503障害を分けます。",
+                            reason="画像の形式不正、通信失敗、Guest満員を文字列比較だけで分類せず、それぞれの対応へ進むためです。",
+                            locations=[["catalog_repository.py", "validate_image", 38, "業務処理"], ["catalog_repository.py", "InvalidCatalogImage", 30, "業務処理"], ["catalog_repository.py", "CatalogPublishError", 34, "業務処理"], ["app.py", "GuestCapacityFull", 201, "業務処理"]],
+                            feature_id="products",
+                            feature_label="商品カタログ申請",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="reraise-finally",
+                            title="再raise・finally・migrationの検証",
+                            meaning="except内で引数なしのraiseを使うと元の例外を再送出します。finallyはtryの終了時に実行する後片付けです。",
+                            use="seed_demo_data()はrollback後に再raiseし、失敗を成功に見せません。Dataset移行の_validate_backfill()は件数や所有者を確認し、不整合ならRuntimeErrorを発生させます。",
+                            reason="初期データ作成やDB移行の失敗を呼び出し側へ伝え、変更前後のデータ保全を確認します。ロックを解放するfinallyの例は「with / yield」で辿れます。",
+                            locations=[["seed_demo.py", "seed_demo_data", 31, "初期データ作成"], ["migrations/versions/c7a1d9e4f2b6_create_datasets_and_backfill_products.py", "_validate_backfill", 58, "migration"]],
+                            feature_id="guest",
+                            feature_label="Datasetの分離と移行",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-iteration">
+                <h3>Pythonらしい反復・データ処理</h3>
+                <p>番号・組・並び順・条件判定を短く表す書き方です。</p>
+                <details><summary>実コードの使い方を読む（4項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="enumerate-zip",
+                            title="enumerate() / zip()",
+                            meaning="enumerate()は番号と要素を取り出し、既定では0から番号を付けます。zip()は複数の並びから同じ位置の要素を組にします。",
+                            use="reorder_tasks()は受信したID順にpositionを保存。input_sales()は商品IDと数量をzip()で対応付けます。",
+                            reason="タスクの順番と商品ごとの数量を明示できます。zip()は短い方に合わせて止まるため、売上処理は先に件数一致を検証しています。",
+                            locations=[["shop_tasks.py", "create_shop_tasks_blueprint.reorder_tasks", 375, "業務処理"], ["app.py", "input_sales", 1874, "業務処理"]],
+                            feature_id="tasks",
+                            feature_label="タスク並び替え",
+                            snippet="for position, task_id in enumerate(task_ids):"
+                        ) }}
+                        {{ python_lesson(
+                            id="sorted-lambda",
+                            title="sorted() / lambda / key / reverse",
+                            meaning="sorted()は新しい並びを作ります。keyは比較に使う値を取り出す関数、lambdaは短い無名関数、reverse=Trueは降順の指定です。",
+                            use="dashboard()は商品名・数量の組について、item[1]の数量をkeyにして多い順へ並べます。",
+                            reason="商品名順ではなく販売数量順のランキングを作ります。SQLの集計とPythonの表示順の整理は別の担当です。",
+                            locations=[["app.py", "dashboard", 1751, "業務処理"]],
+                            feature_id="dashboard",
+                            feature_label="売上ランキング",
+                            snippet="ranked_sales = sorted(sales_data.items(), key=lambda item: item[1], reverse=True)"
+                        ) }}
+                        {{ python_lesson(
+                            id="comprehensions-any",
+                            title="内包表記・any()・ジェネレータ式",
+                            meaning="内包表記は反復からlist / dict / setを組み立てます。any()は1つでも真ならTrue。丸括弧などで書くジェネレータ式は必要に応じて値を取り出します。",
+                            use="タスクrender_list()は内包表記で完了・未完了のlistへ分け、_parse_task_ids()はany()とジェネレータ式で不正なIDがあるか調べます。",
+                            reason="表示対象の整理と不正値の検出を表せます。list内包表記とジェネレータ式は同じ入れ物ではなく、後者はlistを先に作りません。",
+                            locations=[["shop_tasks.py", "create_shop_tasks_blueprint.render_list", 108, "業務処理"], ["shop_tasks.py", "_parse_task_ids", 45, "業務処理"]],
+                            feature_id="tasks",
+                            feature_label="タスク一覧とID検証",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="all-range",
+                            title="all() / range()はテスト側で読む",
+                            meaning="all()はすべての要素が真かを確認し、空ならTrueです。range()は一定範囲の整数を反復できます。",
+                            use="ログイン上限のテストはrange()で試行を繰り返します。PostgreSQLテストのall()は匿名キーの長さ・文字と複数行をまとめて検証します。",
+                            reason="上限まで試した結果や保存形式を確認するためのテスト用例です。SQLAlchemyのquery.all()は行を取得するメソッドで、Python組み込みのall()とは別です。",
+                            locations=[["tests/test_admin_login_rate_limit.py", "test_five_failed_logins_are_allowed_and_sixth_is_rate_limited", 61, "テスト"], ["tests/test_admin_login_rate_limit_postgresql.py", "test_concurrent_failed_admin_logins_never_exceed_postgresql_limit", 336, "テスト"]],
+                            feature_id="auth",
+                            feature_label="ログイン試行回数のテスト",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-strings">
+                <h3>文字列処理</h3>
+                <p>入力を整え、長さや行を確認し、表示する文章を組み立てます。</p>
+                <details><summary>実コードの使い方を読む（2項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="strip-slice",
+                            title="strip() / splitlines() / len() / スライス",
+                            meaning="strip()は両端の空白、splitlines()は行の分割、len()は長さの確認。スライスは一部分を取り出す書き方です。",
+                            use="_derive_title_from_body()は最初の空でない行を探し、[:SHOP_MEMO_TITLE_MAX_LENGTH]でタイトルを切り出します。",
+                            reason="スマホで本文を自動保存したとき、先頭の空行をタイトルにせず、上限内の見出しを作ります。",
+                            locations=[["shop_memos.py", "_derive_title_from_body", 69, "業務処理"]],
+                            feature_id="memos",
+                            feature_label="店舗メモの自動保存",
+                            snippet="stripped_line = line.strip()"
+                        ) }}
+                        {{ python_lesson(
+                            id="join-fstrings",
+                            title="join() / f文字列・casefold()",
+                            meaning="str.join()は複数の文字列を区切り付きで連結し、f文字列は値を文章へ埋め込みます。casefold()は大文字・小文字差の比較に使う変換です。",
+                            use="_generate_ai_advice()は商品名と数量の文章をjoin()でまとめます。publish_catalog_change()はcasefold()でカタログの同名登録を確認します。",
+                            reason="AIへ渡す説明の整形と、文字の大小だけが違う重複登録の防止に使います。SQLAlchemyのquery.join()によるテーブル結合とは別です。",
+                            locations=[["app.py", "_generate_ai_advice", 1064, "業務処理"], ["catalog_repository.py", "publish_catalog_change", 103, "業務処理"]],
+                            feature_id="ai",
+                            feature_label="AIに渡す売上説明",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-state">
+                <h3>型と状態の確認</h3>
+                <p>値がない、False、数量0を区別し、JSONの想定外の型を拒否します。</p>
+                <details><summary>実コードの使い方を読む（2項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="isinstance-bool",
+                            title="isinstance()・boolとintの区別",
+                            meaning="isinstance()は値が指定した型のインスタンスかを確認します。Pythonではboolもintの一種として判定されるため、用途によって別に除外します。",
+                            use="_parse_task_ids()はJSONがdictか、task_idsがlistか、各IDが正のintかを確認し、True / FalseはIDとして受け付けません。",
+                            reason="数値IDのつもりで状態値を使われることを防ぎます。型だけでなく、正数・重複・所有者も別の条件で検証します。",
+                            locations=[["shop_tasks.py", "_parse_task_ids", 45, "業務処理"]],
+                            feature_id="tasks",
+                            feature_label="タスク操作のJSON検証",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="none-state",
+                            title="None / is None / is not None",
+                            meaning="Noneは値がないことを表します。Falseは偽の状態、0は数値であり、意味を区別して扱います。",
+                            use="memo_json_payload()はpinned_at is not Noneから固定状態を作ります。ShopMemoは削除日時deleted_atを持ち、ShopTaskはis_completedとcompleted_atを対応させます。",
+                            reason="固定していない、ゴミ箱に入っている、完了しているなどの状態を、日時の有無とboolで明確に表します。",
+                            locations=[["shop_memos.py", "create_shop_memos_blueprint.memo_json_payload", 315, "業務処理"], ["models.py", "ShopMemo", 174, "業務処理"], ["models.py", "ShopTask", 258, "業務処理"]],
+                            feature_id="memos",
+                            feature_label="メモの固定・ゴミ箱",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-modules">
+                <h3>モジュール・import</h3>
+                <p>標準ライブラリ、外部ライブラリ、自作モジュールの役割を分けます。</p>
+                <details><summary>実コードの使い方を読む（1項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="imports",
+                            title="import / from ... import ...",
+                            meaning="モジュールはコードをまとめた単位。importは他のモジュールの機能を使い、from ... import ...は名前を指定して取り込みます。",
+                            use="app.pyはPython標準のdatetimeやhashlib、外部のFlaskやSQLAlchemy、自作のmodels・prompts・shop_tasks等を読み込みます。",
+                            reason="すべてを自作せず、日付、HTTP、DB、業務処理を担当ごとに組み合わせます。_generate_ai_advice()から自作build_sales_prompt()へも処理を辿れます。",
+                            locations=[["app.py", "_generate_ai_advice", 1064, "業務処理"], ["prompts.py", "build_sales_prompt", 4, "業務処理"]],
+                            feature_id="ai",
+                            feature_label="AIアドバイスの組み立て",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-stdlib">
+                <h3>標準ライブラリの道具</h3>
+                <p>ここで扱う標準ライブラリはPythonに含まれる道具です。Flask等の外部ライブラリと区別します。</p>
+                <details><summary>実コードの使い方を読む（3項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="uuid-json-io",
+                            title="uuid / json / io",
+                            meaning="uuidは識別子、jsonはデータの読書き、ioはメモリ上の読み書き用バッファなどを提供します。",
+                            use="Datasetはuuid.uuid4で識別子を作り、load_admin_catalog()はjson.loadで商品設定を読みます。validate_image()はio.BytesIOで画像の入力・再符号化結果を扱います。",
+                            reason="Guestを区別し、商品設定を読むことと画像データを処理することを、それぞれの道具で表します。画像の解析自体は外部ライブラリPillowです。",
+                            locations=[["models.py", "Dataset", 14, "業務処理"], ["product_images.py", "load_admin_catalog", 145, "業務処理"], ["catalog_repository.py", "validate_image", 38, "業務処理"]],
+                            feature_id="products",
+                            feature_label="商品カタログ・画像",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="hash-hmac-ip",
+                            title="hashlib / hmac / ipaddress",
+                            meaning="hashlibはハッシュ計算、hmacは秘密鍵を使う照合やメッセージ認証、ipaddressはIPアドレスの解析に使います。",
+                            use="_get_admin_auth_fingerprint()は認証設定の指紋を作り、load_user()はhmac.compare_digestで照合。_get_rate_limit_client_key()はIPを正規化しHMACの匿名キーへ変換します。",
+                            reason="認証設定の変更を検知し、試行上限をclientごとに管理します。ハッシュと暗号化は同じ処理ではなく、IPや秘密値をこのページに表示しません。",
+                            locations=[["app.py", "_get_admin_auth_fingerprint", 354, "業務処理"], ["app.py", "load_user", 362, "業務処理"], ["app.py", "_get_rate_limit_client_key", 735, "業務処理"]],
+                            feature_id="auth",
+                            feature_label="認証状態と試行上限",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="wraps-lock",
+                            title="functools / contextlib / threading",
+                            meaning="wrapsは包んだ関数の名前等を引き継ぎ、contextmanagerはwith用の処理を作ります。threadingは同一プロセス内の同期等を扱います。",
+                            use="admin_or_guest_required()はwrapsを使用。_serialize_admin_login_attempt()はSQLiteではthreading.Lock、PostgreSQLではDBのadvisory lockを使用します。",
+                            reason="認証デコレータの関数情報を保ち、同時のログイン試行を整理します。threading.Lockだけで別プロセスまで守れるという説明にはしません。",
+                            locations=[["app.py", "admin_or_guest_required", 432, "業務処理"], ["app.py", "_serialize_admin_login_attempt", 696, "業務処理"]],
+                            feature_id="auth",
+                            feature_label="ログインと同時試行",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-regex">
+                <h3>正規表現</h3>
+                <p>文字列の形を調べます。型・パス・URLの検証とは組み合わせて使います。</p>
+                <details><summary>実コードの使い方を読む（1項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="re-patterns",
+                            title="re・compile() / finditer() / fullmatch()",
+                            meaning="正規表現は文字列の形をパターンで表す道具。finditer()は一致箇所を順に取り出し、fullmatch()は文字列全体が一致するか確認します。",
+                            use="_linkify_memo_body()はHTTP(S) URL候補を探します。商品画像のavailable_product_images()と_safe_image_path()は画像キーやAdmin画像名をパターンで確認します。",
+                            reason="メモのURL候補と、承認済み画像の識別子を確認します。URL候補はさらにurlsplitで検証し、画像はさらに配置範囲・実ファイルも確認します。",
+                            locations=[["shop_memos.py", "_linkify_memo_body", 154, "業務処理"], ["product_images.py", "available_product_images", 182, "業務処理"], ["product_images.py", "_safe_image_path", 156, "業務処理"]],
+                            feature_id="memos",
+                            feature_label="メモ・ゴミ箱のURL表示",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-paths">
+                <h3>pathlib・ファイルとパス</h3>
+                <p>ファイルの場所を表すPathと、ファイルを開く処理を確認します。</p>
+                <details><summary>実コードの使い方を読む（1項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="path-files",
+                            title="pathlib.Path・ファイルの読み取り",
+                            meaning="パスはファイルやディレクトリの場所。Pathなら/での結合、name / suffix、resolve()、is_file()等を使え、文字列の連結と違って操作をまとめて表せます。",
+                            use="_safe_image_path()はproduct_images配下の実ファイルかを確認し、load_admin_catalog()はwithとencoding=\"utf-8\"でJSONを開きます。",
+                            reason="入力名をそのまま画像の場所に使わず、承認したディレクトリの内側にあることを確かめます。Pathを使うだけで安全になるわけではありません。",
+                            locations=[["product_images.py", "_safe_image_path", 156, "業務処理"], ["product_images.py", "load_admin_catalog", 145, "業務処理"]],
+                            feature_id="products",
+                            feature_label="商品画像と商品設定",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-context">
+                <h3>context manager・with・yield</h3>
+                <p>準備 → 一時的に使う → 片付ける、という流れを追います。</p>
+                <details><summary>実コードの使い方を読む（2項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="context-lock",
+                            title="with / @contextmanager / yield / finally",
+                            meaning="withは利用前後の処理をcontext managerへ任せます。@contextmanagerではyieldの位置で呼び出し側へ処理を渡し、戻ってから片付けます。",
+                            use="_serialize_admin_login_attempt()はロック取得後にyieldし、finallyでrollback・SQLiteのロック解放を行います。login()がwithで利用します。",
+                            reason="認証処理の途中に例外があっても片付けるためです。このyieldは大量データの配信ではなく、ロックを使う期間を囲む用途です。",
+                            locations=[["app.py", "_serialize_admin_login_attempt", 696, "業務処理"], ["app.py", "login", 1217, "業務処理"]],
+                            feature_id="auth",
+                            feature_label="管理者ログイン",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="fixture-yield",
+                            title="pytest fixtureのyield",
+                            meaning="pytestのyield fixtureは、yieldまでが準備、渡した値をテストが使い、yieldの後が片付けです。pytestがその流れを管理します。",
+                            use="conftest.pyのflask_app()は隔離したメモリ内SQLiteにテーブルを作り、アプリをyieldし、テスト後にsessionを片付けてテーブルを削除します。",
+                            reason="テストごとのデータを分けるための処理です。アプリ側のcontext managerと同じyield構文でも、呼び出して管理する仕組みと目的は異なります。",
+                            locations=[["conftest.py", "flask_app", 47, "テスト"]],
+                            feature_id="sales",
+                            feature_label="売上入力などのpytest",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-decorators">
+                <h3>デコレータ</h3>
+                <p>@の行が何を登録・追加しているのかを確認します。</p>
+                <details><summary>実コードの使い方を読む（2項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="route-auth",
+                            title="route・Blueprint・認証デコレータ",
+                            meaning="デコレータは関数等に別の処理を適用する書き方です。何をするかはデコレータごとに異なり、@があるだけで認証されるわけではありません。",
+                            use="appの@app.route等はURLを登録し、Blueprintの@blueprint.get / postは店舗ツールのURLを登録。@admin_or_guest_requiredや@access_requiredが認証・認可を追加します。",
+                            reason="URLと処理を結び、関数本体へ進む前に利用者を確認します。Pythonの書き方、Flaskの登録機能、認証の役割を分けて読みます。",
+                            locations=[["app.py", "dashboard", 1751, "業務処理"], ["app.py", "admin_or_guest_required", 432, "業務処理"], ["shop_tasks.py", "create_shop_tasks_blueprint.list_tasks", 141, "業務処理"]],
+                            feature_id="tasks",
+                            feature_label="タスク画面の取得",
+                            snippet=""
+                        ) }}
+                        {{ python_lesson(
+                            id="other-decorators",
+                            title="property / contextmanager / pytestのmark",
+                            meaning="@propertyはメソッドを属性のように読める形にし、@contextmanagerはwithの流れを作ります。pytestのmarkはテストに条件やパラメータ等を付けます。",
+                            use="GuestUser.id、_serialize_admin_login_attempt()、test_business_today_uses_jst_at_utc_date_boundary()の@pytest.mark.parametrizeを見比べます。",
+                            reason="同じ@でも用途が違うと分かります。日付のテストは1つの検証処理に複数の時刻と期待日を与えます。",
+                            locations=[["app.py", "GuestUser.id", 166, "業務処理"], ["app.py", "_serialize_admin_login_attempt", 696, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
+                            feature_id="auth",
+                            feature_label="認証と日付境界のテスト",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+            <article class="overview-card python-category" id="python-dates">
+                <h3>日付と時間</h3>
+                <p>店舗の今日、保存する時刻、Guestの期限を分けます。</p>
+                <details><summary>実コードの使い方を読む（2項目）</summary>
+                    <div class="overview-learning-list">
+                        {{ python_lesson(
+                            id="business-date",
+                            title="datetime / date / ZoneInfo・日本時間",
+                            meaning="datetimeは日時、dateは日付。ZoneInfoはタイムゾーンを表します。同じ瞬間でも地域によって日付が違います。",
+                            use="business_today()はAsia/Tokyoの今日を返し、input_sales()はdate.fromisoformat()で送信された日付を変換します。",
+                            reason="売上入力の今月と本日の金額を日本時間でそろえます。月や年をまたぐと対象商品が変わるため、境界をpytestで確認します。",
+                            locations=[["app.py", "business_today", 210, "業務処理"], ["app.py", "input_sales", 1874, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
+                            feature_id="sales",
+                            feature_label="日本時間の売上入力",
+                            snippet="return datetime.datetime.now(BUSINESS_TIMEZONE).date()"
+                        ) }}
+                        {{ python_lesson(
+                            id="utc-expiry",
+                            title="UTC / timedelta・期限の比較",
+                            meaning="UTCは時刻の基準、timedeltaは時間差です。日時への加算と比較で有効期限を判断できます。",
+                            use="utc_now()はUTCの日時を作り、_guest_dataset_is_expired()は絶対期限と最終操作時刻＋無操作期限を現在時刻と比較します。",
+                            reason="店舗の今日という日付と、Guestが何分・何時間使えるかという経過時間を区別し、期限切れの利用を止めます。",
+                            locations=[["models.py", "utc_now", 9, "業務処理"], ["app.py", "_guest_dataset_is_expired", 243, "業務処理"]],
+                            feature_id="guest",
+                            feature_label="Guestの利用期限",
+                            snippet=""
+                        ) }}
+                    </div>
+                </details>
+            </article>
+        </div>
+        <section id="web-connections" class="overview-section">
+            <h3>PythonとWebアプリの接続</h3>
+            <p>for・if・関数はPythonの基礎。request.formはFlask、queryはSQLAlchemy、fetchはJavaScriptです。Pythonから順に、入力を受ける → DBへ保存する → 画面へ返す、という境界を辿りましょう。</p>
         <dl class="overview-basics overview-card">
             <dt><code>if</code> / <code>for</code></dt><dd><a href="#feature-products">商品登録</a>で、不正な値なら拒否し、複数行を順に検証・更新します。条件分岐と繰り返しです。</dd>
             <dt>関数 / 引数 / <code>return</code></dt><dd><a href="#feature-dashboard">売上分析</a>の<code>_get_sales_from_db(current_dataset, target_year, target_month)</code>は、対象領域と期間を引数で受け取り、集計結果を返します。</dd>
@@ -293,6 +882,14 @@
             <dt>JavaScript event</dt><dd><a href="#feature-tasks">タスク</a>の<code>addEventListener()</code>がclick・pointer・touchなどを受けて、画面の変更やサーバーへの送信につなげます。</dd>
             <dt>pytest fixture</dt><dd><code>conftest.py</code>の<code>flask_app</code>、<code>authenticated_client</code>、<code>csrf_token</code>が、テスト用DB・認証済みclient・CSRF tokenの準備を共通化します。</dd>
         </dl>
+        </section>
+        <nav id="python-help" class="overview-card overview-section" aria-label="Python学習の逆引き">
+            <h3>Pythonの読み方で迷ったら</h3>
+            <p><a href="#python-functions">関数の入力と戻り値を追いたい → 関数へ</a></p>
+            <p><a href="#python-state">NoneとFalseの意味が分からない → 型と状態へ</a></p>
+            <p><a href="#python-context">yieldの前後で何が起きる？ → with・片付けへ</a></p>
+            <p><a href="#troubleshooting">画面や保存の不具合を調べたい → 既存の障害調査用逆引きへ</a></p>
+        </nav>
     </section>
 
     <section class="overview-section" id="technologies">
@@ -379,6 +976,103 @@
                 <h3>Q8. 認証のSessionとdb.sessionは同じもの？</h3>
                 <details><summary>答えを見る</summary>
                     <div class="overview-answer"><p>役割が違います。FlaskのSessionはFlask-Loginとともに、リクエストをまたいで認証状態を引き継ぎます。<code>db.session</code>はSQLAlchemyがDBの読み書きとtransactionを管理する仕組みです。認証状態だけで商品を選ぶのではなく、認証された利用者のDatasetにqueryを限定します。</p></div>
+                </details>
+            </article>
+        </div>
+    </section>
+
+    <section class="overview-section" id="python-quiz">
+        <h2>Python基礎チェック</h2>
+        <p>既存の理解度チェック8問とは別の15問です。まず自分の言葉で考え、「答えを見る」で理由を確認してください。各回答から対応する学習項目へ戻れます。</p>
+        <div class="overview-learning-list">
+            <article class="overview-card" id="python-q1">
+                <h3>Q1. 数量の文字列をintへ変換するだけで、入力検証は十分？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>十分ではありません。_parse_bounded_nonnegative_integer()は文字種と上限を確認してから整数へ変換します。型が合っていても範囲外なら不正です。価格はさらに10円単位かも検証します。</p><p><a href="#python-primitive-types">値と型の例へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q2">
+                <h3>Q2. forは、売上入力で何のために使われている？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>input_sales()が複数の商品IDと数量を順番に確認するためです。各行を検証してから保存するので、途中に不正な行があれば一部だけ保存することを避けられます。</p><p><a href="#python-for-rows">forの処理へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q3">
+                <h3>Q3. タスク並び替えでenumerate()が便利なのはなぜ？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>受け取ったタスクIDに0からの番号を付け、同時に取り出せるからです。reorder_tasks()はその番号をpositionへ保存します。番号を自分で別の変数に数え直す必要がありません。</p><p><a href="#python-enumerate-zip">番号と要素の対応へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q4">
+                <h3>Q4. zip()の前に商品IDと数量の件数を確認するのはなぜ？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>zip()は短い方の並びに合わせて止まり、余った要素を自動でエラーにはしないからです。input_sales()は先に件数一致を検証し、商品IDと数量を取り違えたり余りを無視したりしないようにします。</p><p><a href="#python-enumerate-zip">zipの使い方へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q5">
+                <h3>Q5. タスクIDの重複確認でsetを使う理由は？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>setは同じ値を重複して持たないため、元のlistとsetの長さを比べて重複を見つけられます。_parse_task_ids()は型と正数も確認します。setだけでIDの所有者まで確認できるわけではありません。</p><p><a href="#python-sets-membership">集合と重複へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q6">
+                <h3>Q6. sorted()のkeyとreverse=Trueは何を指定する？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>Dashboardではkeyのlambda item: item[1]が数量を選びます。reverse=Trueで数量の多い順へ並べます。商品名ではなく数量で比較したい、というランキングの目的を指定しています。</p><p><a href="#python-sorted-lambda">ランキングの並べ方へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q7">
+                <h3>Q7. 店舗メモのpinned_atがNoneなら何を表す？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>固定した日時がない、つまり固定していない状態です。memo_json_payload()はis not Noneで固定のboolを作ります。Noneは値がないこと、Falseは状態、0は数値として区別します。</p><p><a href="#python-none-state">Noneと状態へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q8">
+                <h3>Q8. try / exceptでDB障害を捕まえた後、rollbackするのはなぜ？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>失敗までに行った変更を取り消し、売上が途中まで保存された状態を残さないためです。exceptというPython構文自体が取り消すのではなく、db.session.rollback()を呼んでDBの作業単位を戻します。</p><p><a href="#python-try-rollback">例外と保存の取消へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q9">
+                <h3>Q9. メモURL処理のwhileとbreakはどんな役割？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>_split_url_suffix()は末尾の句読点や余分な閉じ括弧を1文字ずつ外します。外したらcontinueで次の確認へ進み、外すものがなくなればbreakします。リンクへ文章の句読点を巻き込まないためです。</p><p><a href="#python-while-control">URL末尾の処理へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q10">
+                <h3>Q10. pathlib.Pathを使えば、すべてのファイル名が安全になる？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>なりません。_safe_image_path()はPathで場所を組み立てた上で、許可した名前や拡張子、配置範囲、実ファイルかを検証します。Pathはファイルの場所を扱う道具で、入力を無条件に許可する仕組みではありません。</p><p><a href="#python-path-files">Pathと検証へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q11">
+                <h3>Q11. app側のyieldとpytest fixtureのyieldは同じ目的？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>構文は同じでも目的と管理する仕組みが違います。app側はwithでロックを使う期間を囲み、finallyで解放します。fixtureはテストDBを準備してアプリを渡し、pytestがテスト後の片付けへ進めます。</p><p><a href="#python-fixture-yield">fixtureの準備と片付けへ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q12">
+                <h3>Q12. GuestUserは普通のclass？ Productとの違いは？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>どちらもPythonのclassを基礎にしますが、GuestUserはUserMixinを継承して認証用の属性を持ちます。Productはdb.Modelを継承し、SQLAlchemyがDB列やテーブルとの対応を組み立てます。classを書いただけで保存されるわけではありません。</p><p><a href="#python-models">classとDB Modelへ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q13">
+                <h3>Q13. デコレータの@が付いていれば、必ず認証される？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>認証されるとは限りません。routeはURLを登録し、認証デコレータは利用者を確認します。propertyやcontextmanager、pytestのmarkにもそれぞれ別の役割があるため、@の後の名前と定義を確認します。</p><p><a href="#python-route-auth">デコレータの役割へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q14">
+                <h3>Q14. 「今日」を日本時間で決めると、何に影響する？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>business_today()の年月で売上入力の今月の商品を選び、日付で本日の金額を集計します。UTCではまだ前日でも日本では翌日という境界があるので、ZoneInfoで店舗の今日をそろえます。Guest期限はUTCの経過時間で別に判定します。</p><p><a href="#python-business-date">店舗の日付へ戻る</a></p></div>
+                </details>
+            </article>
+            <article class="overview-card" id="python-q15">
+                <h3>Q15. strという型ヒントを書けば、間違った型を自動で拒否する？</h3>
+                <details><summary>答えを見る</summary>
+                    <div class="overview-answer"><p>型ヒントだけでは自動で拒否しません。build_sales_prompt()の注釈は入力と戻り値の意図を示します。実際の入力はサーバー側で検証します。またall()の教材例はテスト側であり、DBのquery.all()とは別の機能です。</p><p><a href="#python-type-hints">型ヒントの範囲へ戻る</a></p></div>
                 </details>
             </article>
         </div>
