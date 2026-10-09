@@ -6,21 +6,28 @@
     const button = document.getElementById("overview-location-button");
     const label = document.getElementById("overview-current-chapter");
     const panel = document.getElementById("overview-page-contents");
+    const backdrop = document.getElementById("overview-contents-backdrop");
     const chapters = [...document.querySelectorAll("main > [data-overview-chapter]")];
     const links = panel ? [...panel.querySelectorAll("a[data-overview-link]")] : [];
     const closeButton = panel?.querySelector("[data-overview-close]");
 
-    if (!reader || !button || !label || !panel || !closeButton
+    if (!reader || !button || !label || !panel || !closeButton || !backdrop
         || !chapters.length || chapters.length !== links.length) {
         return;
     }
 
     let currentIndex = 0;
     let scheduled = false;
+    let contentsOpen = false;
+    let closeTimer = null;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const background = [...document.querySelector("main").children]
+        .filter(element => element !== reader && element !== panel);
+    background.push(...document.querySelectorAll(".app-sidebar, .app-navigation-open-button"));
 
     function syncButton() {
-        button.setAttribute("aria-expanded", String(!panel.hidden));
-        button.setAttribute("aria-label", `現在地：${label.textContent}。目次を${panel.hidden ? "開く" : "閉じる"}`);
+        button.setAttribute("aria-expanded", String(contentsOpen));
+        button.setAttribute("aria-label", `現在地：${label.textContent}。目次を${contentsOpen ? "閉じる" : "開く"}`);
     }
 
     function setCurrent(index) {
@@ -35,6 +42,7 @@
         });
         syncButton();
         updateOffset();
+        document.dispatchEvent(new CustomEvent("overview:chapterchange", {detail: {index}}));
     }
 
     function updateCurrent() {
@@ -73,27 +81,54 @@
     }
 
     function closeContents(returnFocus = false) {
-        panel.hidden = true;
+        if (!contentsOpen) return;
+        contentsOpen = false;
+        document.body.classList.remove("overview-contents-open");
+        document.body.style.overflow = "";
+        background.forEach(element => { element.inert = false; });
+        panel.inert = true;
+        panel.removeAttribute("aria-modal");
         syncButton();
+        document.dispatchEvent(new Event("overview:contentschange"));
         if (returnFocus) button.focus({preventScroll: true});
+        clearTimeout(closeTimer);
+        const finish = () => {
+            if (contentsOpen) return;
+            panel.hidden = true;
+            backdrop.hidden = true;
+        };
+        if (reducedMotion.matches) finish();
+        else closeTimer = window.setTimeout(finish, 240);
     }
 
     function openContents() {
         updateCurrent();
+        clearTimeout(closeTimer);
+        contentsOpen = true;
         panel.hidden = false;
+        panel.inert = false;
+        panel.setAttribute("aria-modal", "true");
+        backdrop.hidden = false;
+        background.forEach(element => { element.inert = true; });
         syncButton();
+        document.dispatchEvent(new Event("overview:contentschange"));
         const current = links[currentIndex];
         current.focus({preventScroll: true});
         // Scroll only the panel: opening a late chapter must not move the document.
         panel.scrollTop += current.getBoundingClientRect().top
             - panel.getBoundingClientRect().top - panel.clientHeight / 2;
+        // Keep the initial frame for opacity/translate to animate from.
+        window.requestAnimationFrame(() => {
+            if (contentsOpen) document.body.classList.add("overview-contents-open");
+        });
     }
 
     button.addEventListener("click", () => {
-        if (panel.hidden) openContents();
+        if (!contentsOpen) openContents();
         else closeContents(true);
     });
     closeButton.addEventListener("click", () => closeContents(true));
+    backdrop.addEventListener("click", () => closeContents(true));
 
     links.forEach((link, index) => {
         link.addEventListener("click", event => {
@@ -109,18 +144,21 @@
         });
     });
 
-    document.addEventListener("click", event => {
-        if (!panel.hidden && !reader.contains(event.target)) closeContents();
-    });
     reader.addEventListener("keydown", event => {
-        if (event.key === "Escape" && !panel.hidden) {
+        if (!contentsOpen) return;
+        if (event.key === "Escape") {
             event.preventDefault();
             closeContents(true);
+        } else if (event.key === "Tab") {
+            const focusables = [button, closeButton, ...links];
+            if (event.shiftKey && document.activeElement === focusables[0]) {
+                event.preventDefault();
+                focusables.at(-1).focus();
+            } else if (!event.shiftKey && document.activeElement === focusables.at(-1)) {
+                event.preventDefault();
+                focusables[0].focus();
+            }
         }
-    });
-    reader.addEventListener("focusout", event => {
-        // A disclosure is not a modal: Tab can leave it without trapping focus.
-        if (!reader.contains(event.relatedTarget)) closeContents();
     });
     window.addEventListener("scroll", scheduleUpdate, {passive: true});
     window.addEventListener("resize", updateOffset, {passive: true});
@@ -132,6 +170,8 @@
     // Reuse one list instead of rendering duplicate desktop/mobile contents.
     panel.hidden = true;
     reader.append(panel);
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-labelledby", "overview-contents-title");
     closeButton.hidden = false;
     reader.hidden = false;
     document.body.classList.add("overview-navigation-ready");
