@@ -117,8 +117,10 @@ def test_overview_has_readable_sections_and_valid_internal_links(client):
         assert document.find(id=link["href"][1:])
     assert document.select_one('meta[name="viewport"]')
     assert document.select_one('button[aria-controls="app-sidebar"]')
-    # The overview itself only needs the shared menu script; no external SDKs.
-    assert document.select("script[src]") == []
+    # The reader uses a local deferred script; external SDKs remain unnecessary.
+    assert [script["src"] for script in document.select("script[src]")] == [
+        "/static/system_overview.js",
+    ]
 
 
 def test_overview_explains_catalog_vs_monthly_product_and_history(client):
@@ -222,7 +224,9 @@ def test_quiz_keeps_eight_explained_answers_in_closed_native_details(client):
         assert expected in question.select_one(".overview-answer").get_text()
     # Questions are ordinary headings; answer text belongs only to the details.
     assert all(q.select_one("h3").find_parent("details") is None for q in questions)
-    assert document.select("script[src]") == []
+    assert [script["src"] for script in document.select("script[src]")] == [
+        "/static/system_overview.js",
+    ]
 
 
 def test_troubleshooting_maps_real_symptoms_to_places_and_reasons(client):
@@ -389,3 +393,81 @@ def test_overview_ids_are_unique_and_every_internal_anchor_resolves(client):
     assert len(ids) == len(set(ids))
     for link in document.select('main a[href^="#"]'):
         assert link["href"][1:] in ids
+
+
+CHAPTERS = (
+    ("flow", "1. Bakery Hub全体の流れ"),
+    ("walkthrough", "2. 1つの処理を最後まで追ってみる"),
+    ("features", "3. メニュー・機能別の仕組み"),
+    ("basics", "4. Python基礎・応用マップ"),
+    ("technologies", "5. 共通技術と役割"),
+    ("tests", "6. テストは何を壊さないためにある？"),
+    ("quiz", "7. 理解度チェック"),
+    ("python-quiz", "8. Python基礎チェック"),
+    ("troubleshooting", "9. 困ったときはどこを見る？"),
+)
+
+
+def test_numbered_chapters_preserve_ids_and_have_focusable_headings(client):
+    document = _document(client.get("/system-overview"))
+    chapters = document.select("main > section[data-overview-chapter]")
+    assert [chapter["id"] for chapter in chapters] == [item[0] for item in CHAPTERS]
+    for number, (chapter, (_, title)) in enumerate(zip(chapters, CHAPTERS), start=1):
+        heading = chapter.select_one(":scope > h2")
+        assert heading.get_text(strip=True) == title
+        assert heading["tabindex"] == "-1"
+        assert chapter["data-overview-chapter"] == str(number)
+    assert len(document.select("#basics article[id^='python-']")) == 17
+    assert len(document.select("#quiz article")) == 8
+    assert len(document.select("#python-quiz article")) == 15
+    assert len(document.select("#troubleshooting article")) == 8
+
+
+def test_location_disclosure_is_hidden_until_javascript_initializes(client):
+    document = _document(client.get("/system-overview"))
+    reader = document.select_one("#overview-reader-navigation")
+    assert reader is not None and reader.has_attr("hidden")
+    button = reader.select_one("button#overview-location-button")
+    assert button["type"] == "button"
+    assert button["aria-expanded"] == "false"
+    panel = document.find(id=button["aria-controls"])
+    assert panel["id"] == "overview-page-contents"
+    # No-JS readers keep one ordinary, fully visible list of anchor links.
+    assert not panel.has_attr("hidden")
+    assert panel.find_parent(attrs={"hidden": True}) is None
+    assert panel.select_one("h2").get_text(strip=True) == "このページの目次"
+    assert panel.select_one("button[data-overview-close]").has_attr("hidden")
+    assert "1. 全体の流れ" in button.get_text()
+    assert "目次" in button["aria-label"]
+
+
+def test_single_chapter_contents_links_match_every_chapter_and_mark_current_location(client):
+    document = _document(client.get("/system-overview"))
+    contents = document.select('nav[aria-label="このページの目次"]')
+    assert len(contents) == 1
+    links = contents[0].select("a[data-overview-link]")
+    assert [link["href"] for link in links] == [f"#{item[0]}" for item in CHAPTERS]
+    assert len(links) == 9
+    for number, link in enumerate(links, start=1):
+        assert link.get_text(strip=True).startswith(f"{number}.")
+    # JS owns the live marker; no-JS anchor navigation must not leave a stale
+    # "current" claim on chapter 1 after a reader jumps to another chapter.
+    assert not contents[0].select('a[aria-current]')
+
+
+def test_overview_loads_only_its_local_deferred_navigation_script(client):
+    document = _document(client.get("/system-overview"))
+    scripts = document.select("script[src]")
+    assert len(scripts) == 1
+    assert scripts[0]["src"] == "/static/system_overview.js"
+    assert scripts[0].has_attr("defer")
+    script_response = client.get(scripts[0]["src"])
+    assert script_response.status_code == 200
+    assert "javascript" in script_response.content_type
+
+
+@pytest.mark.parametrize("path", ["/", "/products", "/input", "/dashboard", "/material-orders", "/shop-tools/memo", "/shop-tools/tasks"])
+def test_chapter_navigation_does_not_appear_on_business_pages(authenticated_client, admin_dataset, path):
+    document = _document(authenticated_client.get(path))
+    assert document.select_one("#overview-reader-navigation") is None
+    assert document.select_one('script[src="/static/system_overview.js"]') is None
