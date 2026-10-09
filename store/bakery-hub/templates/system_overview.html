@@ -41,9 +41,12 @@
     <title>システム概要 | Bakery Hub</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='system_overview.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='system_overview_scrubber.js') }}" defer></script>
 </head>
 <body class="system-overview-page app-shell-page">
 {% include "_app_navigation.html" %}
+<button type="button" id="overview-contents-backdrop" class="overview-contents-backdrop"
+        aria-label="目次を閉じる" hidden></button>
 <main class="overview-shell" id="overview-top">
     <div class="overview-reader-navigation" id="overview-reader-navigation" hidden>
         <button type="button" class="overview-location-button" id="overview-location-button"
@@ -54,6 +57,13 @@
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
                  focusable="false" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
         </button>
+    </div>
+    <div id="overview-chapter-scrubber" class="overview-chapter-scrubber" hidden>
+        <div class="overview-scrubber-track" aria-hidden="true"></div>
+        <div class="overview-scrubber-thumb" role="slider" tabindex="0" aria-orientation="vertical"
+             aria-label="章を選ぶ" aria-valuemin="1" aria-valuemax="9"
+             aria-valuenow="1" aria-valuetext="1. 全体の流れ"></div>
+        <span class="overview-scrubber-preview" data-scrubber-preview aria-hidden="true" hidden></span>
     </div>
     <header class="overview-header">
         <p class="overview-eyebrow">Bakery Hub / 学習・確認用</p>

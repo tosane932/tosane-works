@@ -119,7 +119,7 @@ def test_overview_has_readable_sections_and_valid_internal_links(client):
     assert document.select_one('button[aria-controls="app-sidebar"]')
     # The reader uses a local deferred script; external SDKs remain unnecessary.
     assert [script["src"] for script in document.select("script[src]")] == [
-        "/static/system_overview.js",
+        "/static/system_overview.js", "/static/system_overview_scrubber.js",
     ]
 
 
@@ -225,7 +225,7 @@ def test_quiz_keeps_eight_explained_answers_in_closed_native_details(client):
     # Questions are ordinary headings; answer text belongs only to the details.
     assert all(q.select_one("h3").find_parent("details") is None for q in questions)
     assert [script["src"] for script in document.select("script[src]")] == [
-        "/static/system_overview.js",
+        "/static/system_overview.js", "/static/system_overview_scrubber.js",
     ]
 
 
@@ -458,12 +458,14 @@ def test_single_chapter_contents_links_match_every_chapter_and_mark_current_loca
 def test_overview_loads_only_its_local_deferred_navigation_script(client):
     document = _document(client.get("/system-overview"))
     scripts = document.select("script[src]")
-    assert len(scripts) == 1
-    assert scripts[0]["src"] == "/static/system_overview.js"
-    assert scripts[0].has_attr("defer")
-    script_response = client.get(scripts[0]["src"])
-    assert script_response.status_code == 200
-    assert "javascript" in script_response.content_type
+    assert [script["src"] for script in scripts] == [
+        "/static/system_overview.js", "/static/system_overview_scrubber.js",
+    ]
+    for script in scripts:
+        assert script.has_attr("defer")
+        script_response = client.get(script["src"])
+        assert script_response.status_code == 200
+        assert "javascript" in script_response.content_type
 
 
 @pytest.mark.parametrize("path", ["/", "/products", "/input", "/dashboard", "/material-orders", "/shop-tools/memo", "/shop-tools/tasks"])
@@ -471,3 +473,45 @@ def test_chapter_navigation_does_not_appear_on_business_pages(authenticated_clie
     document = _document(authenticated_client.get(path))
     assert document.select_one("#overview-reader-navigation") is None
     assert document.select_one('script[src="/static/system_overview.js"]') is None
+    assert document.select_one('script[src="/static/system_overview_scrubber.js"]') is None
+
+
+def test_contents_backdrop_and_scrubber_are_progressive_enhancements(client):
+    document = _document(client.get("/system-overview"))
+    backdrop = document.select_one("button#overview-contents-backdrop")
+    assert backdrop is not None
+    assert backdrop["type"] == "button"
+    assert backdrop.has_attr("hidden")
+    assert backdrop["aria-label"] == "目次を閉じる"
+    assert document.select_one("#overview-reader-navigation").has_attr("hidden")
+    assert not document.select_one("#overview-page-contents").has_attr("hidden")
+
+    scrubber = document.select_one("#overview-chapter-scrubber")
+    assert scrubber is not None and scrubber.has_attr("hidden")
+    thumb = scrubber.select_one('[role="slider"]')
+    assert thumb["tabindex"] == "0"
+    assert thumb["aria-orientation"] == "vertical"
+    assert thumb["aria-valuemin"] == "1"
+    assert thumb["aria-valuemax"] == "9"
+    assert thumb["aria-valuenow"] == "1"
+    assert "1." in thumb["aria-valuetext"]
+    preview = scrubber.select_one("[data-scrubber-preview]")
+    assert preview is not None
+    assert preview.has_attr("hidden")
+    assert document.select_one('nav[aria-label="このページの目次"]')
+    assert len(document.select("main > section[data-overview-chapter]")) == 9
+
+
+def test_overview_scripts_are_scoped_and_scrubber_can_be_removed_independently(client):
+    document = _document(client.get("/system-overview"))
+    scripts = document.select("script[src]")
+    assert [script["src"] for script in scripts] == [
+        "/static/system_overview.js", "/static/system_overview_scrubber.js",
+    ]
+    assert all(script.has_attr("defer") for script in scripts)
+    for script in scripts:
+        assert client.get(script["src"]).status_code == 200
+    assert len(document.select("#basics article[id^='python-']")) == 17
+    assert len(document.select("#quiz article")) == 8
+    assert len(document.select("#python-quiz article")) == 15
+    assert len(document.select("#troubleshooting article")) == 8
