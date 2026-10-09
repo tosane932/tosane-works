@@ -7738,6 +7738,181 @@ body.shop-task-reorder-lock .shop-task-card {
 }
 
 
+/* システム概要：章の区切りと、単一の目次を使う現在地バー。 */
+.system-overview-page .overview-shell > [data-overview-chapter] {
+    margin-top: 56px;
+}
+
+.system-overview-page .overview-shell > [data-overview-chapter] > h2 {
+    margin-bottom: 20px;
+    padding: 14px 0 14px 16px;
+    border-left: 5px solid #8b735e;
+    border-bottom: 1px solid #d9cbbb;
+    font-size: clamp(24px, 2.4vw, 30px);
+    font-weight: 800;
+    line-height: 1.45;
+}
+
+.system-overview-page .overview-shell,
+.system-overview-page .overview-shell [id] {
+    scroll-margin-top: var(--overview-anchor-offset, 72px);
+}
+
+.system-overview-page.overview-navigation-ready {
+    padding-top: calc(var(--overview-anchor-offset, 72px) + 8px);
+}
+
+.system-overview-page .overview-reader-navigation {
+    position: fixed;
+    z-index: 31;
+    top: max(12px, env(safe-area-inset-top));
+    right: 30px;
+    left: 300px;
+    max-width: 960px;
+    margin-inline: auto;
+}
+
+.system-overview-page .overview-reader-navigation[hidden],
+.system-overview-page .overview-page-contents[hidden],
+.system-overview-page .overview-contents-close[hidden] {
+    display: none;
+}
+
+.system-overview-page .overview-location-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 16px;
+    box-sizing: border-box;
+    border: 1px solid #8b735e;
+    border-radius: 12px;
+    color: #493d34;
+    background: #fffdf8;
+    box-shadow: 0 3px 12px rgba(83, 66, 43, 0.12);
+    font: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.4;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.system-overview-page .overview-location-button .ui-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.system-overview-page .overview-location-button[aria-expanded="true"] .ui-icon {
+    transform: rotate(180deg);
+}
+
+.system-overview-page .overview-page-contents {
+    margin: 24px 0;
+    padding: 20px;
+    background: #fffdf8;
+    border: 1px solid #d9cbbb;
+    border-radius: 12px;
+}
+
+.system-overview-page .overview-contents-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.system-overview-page .overview-contents-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.system-overview-page .overview-page-contents .overview-contents {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    margin: 0;
+}
+
+.system-overview-page .overview-page-contents .overview-contents a {
+    padding: 10px 12px;
+    border-left: 4px solid transparent;
+    color: #493d34;
+    background: transparent;
+    text-decoration: none;
+    line-height: 1.5;
+}
+
+.system-overview-page .overview-page-contents a[aria-current="location"] {
+    border-left-color: #8b5a1a;
+    background: #f7eed6;
+    font-weight: 800;
+}
+
+.system-overview-page .overview-page-contents a:hover {
+    background: #f4f0e8;
+}
+
+.system-overview-page .overview-contents-close {
+    min-width: 64px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid #d9cbbb;
+    border-radius: 8px;
+    color: #493d34;
+    background: #f4f0e8;
+    font: inherit;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.system-overview-page .overview-reader-navigation .overview-page-contents {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(480px, calc(100vw - 330px));
+    max-height: calc(100dvh - var(--overview-anchor-offset, 72px) - max(12px, env(safe-area-inset-bottom)));
+    margin: 0;
+    box-sizing: border-box;
+    overflow-y: auto;
+    box-shadow: 0 6px 24px rgba(83, 66, 43, 0.18);
+}
+
+.system-overview-page .overview-location-button:focus-visible,
+.system-overview-page .overview-contents-close:focus-visible,
+.system-overview-page [data-overview-chapter] > h2:focus-visible {
+    outline: 3px solid #8b5a1a;
+    outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+    .system-overview-page .overview-reader-navigation {
+        top: max(4px, env(safe-area-inset-top));
+        right: max(10px, env(safe-area-inset-right));
+        left: calc(72px + env(safe-area-inset-left));
+    }
+
+    .system-overview-page .overview-location-button {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+
+    .system-overview-page .overview-reader-navigation .overview-page-contents {
+        width: min(480px, calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+        padding: 16px;
+    }
+
+    .system-overview-page.app-navigation-open .overview-reader-navigation {
+        visibility: hidden;
+    }
+}
+
 /* Product form responsive layout v2 */
 .product-page .menu-row {
     display: grid;

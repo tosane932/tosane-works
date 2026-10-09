@@ -40,10 +40,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>システム概要 | Bakery Hub</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='system_overview.js') }}" defer></script>
 </head>
 <body class="system-overview-page app-shell-page">
 {% include "_app_navigation.html" %}
 <main class="overview-shell" id="overview-top">
+    <div class="overview-reader-navigation" id="overview-reader-navigation" hidden>
+        <button type="button" class="overview-location-button" id="overview-location-button"
+                aria-controls="overview-page-contents" aria-expanded="false"
+                aria-label="現在地：1. 全体の流れ。目次を開く">
+            <span id="overview-current-chapter">1. 全体の流れ</span>
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 focusable="false" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        </button>
+    </div>
     <header class="overview-header">
         <p class="overview-eyebrow">Bakery Hub / 学習・確認用</p>
         <h1>
@@ -56,20 +67,27 @@
         <p>Bakery Hubで使用している技術と、各機能が動く仕組みを、学習・確認用にまとめた公開ページです。</p>
     </header>
 
-    <nav class="overview-contents" aria-label="このページの目次">
-        <a href="#flow">全体の流れ</a>
-        <a href="#walkthrough">1つの処理を追う</a>
-        <a href="#features">機能別の仕組み</a>
-        <a href="#basics">Python基礎・応用マップ</a>
-        <a href="#technologies">共通技術</a>
-        <a href="#tests">テストの目的</a>
-        <a href="#quiz">理解度チェック</a>
-        <a href="#python-quiz">Python基礎チェック</a>
-        <a href="#troubleshooting">困ったときの逆引き</a>
-    </nav>
+    <div class="overview-page-contents" id="overview-page-contents">
+        <div class="overview-contents-header">
+            <h2 id="overview-contents-title">このページの目次</h2>
+            <button type="button" class="overview-contents-close" data-overview-close hidden>閉じる</button>
+        </div>
+        <p>読みたい章を選ぶと、その見出しへ移動できます。</p>
+        <nav class="overview-contents" aria-label="このページの目次">
+            <a href="#flow" data-overview-link>1. 全体の流れ</a>
+            <a href="#walkthrough" data-overview-link>2. 1つの処理を追う</a>
+            <a href="#features" data-overview-link>3. 機能別の仕組み</a>
+            <a href="#basics" data-overview-link>4. Python基礎・応用</a>
+            <a href="#technologies" data-overview-link>5. 共通技術</a>
+            <a href="#tests" data-overview-link>6. テストの目的</a>
+            <a href="#quiz" data-overview-link>7. 理解度チェック</a>
+            <a href="#python-quiz" data-overview-link>8. Python基礎チェック</a>
+            <a href="#troubleshooting" data-overview-link>9. 困ったときの逆引き</a>
+        </nav>
+    </div>
 
-    <section class="overview-section" id="flow">
-        <h2>1. Bakery Hub全体の流れ</h2>
+    <section class="overview-section" id="flow" data-overview-chapter="1">
+        <h2 tabindex="-1">1. Bakery Hub全体の流れ</h2>
         <p>まずは、売上入力の「画面を開く → 数量を送る → 保存結果を見る」を例に、処理の役割を分けて読んでみましょう。</p>
         <ol class="overview-flow">
             <li><strong>ブラウザからリクエスト</strong><span><code>GET /input</code>で画面を開き、フォームから<code>POST /input</code>で日付・商品ID・数量を送ります。</span></li>
@@ -82,8 +100,8 @@
         <p class="overview-note">本番用DBはPostgreSQL、通常のpytestはSQLiteのメモリ内DBです。Dashboardの更新やメモ・タスクの一部操作は、HTMLの代わりにJSONを返し、JavaScriptが画面を更新します。このシステム概要自体は、業務データを取得せず説明を表示します。</p>
     </section>
 
-    <section class="overview-section" id="walkthrough">
-        <h2>1つの処理を最後まで追ってみる</h2>
+    <section class="overview-section" id="walkthrough" data-overview-chapter="2">
+        <h2 tabindex="-1">2. 1つの処理を最後まで追ってみる</h2>
         <p>題材は「売上入力 → DB保存 → Dashboard表示」。今月の登録済み商品に数量を入力する場面を、1段階ずつ開いて追いましょう。</p>
         <p class="overview-note">ブラウザ操作 → HTTP → Flask / Python → SQLAlchemy → DB → Flask / Jinja → HTML → ブラウザ表示、という往復です。保存とDashboardの表示は、別々のリクエストでつながります。</p>
         <ol class="overview-walkthrough">
@@ -148,8 +166,8 @@
         </ol>
     </section>
 
-    <section class="overview-section" id="features">
-        <h2>2. メニュー・機能別の仕組み</h2>
+    <section class="overview-section" id="features" data-overview-chapter="3">
+        <h2 tabindex="-1">3. メニュー・機能別の仕組み</h2>
         <p>役割を確認してから詳細を開くと、Python・DB・画面・テストのつながりを追えます。ファイル名のリンクはGitHubのmainを開きます。</p>
         <nav class="overview-contents" aria-label="機能別の目次">
             {% for id, label in [('products', '商品登録'), ('product-catalog', '商品一覧'), ('sales', '売上入力'), ('dashboard', '売上分析'), ('materials', '材料発注'), ('memos', '店舗メモ'), ('tasks', 'タスク'), ('guest', 'Guest Demo'), ('auth', 'ログイン'), ('ai', 'AI')] %}
@@ -291,8 +309,8 @@
         </div>
     </section>
 
-    <section class="overview-section" id="basics">
-        <h2>3. 「基礎」はどこで使われる？</h2>
+    <section class="overview-section" id="basics" data-overview-chapter="4">
+        <h2 tabindex="-1">4. Python基礎・応用マップ</h2>
         <p>用語だけ覚えるより、該当する機能を開き「この処理を変えると何が起きるか」を考えてからコードを読んでみましょう。</p>
         <p><strong>Python基礎・応用マップ</strong>：値 → 条件 → 繰り返し → 関数とデータ、の順に読むと処理を追いやすくなります。気になるカテゴリだけ開き、教材の住所からGitHubのmainへ進めます。</p>
         <p class="overview-note">実装済みの使用例だけを掲載しています。業務処理・テスト・初期データ作成・migrationのどこにある例かを明示します。読める範囲の地図であり、Python全仕様を網羅する一覧ではありません。</p>
@@ -892,8 +910,8 @@
         </nav>
     </section>
 
-    <section class="overview-section" id="technologies">
-        <h2>4. 共通技術と役割</h2>
+    <section class="overview-section" id="technologies" data-overview-chapter="5">
+        <h2 tabindex="-1">5. 共通技術と役割</h2>
         <dl class="overview-basics overview-card">
             <dt>Python / Flask</dt><dd>入力検証、日付処理、集計結果の整理をPythonで記述。FlaskがURLと関数を結び、HTML・JSON・リダイレクトを返します。店舗ツールはBlueprintで分けています。</dd>
             <dt>SQLAlchemy / PostgreSQL</dt><dd>モデル・query・transactionでデータを扱います。PostgreSQLは本番用DBとDocker / CIのDBに使用。SQLiteはローカルの既定DBと通常pytestに使います。</dd>
@@ -909,8 +927,8 @@
         <p class="overview-note">ここではコードと設定ファイルにある設計を説明しています。稼働中の本番環境を診断するページではありません。認証情報や設定の秘密値、実際のCookie・Session値は表示しません。</p>
     </section>
 
-    <section class="overview-section" id="tests">
-        <h2>5. テストは何を壊さないためにある？</h2>
+    <section class="overview-section" id="tests" data-overview-chapter="6">
+        <h2 tabindex="-1">6. テストは何を壊さないためにある？</h2>
         <p>成功画面だけでなく、「拒否されたときにDBが変わっていないか」「他の利用者のデータが混ざっていないか」まで確認します。</p>
         <ul class="overview-test-list overview-card">
             <li><strong>入力の境界・不正値</strong> — 商品名・価格・販売数量・メモ本文・タスクタイトルなどの許容範囲を確認します。</li>
@@ -926,8 +944,8 @@
         <p class="overview-note">通常テストは<code>conftest.py</code>の隔離DBを使います。PostgreSQL専用テストは使い捨てのテストDBと明示的な設定が必要です。AI連携テストはクライアントを置き換えます。pytestのGREENだけでは、スマホの操作感や本番環境での動作をすべて保証できないため、ブラウザでの表示確認も組み合わせます。</p>
         {{ source_links(['conftest.py', 'tests/test_csrf.py', 'tests/test_xss_regressions.py', 'tests/test_system_overview.py']) }}
     </section>
-    <section class="overview-section" id="quiz">
-        <h2>理解度チェック</h2>
+    <section class="overview-section" id="quiz" data-overview-chapter="7">
+        <h2 tabindex="-1">7. 理解度チェック</h2>
         <p>まず自分の言葉で答えてから、「答えを見る」を開いて比べましょう。迷ったら<a href="#walkthrough">処理フロー</a>や<a href="#basics">基礎の説明</a>へ戻れます。</p>
         <div class="overview-learning-list">
             <article class="overview-card" id="quiz-q1">
@@ -981,8 +999,8 @@
         </div>
     </section>
 
-    <section class="overview-section" id="python-quiz">
-        <h2>Python基礎チェック</h2>
+    <section class="overview-section" id="python-quiz" data-overview-chapter="8">
+        <h2 tabindex="-1">8. Python基礎チェック</h2>
         <p>既存の理解度チェック8問とは別の15問です。まず自分の言葉で考え、「答えを見る」で理由を確認してください。各回答から対応する学習項目へ戻れます。</p>
         <div class="overview-learning-list">
             <article class="overview-card" id="python-q1">
@@ -1078,8 +1096,8 @@
         </div>
     </section>
 
-    <section class="overview-section" id="troubleshooting">
-        <h2>困ったときはどこを見る？</h2>
+    <section class="overview-section" id="troubleshooting" data-overview-chapter="9">
+        <h2 tabindex="-1">9. 困ったときはどこを見る？</h2>
         <p>症状に近いカードを開き、最初の確認場所を探しましょう。ブラウザの開発者ツールの「Network」では、送ったURL・HTTPメソッド・応答の状態を確認できます。</p>
         <div class="overview-feature-grid">
             <article class="overview-card" id="trouble-button">
