@@ -1,4 +1,7 @@
+import ast
 import datetime
+from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 from bs4 import BeautifulSoup
@@ -239,3 +242,150 @@ def test_troubleshooting_maps_real_symptoms_to_places_and_reasons(client):
     assert "business_today()" in document.select_one("#trouble-date").get_text()
     assert "require_current_dataset()" in document.select_one("#trouble-dataset").get_text()
     assert "fixture" in document.select_one("#trouble-pytest").get_text()
+
+
+PYTHON_CATEGORIES = (
+    "values", "conditions", "loops", "structures", "functions", "classes",
+    "exceptions", "iteration", "strings", "state", "modules", "stdlib",
+    "regex", "paths", "context", "decorators", "dates",
+)
+
+
+@pytest.mark.parametrize("category", PYTHON_CATEGORIES)
+def test_python_map_has_grouped_lessons_with_purpose_and_code_address(client, category):
+    document = _document(client.get("/system-overview"))
+    card = document.select_one(f"#basics article#python-{category}")
+    assert card is not None
+    assert card.select_one("h3")
+    assert card.select_one("details > summary")
+    assert not card.select_one("details").has_attr("open")
+    assert document.select_one(
+        f'nav[aria-label="Python基礎・応用マップの目次"] a[href="#python-{category}"]'
+    )
+    lessons = card.select(".python-lesson")
+    assert lessons
+    for lesson in lessons:
+        assert lesson.select_one("h4")
+        labels = [item.get_text(strip=True) for item in lesson.select("dt")]
+        assert labels == ["これは何か", "Bakery Hubでは", "なぜ使うか", "教材の住所"]
+        assert all(item.get_text(strip=True) for item in lesson.select("dd"))
+        assert lesson.select_one("a[data-code-address]")
+        assert lesson.select_one('a[href^="#feature-"]')
+
+
+def _source_definitions(source):
+    """Nested Blueprint handlers and class methods also have a real address."""
+    definitions = {}
+
+    def visit(node, prefix=""):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            prefix = f"{prefix}.{node.name}" if prefix else node.name
+            definitions[prefix] = node
+        for child in ast.iter_child_nodes(node):
+            visit(child, prefix)
+
+    visit(ast.parse(source))
+    return definitions
+
+
+def test_python_code_links_resolve_to_existing_files_definitions_and_lines(client):
+    document = _document(client.get("/system-overview"))
+    app_root = Path(app_module.__file__).parent.resolve()
+    links = document.select("#basics a[data-code-address]")
+    assert len(links) >= len(PYTHON_CATEGORIES)
+    for link in links:
+        path = (app_root / link["data-source-file"]).resolve()
+        assert path.is_relative_to(app_root)
+        assert path.is_file()
+        source = path.read_text(encoding="utf-8")
+        definition = _source_definitions(source)[link["data-source-symbol"]]
+        url = urlsplit(link["href"])
+        assert url.scheme == "https"
+        assert url.netloc == "github.com"
+        assert url.path == (
+            "/tosane932/tosane-works/blob/main/store/bakery-hub/"
+            + link["data-source-file"]
+        )
+        assert url.fragment == f"L{definition.lineno}"
+        assert link["data-source-file"] in link.get_text()
+        assert link["data-source-symbol"] in link.get_text()
+        assert link["data-source-scope"] in {"業務処理", "テスト", "初期データ作成", "migration"}
+
+
+def test_python_snippets_are_short_actual_source_without_template_execution(client):
+    document = _document(client.get("/system-overview"))
+    app_root = Path(app_module.__file__).parent
+    snippets = document.select("#basics .python-source-snippet code")
+    assert snippets
+    for snippet in snippets:
+        lesson = snippet.find_parent(class_="python-lesson")
+        link = lesson.select_one("a[data-code-address]")
+        source = (app_root / link["data-source-file"]).read_text(encoding="utf-8")
+        definition = _source_definitions(source)[link["data-source-symbol"]]
+        excerpt = ast.get_source_segment(source, definition)
+        text = snippet.get_text()
+        assert 1 <= len(text.splitlines()) <= 8
+        assert text in excerpt
+
+
+def test_python_map_distinguishes_builtin_calls_from_database_and_test_tools(client):
+    document = _document(client.get("/system-overview"))
+    # all() and range() were found in tests; query.all() is a SQLAlchemy method.
+    all_lesson = document.select_one("#python-all-range")
+    assert "テスト" in all_lesson.get_text()
+    assert all(
+        link["data-source-scope"] == "テスト"
+        for link in all_lesson.select("a[data-code-address]")
+    )
+    assert "query.all()" in all_lesson.get_text()
+    hints = document.select_one("#python-type-hints").get_text()
+    assert "prompts.py" in hints
+    assert "全体" in hints and "入力検証" in hints
+    assert "SQLAlchemy" in document.select_one("#python-models").get_text()
+    context_text = document.select_one("#python-context").get_text()
+    assert "_serialize_admin_login_attempt" in context_text
+    assert "flask_app" in context_text
+    assert "大量" in context_text  # Do not describe these yield uses as CSV streaming.
+
+
+def test_python_map_excludes_unimplemented_features_and_preserves_web_connections(client):
+    document = _document(client.get("/system-overview"))
+    text = document.select_one("#basics").get_text()
+    for unused in ("dataclass", "Enum", "csv", "Counter", "defaultdict", "TypedDict", "match / case", "cache"):
+        assert unused not in text
+    web = document.select_one("#web-connections")
+    assert web is not None
+    for term in ("Python", "Flask", "SQLAlchemy", "JavaScript", "request.form", "fetch", "GET", "POST", "CRUD"):
+        assert term in web.get_text()
+    assert document.select_one('#basics a[href="#python-help"]')
+    assert document.select_one('#python-help a[href="#python-functions"]')
+    assert document.select_one('#python-help a[href="#python-state"]')
+
+
+def test_python_quiz_adds_fifteen_closed_answers_with_links_back_to_lessons(client):
+    document = _document(client.get("/system-overview"))
+    questions = document.select("#python-quiz article")
+    assert len(questions) == 15
+    contents = document.select_one('nav[aria-label="このページの目次"]')
+    assert contents.select_one('a[href="#python-quiz"]')
+    for number, question in enumerate(questions, start=1):
+        assert question["id"] == f"python-q{number}"
+        assert question.select_one("h3").get_text().startswith(f"Q{number}.")
+        details = question.select_one("details")
+        assert not details.has_attr("open")
+        assert details.select_one("summary").get_text() == "答えを見る"
+        answer = details.select_one(".overview-answer")
+        assert len(answer.get_text(strip=True)) >= 50
+        link = answer.select_one('a[href^="#python-"]')
+        assert document.select_one(link["href"])
+        assert question.select_one("h3").find_parent("details") is None
+    assert len(document.select("#quiz article")) == 8
+    assert len(document.select("#troubleshooting article")) == 8
+
+
+def test_overview_ids_are_unique_and_every_internal_anchor_resolves(client):
+    document = _document(client.get("/system-overview"))
+    ids = [element["id"] for element in document.select("[id]")]
+    assert len(ids) == len(set(ids))
+    for link in document.select('main a[href^="#"]'):
+        assert link["href"][1:] in ids

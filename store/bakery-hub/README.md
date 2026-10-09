@@ -173,7 +173,7 @@ AdminとGuestは同じ業務画面を利用できますが、
 
 [システム概要を読む（ログイン不要）](https://bakery-salesdata.onrender.com/system-overview)
 
-商品登録・売上入力・Dashboard・材料発注・店舗メモ・タスク・Guest Demo・ログイン・AIの9機能について、Python / Flask / SQLAlchemy / JavaScript / pytestの役割を実装と結びつけて説明しています。処理フロー、理解度チェック8問、トラブル逆引き8項目も掲載。未ログイン・Admin・Guestのいずれでも閲覧できます（PR #72 / #73）。
+商品登録・商品一覧・売上入力・Dashboard・材料発注・店舗メモ・タスク・Guest Demo・ログイン・AIの10機能について、Python / Flask / SQLAlchemy / JavaScript / pytestの役割を実装と結びつけて説明しています。Python基礎・応用マップは17カテゴリに分かれ、用途・理由・実ファイル・関数/class・GitHubのmainへのリンクから既存コードを辿れます。業務処理・テスト・初期データ作成・migrationの使用例も区別しています。処理フロー、既存の理解度チェック8問、追加のPython基礎チェック15問、トラブル逆引き8項目と学習の逆引きを掲載。未ログイン・Admin・Guestのいずれでも閲覧できます。
 
 ---
 
@@ -209,7 +209,7 @@ AdminとGuestは同じ業務画面を利用できますが、
 - Security Headers / HSTS
 - GitHub ActionsによるSQLite + PostgreSQL 16の二層CI
 - Falsification / Mutation Testing（2026年8月の手動11件、10月のCodex + Cosmic Rayによる1,286件の再監査）
-- 学習用の公開「システム概要」（9機能・理解度チェック・トラブル逆引き）
+- 学習用の公開「システム概要」（10機能・Python基礎17カテゴリ・理解度チェック・トラブル逆引き）
 - 月替わり・年替わり事故の回帰テスト
 - 本日の売上金額KPI（日本時間・表示期間とは独立した当日集計）
 - PC Dashboardの主要領域を1画面内で確認しやすくするコンパクトな配置
@@ -386,7 +386,7 @@ PR #64ではスマートフォン上部の余白と固定メニューボタン�
 | URL表示 | HTTP / HTTPS絶対URLだけを安全に自動リンク化 |
 | Mobile UI | 長押し・swipe・Undo・FAB・responsive editor |
 | Navigation | Bakery Hubブランド・inline SVG・カテゴリカラー |
-| システム概要 | 公開教材ページ・9機能の技術説明・処理フロー・理解度チェック8問・トラブル逆引き8項目 |
+| システム概要 | 公開教材ページ・10機能の技術説明・Python基礎17カテゴリ・処理フロー・理解度チェック8問＋Python基礎チェック15問・トラブル逆引き8項目 |
 | Portfolio入口 | ログイン画面にStore / Information / Logisticsの作品・README・デモ導線 |
 | タスク | Dataset単位の追加・完了 / 未完了・削除・複数選択・長押し並び替え |
 | AI | Gemini APIによる日次支援・経営アドバイス |
