@@ -344,7 +344,8 @@ def test_shared_mobile_navigation_reveals_on_upward_scroll_and_keeps_menus_stabl
     assert 'const topThreshold = 12;' in navigation_source
     assert 'window.addEventListener("scroll"' in navigation_source
     assert 'window.requestAnimationFrame(updateTopNavigation)' in navigation_source
-    assert 'if (direction > 0)' in navigation_source
+    assert 'directionDistance = Math.max(0,' in navigation_source
+    assert 'directionDistance + movement * (navigationHidden ? -1 : 1)' in navigation_source
     assert 'document.body.classList.add("app-top-navigation-hidden")' in navigation_source
     assert 'document.addEventListener("overview:contentschange", resetScrollDirection)' in navigation_source
     assert 'navigationIsOpen()' in navigation_source
@@ -352,8 +353,37 @@ def test_shared_mobile_navigation_reveals_on_upward_scroll_and_keeps_menus_stabl
     assert 'app-top-navigation-ready:not(.system-overview-page)::before' in style_source
     assert 'app-top-navigation-hidden .app-navigation-open-button' in style_source
     assert 'blur(5px)' in style_source
-    assert 'visibility 0s linear 200ms' in style_source
+    assert 'visibility 0s linear 240ms' in style_source
     assert 'transition: none;' in style_source
+
+
+def test_overview_chapter_bar_uses_milk_tea_colors_with_readable_arrow():
+    style_source = (
+        Path(app_module.app.root_path) / "static" / "style.css"
+    ).read_text()
+    overview_source = (
+        Path(app_module.app.root_path) / "templates" / "system_overview.html"
+    ).read_text()
+    button_rules = re.findall(
+        r"\.system-overview-page \.overview-location-button \{([^}]*)\}",
+        style_source,
+    )
+    assert any(
+        all(color in rule for color in (
+            "border-color: #D3C0A7;",
+            "color: #604A35;",
+            "background: #E9DDCB;",
+        ))
+        for rule in button_rules
+    )
+    assert not any(
+        "background: rgba(255, 254, 251, 0.98);" in rule
+        for rule in button_rules
+    )
+    arrow = BeautifulSoup(overview_source, "html.parser").select_one(
+        "#overview-location-button svg.ui-icon"
+    )
+    assert arrow is not None and arrow["stroke"] == "currentColor"
 
 
 def test_mobile_primary_buttons_use_replayable_tap_bubble_animation():

@@ -325,7 +325,6 @@
         }
 
         let previousScrollY = Math.max(0, window.scrollY);
-        let scrollDirection = 0;
         let directionDistance = 0;
         let scrollFrame = 0;
         const hideDistance = 36;
@@ -339,7 +338,6 @@
         function resetScrollDirection() {
             previousScrollY = Math.max(0, window.scrollY);
             directionDistance = 0;
-            scrollDirection = 0;
             showTopNavigation();
         }
 
@@ -358,26 +356,17 @@
             previousScrollY = currentY;
             if (!mobileViewport.matches || currentY <= topThreshold || topNavigationIsInUse()) {
                 directionDistance = 0;
-                scrollDirection = 0;
                 showTopNavigation();
                 return;
             }
-            const direction = Math.sign(movement);
-            if (!direction) return;
+            if (!movement) return;
             const navigationHidden = document.body.classList.contains("app-top-navigation-hidden");
-            if ((direction > 0 && navigationHidden)
-                || (direction < 0 && !navigationHidden)) {
-                directionDistance = 0;
-                scrollDirection = 0;
-                return;
-            }
-            directionDistance = direction === scrollDirection
-                ? directionDistance + Math.abs(movement) : Math.abs(movement);
-            scrollDirection = direction;
-            if (directionDistance < (direction > 0 ? hideDistance : revealDistance)) return;
+            // A small bounce cancels part of the travel instead of restarting it.
+            directionDistance = Math.max(0,
+                directionDistance + movement * (navigationHidden ? -1 : 1));
+            if (directionDistance < (navigationHidden ? revealDistance : hideDistance)) return;
             directionDistance = 0;
-            scrollDirection = 0;
-            if (direction > 0) {
+            if (!navigationHidden) {
                 const currentFocus = document.activeElement;
                 if (currentFocus === openButton
                     || currentFocus?.id === "overview-location-button") {
