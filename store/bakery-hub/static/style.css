@@ -7914,6 +7914,22 @@ body.shop-task-reorder-lock .shop-task-card {
 }
 
 /* システム概要：本文、しおり、目次の奥行き。各UIはこのページだけに限定する。 */
+.system-overview-page.overview-navigation-ready::before {
+    content: "";
+    position: fixed;
+    z-index: 30;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: var(--overview-anchor-offset, 68px);
+    pointer-events: none;
+    background: rgba(255, 253, 248, 0.72);
+    border-bottom: 1px solid rgba(111, 77, 40, 0.16);
+    box-shadow: 0 2px 5px rgba(57, 43, 28, 0.05);
+    backdrop-filter: blur(9px);
+    -webkit-backdrop-filter: blur(9px);
+}
+
 .system-overview-page .overview-reader-navigation {
     z-index: 42;
     max-width: 720px;
@@ -8036,7 +8052,7 @@ body.shop-task-reorder-lock .shop-task-card {
     }
 }
 
-/* 検証用の章スクラバー。単独のtemplate/JS/CSSブロックとして撤去できる。 */
+/* 章スクラバー：スクロール中のみ右端へ現れ、本文の操作領域を常時覆わない。 */
 .system-overview-page .overview-chapter-scrubber[hidden] {
     display: none;
 }
@@ -8045,21 +8061,31 @@ body.shop-task-reorder-lock .shop-task-card {
     position: fixed;
     z-index: 30;
     top: 50%;
-    right: max(24px, env(safe-area-inset-right));
+    right: max(8px, calc(env(safe-area-inset-right) + 8px));
     width: 44px;
-    height: min(46dvh, 340px);
+    height: min(42dvh, 300px);
     transform: translateY(-50%);
+    opacity: 0;
     pointer-events: none;
+    transition: opacity 180ms ease;
+}
+
+.system-overview-page .overview-chapter-scrubber.is-visible {
+    opacity: 0.76;
+}
+
+.system-overview-page .overview-chapter-scrubber.is-dragging {
+    opacity: 1;
 }
 
 .system-overview-page .overview-scrubber-track {
     position: absolute;
     top: 22px;
     bottom: 22px;
-    right: 21px;
-    width: 2px;
+    right: 8px;
+    width: 1px;
     border-radius: 2px;
-    background: rgba(111, 77, 40, 0.30);
+    background: rgba(111, 77, 40, 0.20);
 }
 
 .system-overview-page .overview-scrubber-thumb {
@@ -8071,21 +8097,27 @@ body.shop-task-reorder-lock .shop-task-card {
     height: 44px;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: 8px;
     cursor: grab;
     touch-action: none;
+    pointer-events: none;
+}
+
+.system-overview-page .overview-chapter-scrubber.is-visible .overview-scrubber-thumb {
     pointer-events: auto;
 }
 
 .system-overview-page .overview-scrubber-thumb::before {
     content: "";
     display: block;
-    width: 14px;
-    height: 30px;
-    border: 1px solid rgba(111, 77, 40, 0.35);
-    border-radius: 9px;
-    background: rgba(255, 253, 248, 0.95);
-    box-shadow: 0 1px 5px rgba(57, 43, 28, 0.16);
+    position: absolute;
+    right: 4px;
+    width: 8px;
+    height: 26px;
+    border: 1px solid rgba(111, 77, 40, 0.28);
+    border-radius: 5px;
+    background: rgba(125, 91, 56, 0.68);
+    box-shadow: 0 1px 3px rgba(57, 43, 28, 0.09);
 }
 
 .system-overview-page .overview-scrubber-thumb:active {
@@ -8094,7 +8126,7 @@ body.shop-task-reorder-lock .shop-task-card {
 
 .system-overview-page .overview-scrubber-thumb:active::before,
 .system-overview-page .overview-scrubber-thumb:focus-visible::before {
-    background: #f7eed6;
+    background: #8b5a1a;
 }
 
 .system-overview-page .overview-scrubber-thumb:focus-visible {
@@ -8117,12 +8149,20 @@ body.shop-task-reorder-lock .shop-task-card {
     white-space: nowrap;
 }
 
+.system-overview-page .overview-chapter-scrubber:not(.is-dragging) .overview-scrubber-preview {
+    display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .system-overview-page .overview-location-button,
     .system-overview-page .overview-contents-backdrop,
     .system-overview-page .overview-reader-navigation .overview-page-contents,
     .system-overview-page .overview-reader-navigation .overview-contents a,
     .system-overview-page .overview-contents-close {
+        transition: none;
+    }
+
+    .system-overview-page .overview-chapter-scrubber {
         transition: none;
     }
 }

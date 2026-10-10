@@ -489,7 +489,8 @@ def test_contents_backdrop_and_scrubber_are_progressive_enhancements(client):
     scrubber = document.select_one("#overview-chapter-scrubber")
     assert scrubber is not None and scrubber.has_attr("hidden")
     thumb = scrubber.select_one('[role="slider"]')
-    assert thumb["tabindex"] == "0"
+    # The shortcut becomes keyboard-focusable only while it is visible.
+    assert thumb["tabindex"] == "-1"
     assert thumb["aria-orientation"] == "vertical"
     assert thumb["aria-valuemin"] == "1"
     assert thumb["aria-valuemax"] == "9"
@@ -515,3 +516,15 @@ def test_overview_scripts_are_scoped_and_scrubber_can_be_removed_independently(c
     assert len(document.select("#quiz article")) == 8
     assert len(document.select("#python-quiz article")) == 15
     assert len(document.select("#troubleshooting article")) == 8
+
+
+def test_scrubber_is_available_on_the_normal_page_without_a_preview_query(client):
+    ordinary = _document(client.get("/system-overview"))
+    preview = _document(client.get("/system-overview?chapter-scrubber=preview"))
+    for document in (ordinary, preview):
+        assert document.select_one("#overview-chapter-scrubber [role='slider']")
+        assert len(document.select("#overview-page-contents a[data-overview-link]")) == 9
+        assert len(document.select("#basics article[id^='python-']")) == 17
+    script = client.get("/static/system_overview_scrubber.js").get_data(as_text=True)
+    assert "URLSearchParams" not in script
+    assert '"preview"' not in script
