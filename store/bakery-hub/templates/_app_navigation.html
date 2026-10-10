@@ -324,6 +324,62 @@
             return document.body.classList.contains("app-navigation-open");
         }
 
+        let previousScrollY = Math.max(0, window.scrollY);
+        let scrollDirection = 0;
+        let directionDistance = 0;
+        let scrollFrame = 0;
+        const scrollThreshold = 8;
+        const topThreshold = 12;
+
+        function showTopNavigation() {
+            document.body.classList.remove("app-top-navigation-hidden");
+        }
+
+        function resetScrollDirection() {
+            previousScrollY = Math.max(0, window.scrollY);
+            directionDistance = 0;
+            scrollDirection = 0;
+            showTopNavigation();
+        }
+
+        function topNavigationIsInUse() {
+            return navigationIsOpen()
+                || !!document.querySelector("#overview-page-contents[aria-modal]")
+                || (document.activeElement?.matches(":focus-visible")
+                    && (document.activeElement === openButton
+                        || document.activeElement?.id === "overview-location-button"));
+        }
+
+        function updateTopNavigation() {
+            scrollFrame = 0;
+            const currentY = Math.max(0, window.scrollY);
+            const movement = currentY - previousScrollY;
+            previousScrollY = currentY;
+            if (!mobileViewport.matches || currentY <= topThreshold || topNavigationIsInUse()) {
+                directionDistance = 0;
+                scrollDirection = 0;
+                showTopNavigation();
+                return;
+            }
+            const direction = Math.sign(movement);
+            if (!direction) return;
+            directionDistance = direction === scrollDirection
+                ? directionDistance + Math.abs(movement) : Math.abs(movement);
+            scrollDirection = direction;
+            if (directionDistance < scrollThreshold) return;
+            directionDistance = 0;
+            if (direction > 0) {
+                const currentFocus = document.activeElement;
+                if (currentFocus === openButton
+                    || currentFocus?.id === "overview-location-button") {
+                    currentFocus.blur();
+                }
+                document.body.classList.add("app-top-navigation-hidden");
+            } else {
+                showTopNavigation();
+            }
+        }
+
         function closeNavigation(returnFocus) {
             document.body.classList.remove("app-navigation-open");
             openButton.setAttribute("aria-expanded", "false");
@@ -340,6 +396,7 @@
         }
 
         function openNavigation() {
+            resetScrollDirection();
             document.body.classList.add("app-navigation-open");
             openButton.setAttribute("aria-expanded", "true");
             sidebar.setAttribute("aria-hidden", "false");
@@ -349,6 +406,7 @@
         }
 
         function syncNavigationToViewport() {
+            resetScrollDirection();
             if (mobileViewport.matches) {
                 closeNavigation(false);
             } else {
@@ -401,8 +459,23 @@
         closeButton.addEventListener("click", () => closeNavigation(true));
         overlay.addEventListener("click", () => closeNavigation(true));
         mobileViewport.addEventListener("change", syncNavigationToViewport);
+        window.addEventListener("scroll", () => {
+            if (!scrollFrame) scrollFrame = window.requestAnimationFrame(updateTopNavigation);
+        }, {passive: true});
+        window.addEventListener("pageshow", resetScrollDirection);
+        document.addEventListener("overview:contentschange", resetScrollDirection);
+        document.addEventListener("focusin", event => {
+            if (event.target === openButton
+                || event.target?.id === "overview-location-button") {
+                resetScrollDirection();
+            }
+        });
 
         document.addEventListener("keydown", event => {
+            if (event.key === "Tab"
+                && document.body.classList.contains("app-top-navigation-hidden")) {
+                resetScrollDirection();
+            }
             if (event.key === "Escape" && navigationIsOpen()) {
                 closeNavigation(true);
                 return;
@@ -436,5 +509,6 @@
         });
 
         syncNavigationToViewport();
+        document.body.classList.add("app-top-navigation-ready");
     })();
 </script>

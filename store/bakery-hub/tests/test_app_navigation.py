@@ -322,6 +322,39 @@ def test_app_navigation_supports_escape_and_focus_return_without_inner_html():
     assert "|safe" not in navigation_source
 
 
+def test_shared_mobile_navigation_reveals_on_upward_scroll_and_keeps_menus_stable(
+    client, authenticated_client, admin_dataset,
+):
+    navigation_source = (
+        Path(app_module.app.root_path) / "templates" / "_app_navigation.html"
+    ).read_text()
+    style_source = (
+        Path(app_module.app.root_path) / "static" / "style.css"
+    ).read_text()
+
+    for test_client, path in ((client, "/system-overview"), (authenticated_client, "/")):
+        document = BeautifulSoup(test_client.get(path).get_data(as_text=True), "html.parser")
+        assert document.select_one("button.app-navigation-open-button")
+        assert any(
+            "app-top-navigation-hidden" in script.get_text()
+            for script in document.select("script:not([src])")
+        )
+    assert 'const scrollThreshold = 8;' in navigation_source
+    assert 'const topThreshold = 12;' in navigation_source
+    assert 'window.addEventListener("scroll"' in navigation_source
+    assert 'window.requestAnimationFrame(updateTopNavigation)' in navigation_source
+    assert 'if (direction > 0)' in navigation_source
+    assert 'document.body.classList.add("app-top-navigation-hidden")' in navigation_source
+    assert 'document.addEventListener("overview:contentschange", resetScrollDirection)' in navigation_source
+    assert 'navigationIsOpen()' in navigation_source
+    assert 'event.key === "Tab"' in navigation_source
+    assert 'app-top-navigation-ready:not(.system-overview-page)::before' in style_source
+    assert 'app-top-navigation-hidden .app-navigation-open-button' in style_source
+    assert 'blur(5px)' in style_source
+    assert 'visibility 0s linear 200ms' in style_source
+    assert 'transition: none;' in style_source
+
+
 def test_mobile_primary_buttons_use_replayable_tap_bubble_animation():
     navigation_source = (
         Path(app_module.app.root_path) / "templates" / "_app_navigation.html"
