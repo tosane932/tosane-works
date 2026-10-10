@@ -528,3 +528,20 @@ def test_scrubber_is_available_on_the_normal_page_without_a_preview_query(client
     script = client.get("/static/system_overview_scrubber.js").get_data(as_text=True)
     assert "URLSearchParams" not in script
     assert '"preview"' not in script
+
+
+def test_scrubber_refinement_preserves_hit_area_and_chapter_navigation():
+    style = (Path(app_module.app.root_path) / "static" / "style.css").read_text()
+    scrubber = (Path(app_module.app.root_path) / "static" / "system_overview_scrubber.js").read_text()
+    overview = (Path(app_module.app.root_path) / "static" / "system_overview.js").read_text()
+
+    thumb = style.split(".system-overview-page .overview-scrubber-thumb {", 1)[1].split("}", 1)[0]
+    mark = style.split(".system-overview-page .overview-scrubber-thumb::before {", 1)[1].split("}", 1)[0]
+    assert "width: 44px;" in thumb and "height: 44px;" in thumb
+    assert "width: 14px;" in mark and "height: 22px;" in mark
+    assert "border-radius: 999px;" in mark
+    assert ".overview-chapter-scrubber.is-dragging .overview-scrubber-thumb::before" in style
+    assert "outline: none;" in style.split(".overview-scrubber-thumb:focus-visible {", 1)[1].split("}", 1)[0]
+    assert "visibleFor = 1600" in scrubber
+    assert "if (commit && moved) jumpTo(index)" in scrubber
+    assert "reader.offsetTop + button.offsetHeight" in overview

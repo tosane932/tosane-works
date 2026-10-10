@@ -48,7 +48,8 @@
     function updateCurrent() {
         // Only nine chapter positions: a huge chapter need not intersect the viewport.
         // rAF batches scroll events, including jumps, backward scroll and details changes.
-        const readingLine = button.getBoundingClientRect().bottom + 16;
+        // Keep the chapter boundary stable when the mobile top bar slides away.
+        const readingLine = reader.offsetTop + button.offsetHeight + 16;
         let index = 0;
         chapters.forEach((chapter, i) => {
             if (chapter.getBoundingClientRect().top <= readingLine) {
@@ -75,7 +76,7 @@
 
     function updateOffset() {
         // Measure the real bar, including wrapped text, zoom and safe-area padding.
-        const offset = Math.ceil(button.getBoundingClientRect().bottom + 12);
+        const offset = Math.ceil(reader.offsetTop + button.offsetHeight + 12);
         document.body.style.setProperty("--overview-anchor-offset", `${offset}px`);
         scheduleUpdate();
     }

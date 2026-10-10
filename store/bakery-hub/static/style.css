@@ -7924,10 +7924,9 @@ body.shop-task-reorder-lock .shop-task-card {
     height: var(--overview-anchor-offset, 68px);
     pointer-events: none;
     background: rgba(255, 253, 248, 0.72);
-    border-bottom: 1px solid rgba(111, 77, 40, 0.16);
-    box-shadow: 0 2px 5px rgba(57, 43, 28, 0.05);
-    backdrop-filter: blur(9px);
-    -webkit-backdrop-filter: blur(9px);
+    box-shadow: 0 2px 7px rgba(57, 43, 28, 0.035);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
 }
 
 .system-overview-page .overview-reader-navigation {
@@ -7938,10 +7937,9 @@ body.shop-task-reorder-lock .shop-task-card {
 .system-overview-page .overview-location-button {
     min-height: 44px;
     padding: 7px 14px;
-    border-color: rgba(111, 77, 40, 0.38);
-    border-bottom-color: rgba(111, 77, 40, 0.52);
+    border-color: transparent;
     background: rgba(255, 253, 248, 0.96);
-    box-shadow: 0 2px 7px rgba(57, 43, 28, 0.10);
+    box-shadow: 0 2px 7px rgba(57, 43, 28, 0.055);
     font-size: 15px;
     transition: background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
@@ -7949,8 +7947,8 @@ body.shop-task-reorder-lock .shop-task-card {
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .system-overview-page .overview-location-button {
         background: rgba(255, 253, 248, 0.84);
-        backdrop-filter: blur(9px);
-        -webkit-backdrop-filter: blur(9px);
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
     }
 }
 
@@ -8097,7 +8095,7 @@ body.shop-task-reorder-lock .shop-task-card {
     height: 44px;
     align-items: center;
     justify-content: center;
-    border-radius: 8px;
+    border-radius: 50%;
     cursor: grab;
     touch-action: none;
     pointer-events: none;
@@ -8111,27 +8109,31 @@ body.shop-task-reorder-lock .shop-task-card {
     content: "";
     display: block;
     position: absolute;
-    right: 4px;
-    width: 8px;
-    height: 26px;
-    border: 1px solid rgba(111, 77, 40, 0.28);
-    border-radius: 5px;
-    background: rgba(125, 91, 56, 0.68);
-    box-shadow: 0 1px 3px rgba(57, 43, 28, 0.09);
+    right: 1px;
+    width: 14px;
+    height: 22px;
+    border-radius: 999px;
+    background: rgba(125, 91, 56, 0.70);
+    box-shadow: 0 1px 3px rgba(57, 43, 28, 0.08);
+    transition: width 150ms ease, background-color 150ms ease;
 }
 
 .system-overview-page .overview-scrubber-thumb:active {
     cursor: grabbing;
 }
 
-.system-overview-page .overview-scrubber-thumb:active::before,
-.system-overview-page .overview-scrubber-thumb:focus-visible::before {
-    background: #8b5a1a;
+.system-overview-page .overview-chapter-scrubber.is-dragging .overview-scrubber-thumb::before,
+.system-overview-page .overview-scrubber-thumb:active::before {
+    width: 17px;
+    background: rgba(111, 77, 40, 0.88);
 }
 
 .system-overview-page .overview-scrubber-thumb:focus-visible {
-    outline: 3px solid #8b5a1a;
-    outline-offset: 0;
+    outline: none;
+}
+
+.system-overview-page .overview-scrubber-thumb:focus-visible::before {
+    box-shadow: 0 0 0 3px rgba(44, 93, 59, 0.7);
 }
 
 .system-overview-page .overview-scrubber-preview {
@@ -8163,6 +8165,58 @@ body.shop-task-reorder-lock .shop-task-card {
     }
 
     .system-overview-page .overview-chapter-scrubber {
+        transition: none;
+    }
+
+    .system-overview-page .overview-scrubber-thumb::before {
+        transition: none;
+    }
+}
+
+/* The mobile top layer belongs to the shared navigation; the chapter bar stays local. */
+@media (max-width: 900px) {
+    body.app-shell-page.app-top-navigation-ready:not(.system-overview-page)::before {
+        content: "";
+        position: fixed;
+        z-index: 30;
+        top: 0;
+        right: 0;
+        left: 0;
+        height: max(56px, calc(52px + env(safe-area-inset-top)));
+        pointer-events: none;
+        background: rgba(255, 253, 248, 0.72);
+        box-shadow: 0 2px 7px rgba(57, 43, 28, 0.035);
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+    }
+
+    body.app-shell-page.app-top-navigation-ready::before,
+    .app-navigation-open-button,
+    .system-overview-page .overview-reader-navigation {
+        transition: transform 200ms ease, opacity 200ms ease, visibility 0s;
+    }
+
+    body.app-shell-page.app-top-navigation-hidden::before {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+
+    body.app-shell-page.app-top-navigation-hidden .app-navigation-open-button,
+    .system-overview-page.app-top-navigation-hidden .overview-reader-navigation {
+        transform: translateY(calc(-100% - 8px));
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: transform 200ms ease, opacity 200ms ease, visibility 0s linear 200ms;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.app-shell-page.app-top-navigation-ready::before,
+    .app-navigation-open-button,
+    .system-overview-page .overview-reader-navigation,
+    body.app-shell-page.app-top-navigation-hidden .app-navigation-open-button,
+    .system-overview-page.app-top-navigation-hidden .overview-reader-navigation {
         transition: none;
     }
 }
