@@ -7787,10 +7787,10 @@ body.shop-task-reorder-lock .shop-task-card {
     min-height: 48px;
     padding: 10px 16px;
     box-sizing: border-box;
-    border: 1px solid #8b735e;
+    border: 1px solid #D3C0A7;
     border-radius: 12px;
-    color: #493d34;
-    background: #fffdf8;
+    color: #604A35;
+    background: #E9DDCB;
     box-shadow: 0 3px 12px rgba(83, 66, 43, 0.12);
     font: inherit;
     font-size: 16px;
@@ -7937,19 +7937,12 @@ body.shop-task-reorder-lock .shop-task-card {
 .system-overview-page .overview-location-button {
     min-height: 44px;
     padding: 7px 14px;
-    border-color: transparent;
-    background: rgba(255, 254, 251, 0.98);
+    border-color: #D3C0A7;
+    color: #604A35;
+    background: #E9DDCB;
     box-shadow: 0 2px 7px rgba(57, 43, 28, 0.055);
     font-size: 15px;
     transition: background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
-}
-
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .system-overview-page .overview-location-button {
-        background: rgba(255, 254, 251, 0.98);
-        backdrop-filter: blur(5px);
-        -webkit-backdrop-filter: blur(5px);
-    }
 }
 
 .system-overview-page .overview-location-button:hover {
@@ -8193,7 +8186,7 @@ body.shop-task-reorder-lock .shop-task-card {
     body.app-shell-page.app-top-navigation-ready::before,
     .app-navigation-open-button,
     .system-overview-page .overview-reader-navigation {
-        transition: transform 200ms ease, opacity 200ms ease, visibility 0s;
+        transition: transform 240ms ease-out, opacity 240ms ease-out, visibility 0s;
     }
 
     body.app-shell-page.app-top-navigation-hidden::before {
@@ -8207,7 +8200,7 @@ body.shop-task-reorder-lock .shop-task-card {
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
-        transition: transform 200ms ease, opacity 200ms ease, visibility 0s linear 200ms;
+        transition: transform 240ms ease-out, opacity 240ms ease-out, visibility 0s linear 240ms;
     }
 }
 
