@@ -339,7 +339,8 @@ def test_shared_mobile_navigation_reveals_on_upward_scroll_and_keeps_menus_stabl
             "app-top-navigation-hidden" in script.get_text()
             for script in document.select("script:not([src])")
         )
-    assert 'const scrollThreshold = 8;' in navigation_source
+    assert 'const hideDistance = 36;' in navigation_source
+    assert 'const revealDistance = 18;' in navigation_source
     assert 'const topThreshold = 12;' in navigation_source
     assert 'window.addEventListener("scroll"' in navigation_source
     assert 'window.requestAnimationFrame(updateTopNavigation)' in navigation_source

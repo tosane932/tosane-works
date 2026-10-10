@@ -7938,7 +7938,7 @@ body.shop-task-reorder-lock .shop-task-card {
     min-height: 44px;
     padding: 7px 14px;
     border-color: transparent;
-    background: rgba(255, 253, 248, 0.96);
+    background: rgba(255, 254, 251, 0.98);
     box-shadow: 0 2px 7px rgba(57, 43, 28, 0.055);
     font-size: 15px;
     transition: background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
@@ -7946,7 +7946,7 @@ body.shop-task-reorder-lock .shop-task-card {
 
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .system-overview-page .overview-location-button {
-        background: rgba(255, 253, 248, 0.84);
+        background: rgba(255, 254, 251, 0.98);
         backdrop-filter: blur(5px);
         -webkit-backdrop-filter: blur(5px);
     }
@@ -7999,7 +7999,7 @@ body.shop-task-reorder-lock .shop-task-card {
     width: min(420px, calc(100vw - 330px));
     padding: 16px;
     border-color: rgba(111, 77, 40, 0.20);
-    background: rgba(255, 253, 248, 0.98);
+    background: rgba(255, 254, 251, 0.99);
     box-shadow: 0 8px 22px rgba(57, 43, 28, 0.15);
     opacity: 0;
     transform: translateY(-8px) scale(0.985);
