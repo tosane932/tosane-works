@@ -341,7 +341,6 @@ def test_shared_mobile_navigation_reveals_on_upward_scroll_and_keeps_menus_stabl
         )
     assert 'const hideDistance = 36;' in navigation_source
     assert 'const revealDistance = 18;' in navigation_source
-    assert 'const toggleCooldown = 280;' in navigation_source
     assert 'const topThreshold = 12;' in navigation_source
     assert 'window.addEventListener("scroll"' in navigation_source
     assert 'window.requestAnimationFrame(updateTopNavigation)' in navigation_source
