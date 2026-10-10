@@ -328,7 +328,10 @@
         let scrollDirection = 0;
         let directionDistance = 0;
         let scrollFrame = 0;
-        const scrollThreshold = 8;
+        let lastNavigationToggleAt = -Infinity;
+        const hideDistance = 36;
+        const revealDistance = 18;
+        const toggleCooldown = 280;
         const topThreshold = 12;
 
         function showTopNavigation() {
@@ -339,6 +342,7 @@
             previousScrollY = Math.max(0, window.scrollY);
             directionDistance = 0;
             scrollDirection = 0;
+            lastNavigationToggleAt = -Infinity;
             showTopNavigation();
         }
 
@@ -363,11 +367,20 @@
             }
             const direction = Math.sign(movement);
             if (!direction) return;
+            const navigationHidden = document.body.classList.contains("app-top-navigation-hidden");
+            if (window.performance.now() - lastNavigationToggleAt < toggleCooldown
+                || (direction > 0 && navigationHidden)
+                || (direction < 0 && !navigationHidden)) {
+                directionDistance = 0;
+                scrollDirection = 0;
+                return;
+            }
             directionDistance = direction === scrollDirection
                 ? directionDistance + Math.abs(movement) : Math.abs(movement);
             scrollDirection = direction;
-            if (directionDistance < scrollThreshold) return;
+            if (directionDistance < (direction > 0 ? hideDistance : revealDistance)) return;
             directionDistance = 0;
+            scrollDirection = 0;
             if (direction > 0) {
                 const currentFocus = document.activeElement;
                 if (currentFocus === openButton
@@ -378,6 +391,7 @@
             } else {
                 showTopNavigation();
             }
+            lastNavigationToggleAt = window.performance.now();
         }
 
         function closeNavigation(returnFocus) {
