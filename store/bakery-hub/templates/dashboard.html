@@ -22,6 +22,34 @@
         <span>売上データ分析</span>
     </h1>
     </header>
+    <section class="period-sales-panel" aria-labelledby="period-sales-heading">
+      <h2 id="period-sales-heading">店舗の売上推移</h2>
+      <div class="period-sales-tabs" role="group" aria-label="売上集計期間">
+        <button type="button" data-sales-period="day">本日</button>
+        <button type="button" data-sales-period="week" aria-pressed="true">週別</button>
+        <button type="button" data-sales-period="month">月別</button>
+        <button type="button" data-sales-period="year">年別</button>
+      </div>
+      <div class="period-sales-navigation">
+        <button type="button" id="periodSalesPrevious" aria-label="前の期間">‹ 前へ</button>
+        <strong id="periodSalesLabel" aria-live="polite">集計中…</strong>
+        <button type="button" id="periodSalesNext" aria-label="次の期間">次へ ›</button>
+      </div>
+      <p id="periodSalesStatus" role="status" aria-live="polite"></p>
+      <div class="period-sales-summary">
+        <div><small>期間売上</small><strong id="periodSalesTotal">—</strong></div>
+        <div><small id="periodSalesComparisonLabel">前期間比</small><strong id="periodSalesComparison">—</strong></div>
+      </div>
+      <div class="period-sales-graph" role="region" aria-label="期間内の売上金額グラフ" tabindex="0">
+        <div class="period-sales-canvas"><canvas id="periodSalesChart"></canvas></div>
+      </div>
+      <h3>この期間の売れ筋商品 <small>販売個数順</small></h3>
+      <div id="periodSalesRanking" class="period-sales-ranking" aria-live="polite"></div>
+    </section>
+
+    <details class="dashboard-legacy-details" open>
+      <summary>詳細分析・AIアドバイス（従来の年月指定）</summary>
+      <div class="dashboard-legacy-inner">
     <p class="dashboard-filter-guidance">
         ※表示期間を変更した後は、【データを抽出】ボタンを押してください。
     </p>
@@ -186,6 +214,8 @@
     </div>
 
     </section>
+      </div>
+    </details>
     <div class="dashboard-actions">
         <a
             href="{{ url_for('input_sales') }}"
@@ -215,6 +245,98 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const buttons = Array.from(document.querySelectorAll('[data-sales-period]'));
+    let period = 'week';
+    let offset = 0;
+    let requestSerial = 0;
+    const status = document.getElementById('periodSalesStatus');
+    const labels = document.getElementById('periodSalesLabel');
+    const money = value => '¥' + Number(value).toLocaleString('ja-JP');
+    const canvas = document.getElementById('periodSalesChart');
+    const graph = new Chart(canvas, {
+        type: 'bar',
+        data: { labels: [], datasets: [{
+            label: '売上金額（円）', data: [], backgroundColor: '#d18a4b',
+            borderRadius: 4, maxBarThickness: 28
+        }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false },
+                tooltip: { callbacks: { label: ctx => money(ctx.parsed.y || 0) } } },
+            scales: { y: { beginAtZero: true, ticks: {
+                callback: value => Number(value).toLocaleString('ja-JP')
+            } } }
+        }
+    });
+    async function reload() {
+        const current = ++requestSerial;
+        status.textContent = '売上データを取得中…';
+        try {
+            const params = new URLSearchParams({ period, offset: String(offset) });
+            const response = await fetch('/api/sales-period-summary?' + params);
+            if (!response.ok) throw new Error('API response ' + response.status);
+            const data = await response.json();
+            if (current !== requestSerial) return;
+            labels.textContent = data.label;
+            document.getElementById('periodSalesTotal').textContent = money(data.total_sales);
+            document.getElementById('periodSalesComparisonLabel').textContent = data.comparison_label;
+            const comparison = document.getElementById('periodSalesComparison');
+            comparison.textContent = data.previous_sales === null ? '—' :
+                (data.difference > 0 ? '+' : '') + money(data.difference) +
+                (data.comparison_rate === null ? '（率なし）' :
+                    ' / ' + (data.comparison_rate > 0 ? '+' : '') + data.comparison_rate + '%');
+            comparison.classList.toggle('negative', data.difference < 0);
+            graph.data.labels = data.chart_labels;
+            graph.data.datasets[0].data = data.chart_values;
+            graph.update();
+            const rank = document.getElementById('periodSalesRanking');
+            rank.replaceChildren();
+            if (!data.rankings.length) {
+                const empty = document.createElement('p');
+                empty.textContent = 'この期間の売上データはありません。';
+                rank.append(empty);
+            }
+            data.rankings.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'period-sales-ranking-row';
+                const title = document.createElement('span');
+                title.textContent = (index + 1) + '位　' + item.name;
+                const values = document.createElement('strong');
+                values.textContent = item.quantity.toLocaleString('ja-JP') +
+                    '個 / ' + money(item.revenue);
+                row.append(title, values);
+                rank.append(row);
+            });
+            status.textContent = '実績：' + data.actual_through +
+                '（未到来の日付は集計していません）';
+            document.getElementById('periodSalesNext').disabled = offset >= 0;
+        } catch (error) {
+            if (current !== requestSerial) return;
+            status.textContent = '集計を取得できませんでした。期間を選び直してください。';
+            console.error('Sales period summary failed', error);
+        }
+    }
+    buttons.forEach(button => button.addEventListener('click', () => {
+        period = button.dataset.salesPeriod;
+        offset = 0;
+        buttons.forEach(item => item.setAttribute('aria-pressed',
+            String(item === button)));
+        reload();
+    }));
+    document.getElementById('periodSalesPrevious').addEventListener('click', () => {
+        offset--;
+        reload();
+    });
+    document.getElementById('periodSalesNext').addEventListener('click', () => {
+        if (offset < 0) offset++;
+        reload();
+    });
+    reload();
+});
+</script>
+
 <script>
     const yearSelect = document.getElementById('selectYear');
     const monthSelect = document.getElementById('selectMonth');
