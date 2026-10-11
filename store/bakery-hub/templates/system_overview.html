@@ -168,7 +168,7 @@
                 <details>
                     <summary>処理と基礎を読む</summary>
                     <p><code>_get_sales_from_db()</code>がProductとDailySalesをjoinし、Datasetと表示期間で絞ります。数量の合計はDBの<code>db.func.sum()</code>が担当し、Pythonが結果をdictにして<code>sorted()</code>で数量順に並べ、グラフ用のlistも作ります。Flaskが<code>dashboard.html</code>へ渡し、JinjaがランキングのHTMLを、JavaScriptとChart.jsがグラフを表示します。</p>
-                    <p>初期表示は全年度・全月です。期間の「更新」ではJavaScriptの<code>fetch()</code>が<code>GET /api/dashboard-data</code>を送り、Flaskの<code>jsonify()</code>で返されたJSONから画面を更新します。「本日の売上」は日本時間の今日を別に集計します。</p>
+                    <p>新しい売上サマリーでは本日・週別・月別・年別を切り替え、<code>GET /api/sales-period-summary</code>で選択期間の売上金額・前期間比・販売個数ランキング・推移を取得します。今週など進行中の期間では経過日数をそろえて比較します。既存の詳細分析は全年度・全月で始まり、期間の「更新」ではJavaScriptの<code>fetch()</code>が<code>GET /api/dashboard-data</code>を送り、Flaskの<code>jsonify()</code>で返されたJSONから画面を更新します。「本日の売上」は日本時間の今日を別に集計します。</p>
                     <p class="overview-foundations"><strong>ここで学べる基礎</strong><br>Database：<code>join</code> / query / 集計<br>Python：dict / list / <code>sorted()</code><br>Frontend：Jinja / <code>JavaScript</code> / fetch<br>Web：HTML response / <code>JSON</code></p>
                     {{ source_links(['templates/dashboard.html']) }}
                 </details>
@@ -226,7 +226,7 @@
             <dd>{{ source_links(['app.py', 'models.py', 'templates/input.html', 'tests/test_sales.py', 'tests/test_sales_postgresql.py']) }}</dd>
         {% endcall %}
 
-        {% call feature('dashboard', '売上データ分析 / Dashboard', '期間ごとの販売数量ランキング・グラフと、日本時間の本日の売上金額を表示します。', 'GET /dashboard・GET /api/dashboard-data') %}
+        {% call feature('dashboard', '売上データ分析 / Dashboard', '本日・週・月・年の売上金額推移と前期間比・売れ筋ランキングを表示し、従来の販売数量分析と日本時間の本日の売上も利用できます。', 'GET /dashboard・GET /api/dashboard-data') %}
             <dt>Python / Flask</dt>
             <dd><code>_get_dashboard_period()</code>で表示期間をそろえ、<code>_get_sales_from_db()</code>の辞書を<code>sorted()</code>で数量順にします。グラフ用の名前と数量はlistに分け、HTMLまたは<code>jsonify()</code>で返します。</dd>
             <dt>Database</dt>
