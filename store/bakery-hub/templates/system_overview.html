@@ -357,7 +357,7 @@
                             meaning="変数は値に付ける名前です。=は右側の結果を左側の名前へ代入し、==による比較とは区別します。",
                             use="商品登録のindex()は、name.strip()の結果をnormalized_nameへ代入します。",
                             reason="受け取った入力と、検証・保存に使う整えた名前を区別して読めます。",
-                            locations=[["app.py", "index", 1283, "業務処理"]],
+                            locations=[["app.py", "index", 1284, "業務処理"]],
                             feature_id="products",
                             feature_label="商品・メニュー登録",
                             snippet="normalized_name = name.strip()"
@@ -379,7 +379,7 @@
                             meaning="< / <= / == / !=は比較、+ / - / * / %などは計算です。比較の結果や空でない値を条件判断に使います。",
                             use="index()は商品名の長さを範囲比較し、価格を%で割った余りから10円単位か判断します。",
                             reason="価格の大小だけでなく、許可した単位かも保存前に確認できます。%は割り算の余りです。",
-                            locations=[["app.py", "index", 1283, "業務処理"]],
+                            locations=[["app.py", "index", 1284, "業務処理"]],
                             feature_id="products",
                             feature_label="商品・メニュー登録",
                             snippet=""
@@ -409,7 +409,7 @@
                             meaning="isは同じオブジェクトかを確認します。値の一致を確認する==とは役割が違い、Noneの有無はis None / is not Noneで調べます。",
                             use="index()は既存商品を見つけられなければexisting_product is Noneで拒否。入力された商品IDがあるかも別に検証します。",
                             reason="見つからない商品を別の商品として更新しないためです。Noneと数量0・空文字は同じ状態ではありません。",
-                            locations=[["app.py", "index", 1283, "業務処理"]],
+                            locations=[["app.py", "index", 1284, "業務処理"]],
                             feature_id="products",
                             feature_label="商品・メニュー登録",
                             snippet=""
