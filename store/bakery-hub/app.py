@@ -46,7 +46,8 @@ from models import (
 from google import genai
 from material_orders import create_material_orders_blueprint
 from prompts import build_sales_prompt
-from sales_period_summary import PERIOD_OFFSETS, sales_period_summary
+from sales_period_summary import PERIOD_OFFSETS, sales_period_summary, period_bounds
+from weather_history import WeatherHistoryError, import_weather, stored_weather
 from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
 from product_images import available_product_images, available_product_image_assets
@@ -1794,6 +1795,45 @@ def dashboard():
                            available_years=available_years,
                            sales_months=sales_months,
                            period_text=period_text)
+
+
+@app.route("/api/weather-history")
+@admin_or_guest_required
+def api_weather_history():
+    period = request.args.get("period", "week")
+    if period not in PERIOD_OFFSETS:
+        abort(400)
+    try:
+        offset = int(request.args.get("offset", "0"))
+    except (ValueError, TypeError):
+        abort(400)
+    if offset > 0 or offset < -PERIOD_OFFSETS[period]:
+        abort(400)
+    dataset = require_current_dataset()
+    start, end = period_bounds(period, offset, business_today())
+    # Only read persisted records. Never query an external service from page views.
+    return jsonify({"weather": stored_weather(dataset.id, start, end)})
+
+
+@app.route("/api/weather-history/import", methods=["POST"])
+@admin_required
+def api_weather_history_import():
+    # No Guest write or external API access.
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400)
+    period = payload.get("period")
+    if period not in ("day", "week", "month"):
+        abort(400)
+    offset = payload.get("offset")
+    if type(offset) is not int or not -PERIOD_OFFSETS[period] <= offset <= 0:
+        abort(400)
+    dataset = require_current_dataset()
+    try:
+        result = import_weather(dataset.id, period, offset, business_today(), app.config)
+    except WeatherHistoryError as exc:
+        return jsonify({"error": str(exc)}), 503
+    return jsonify(result)
 
 
 @app.route("/api/sales-period-summary")
