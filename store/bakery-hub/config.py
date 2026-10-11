@@ -75,3 +75,9 @@ else:
     SQLALCHEMY_DATABASE_URI = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'local.db')}"
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+# 店舗の気象履歴を記録する場合のみ設定
+WEATHER_LATITUDE = os.environ.get("WEATHER_LATITUDE")
+WEATHER_LONGITUDE = os.environ.get("WEATHER_LONGITUDE")
+WEATHER_API_MODE = os.environ.get("WEATHER_API_MODE")
+WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY")
