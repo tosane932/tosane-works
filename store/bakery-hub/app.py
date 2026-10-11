@@ -46,6 +46,8 @@ from models import (
 from google import genai
 from material_orders import create_material_orders_blueprint
 from prompts import build_sales_prompt
+from sales_period_summary import PERIOD_OFFSETS, sales_period_summary, period_bounds
+from weather_history import WeatherHistoryError, import_weather, stored_weather
 from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
 from product_images import available_product_images, available_product_image_assets
@@ -89,6 +91,10 @@ app.config["SECRET_KEY"] = config.SECRET_KEY
 app.config["ADMIN_USERNAME"] = config.ADMIN_USERNAME
 app.config["ADMIN_PASSWORD_HASH"] = config.ADMIN_PASSWORD_HASH
 app.config["LOCAL_DEVELOPMENT"] = config.LOCAL_DEVELOPMENT
+app.config["WEATHER_LATITUDE"] = config.WEATHER_LATITUDE
+app.config["WEATHER_LONGITUDE"] = config.WEATHER_LONGITUDE
+app.config["WEATHER_API_MODE"] = config.WEATHER_API_MODE
+app.config["WEATHER_API_KEY"] = config.WEATHER_API_KEY
 
 app.config["SESSION_COOKIE_SECURE"] = config.SESSION_COOKIE_SECURE
 app.config["SESSION_COOKIE_HTTPONLY"] = config.SESSION_COOKIE_HTTPONLY
@@ -1793,6 +1799,63 @@ def dashboard():
                            available_years=available_years,
                            sales_months=sales_months,
                            period_text=period_text)
+
+
+@app.route("/api/weather-history")
+@admin_or_guest_required
+def api_weather_history():
+    period = request.args.get("period", "week")
+    if period not in PERIOD_OFFSETS:
+        abort(400)
+    try:
+        offset = int(request.args.get("offset", "0"))
+    except (ValueError, TypeError):
+        abort(400)
+    if offset > 0 or offset < -PERIOD_OFFSETS[period]:
+        abort(400)
+    dataset = require_current_dataset()
+    start, end = period_bounds(period, offset, business_today())
+    # Only read persisted records. Never query an external service from page views.
+    return jsonify({"weather": stored_weather(dataset.id, start, end)})
+
+
+@app.route("/api/weather-history/import", methods=["POST"])
+@admin_required
+def api_weather_history_import():
+    # No Guest write or external API access.
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400)
+    period = payload.get("period")
+    if period not in ("day", "week", "month"):
+        abort(400)
+    offset = payload.get("offset")
+    if type(offset) is not int or not -PERIOD_OFFSETS[period] <= offset <= 0:
+        abort(400)
+    dataset = require_current_dataset()
+    try:
+        result = import_weather(dataset.id, period, offset, business_today(), app.config)
+    except WeatherHistoryError as exc:
+        return jsonify({"error": str(exc)}), 503
+    return jsonify(result)
+
+
+@app.route("/api/sales-period-summary")
+@admin_or_guest_required
+def api_sales_period_summary():
+    """新しい期間別サマリー。Datasetの識別子はリクエストから受け取らない。"""
+    period = request.args.get("period", "week")
+    offset_text = request.args.get("offset", "0")
+    if period not in PERIOD_OFFSETS:
+        abort(400)
+    try:
+        offset = int(offset_text)
+    except (TypeError, ValueError):
+        abort(400)
+    if not -PERIOD_OFFSETS[period] <= offset <= 0:
+        abort(400)
+    dataset = require_current_dataset()
+    return jsonify(sales_period_summary(dataset.id, period, offset, business_today()))
 
 
 @app.route("/api/dashboard-data")

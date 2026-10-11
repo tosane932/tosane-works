@@ -377,3 +377,25 @@ class DailySales(db.Model):
     product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
     date = db.Column(db.Date, nullable=False)
     quantity = db.Column(db.Integer, nullable=False, default=0)
+
+
+class DailyWeather(db.Model):
+    """日別天気の保存済み観測・再解析データ。認可済みDatasetと日付で一意。"""
+    __tablename__ = "daily_weather"
+    __table_args__ = (
+        db.UniqueConstraint("dataset_id", "date", name="uq_daily_weather_dataset_date"),
+        db.CheckConstraint("weather_code BETWEEN 0 AND 99", name="ck_daily_weather_code"),
+        db.CheckConstraint("latitude BETWEEN -90 AND 90", name="ck_daily_weather_latitude"),
+        db.CheckConstraint("longitude BETWEEN -180 AND 180", name="ck_daily_weather_longitude"),
+        db.CheckConstraint("precipitation_mm IS NULL OR precipitation_mm >= 0", name="ck_daily_weather_precipitation"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False)
+    weather_code = db.Column(db.Integer, nullable=False)
+    precipitation_mm = db.Column(db.Float, nullable=True)
+    max_temperature_c = db.Column(db.Float, nullable=True)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    source = db.Column(db.String(64), nullable=False)
+    recorded_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)

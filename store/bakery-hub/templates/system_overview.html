@@ -168,7 +168,7 @@
                 <details>
                     <summary>処理と基礎を読む</summary>
                     <p><code>_get_sales_from_db()</code>がProductとDailySalesをjoinし、Datasetと表示期間で絞ります。数量の合計はDBの<code>db.func.sum()</code>が担当し、Pythonが結果をdictにして<code>sorted()</code>で数量順に並べ、グラフ用のlistも作ります。Flaskが<code>dashboard.html</code>へ渡し、JinjaがランキングのHTMLを、JavaScriptとChart.jsがグラフを表示します。</p>
-                    <p>初期表示は全年度・全月です。期間の「更新」ではJavaScriptの<code>fetch()</code>が<code>GET /api/dashboard-data</code>を送り、Flaskの<code>jsonify()</code>で返されたJSONから画面を更新します。「本日の売上」は日本時間の今日を別に集計します。</p>
+                    <p>新しい売上サマリーでは本日・週別・月別・年別を切り替え、<code>GET /api/sales-period-summary</code>で選択期間の売上金額・前期間比・販売個数ランキング・推移を取得します。今週など進行中の期間では経過日数をそろえて比較します。さらに、店舗所在地を設定した管理者が明示操作した場合に限り、過去の天気データを気象提供元から取得して日付ごとにDBへ保存します。<code>GET /api/weather-history</code>では保存済みの記録だけを表示し、Guestは天気の取得・保存を実行できません。天気と売上に相関が見えても原因を断定せず、店主の経営判断の材料として扱います。既存の詳細分析は全年度・全月で始まり、期間の「更新」ではJavaScriptの<code>fetch()</code>が<code>GET /api/dashboard-data</code>を送り、Flaskの<code>jsonify()</code>で返されたJSONから画面を更新します。「本日の売上」は日本時間の今日を別に集計します。</p>
                     <p class="overview-foundations"><strong>ここで学べる基礎</strong><br>Database：<code>join</code> / query / 集計<br>Python：dict / list / <code>sorted()</code><br>Frontend：Jinja / <code>JavaScript</code> / fetch<br>Web：HTML response / <code>JSON</code></p>
                     {{ source_links(['templates/dashboard.html']) }}
                 </details>
@@ -226,7 +226,7 @@
             <dd>{{ source_links(['app.py', 'models.py', 'templates/input.html', 'tests/test_sales.py', 'tests/test_sales_postgresql.py']) }}</dd>
         {% endcall %}
 
-        {% call feature('dashboard', '売上データ分析 / Dashboard', '期間ごとの販売数量ランキング・グラフと、日本時間の本日の売上金額を表示します。', 'GET /dashboard・GET /api/dashboard-data') %}
+        {% call feature('dashboard', '売上データ分析 / Dashboard', '本日・週・月・年の売上金額推移と前期間比・売れ筋ランキングを表示し、従来の販売数量分析と日本時間の本日の売上も利用できます。', 'GET /dashboard・GET /api/dashboard-data') %}
             <dt>Python / Flask</dt>
             <dd><code>_get_dashboard_period()</code>で表示期間をそろえ、<code>_get_sales_from_db()</code>の辞書を<code>sorted()</code>で数量順にします。グラフ用の名前と数量はlistに分け、HTMLまたは<code>jsonify()</code>で返します。</dd>
             <dt>Database</dt>
@@ -357,7 +357,7 @@
                             meaning="変数は値に付ける名前です。=は右側の結果を左側の名前へ代入し、==による比較とは区別します。",
                             use="商品登録のindex()は、name.strip()の結果をnormalized_nameへ代入します。",
                             reason="受け取った入力と、検証・保存に使う整えた名前を区別して読めます。",
-                            locations=[["app.py", "index", 1283, "業務処理"]],
+                            locations=[["app.py", "index", 1289, "業務処理"]],
                             feature_id="products",
                             feature_label="商品・メニュー登録",
                             snippet="normalized_name = name.strip()"
@@ -368,7 +368,7 @@
                             meaning="strは文字列、intは整数、boolはTrue / Falseの状態。型変換は値を別の型として扱える形にすることです。",
                             use="_parse_bounded_nonnegative_integer()は数字の文字列を検証してintへ変換。タスクの_parse_boolean()はboolまたは文字列の0 / 1を状態へ変換します。",
                             reason="文字列の数量をそのまま計算せず、受け付けた値を整数や状態として扱います。変換できたことだけで入力が妥当とは限りません。",
-                            locations=[["app.py", "_parse_bounded_nonnegative_integer", 224, "業務処理"], ["shop_tasks.py", "_parse_boolean", 37, "業務処理"]],
+                            locations=[["app.py", "_parse_bounded_nonnegative_integer", 230, "業務処理"], ["shop_tasks.py", "_parse_boolean", 37, "業務処理"]],
                             feature_id="sales",
                             feature_label="日次売上入力",
                             snippet="return int(normalized_value)"
@@ -379,7 +379,7 @@
                             meaning="< / <= / == / !=は比較、+ / - / * / %などは計算です。比較の結果や空でない値を条件判断に使います。",
                             use="index()は商品名の長さを範囲比較し、価格を%で割った余りから10円単位か判断します。",
                             reason="価格の大小だけでなく、許可した単位かも保存前に確認できます。%は割り算の余りです。",
-                            locations=[["app.py", "index", 1283, "業務処理"]],
+                            locations=[["app.py", "index", 1289, "業務処理"]],
                             feature_id="products",
                             feature_label="商品・メニュー登録",
                             snippet=""
@@ -398,7 +398,7 @@
                             meaning="ifは条件が成り立つ場合、elifは別の条件、elseはそれ以外を選びます。and / or / notは条件を組み合わせます。",
                             use="require_current_dataset()は管理者、Guest、それ以外を分け、管理者領域またはそのGuestの領域だけを解決します。",
                             reason="認証済みというだけで全利用者のデータを返さず、操作してよいDatasetを確定するための分岐です。",
-                            locations=[["app.py", "require_current_dataset", 447, "業務処理"]],
+                            locations=[["app.py", "require_current_dataset", 453, "業務処理"]],
                             feature_id="guest",
                             feature_label="Guest Demo",
                             snippet=""
@@ -409,7 +409,7 @@
                             meaning="isは同じオブジェクトかを確認します。値の一致を確認する==とは役割が違い、Noneの有無はis None / is not Noneで調べます。",
                             use="index()は既存商品を見つけられなければexisting_product is Noneで拒否。入力された商品IDがあるかも別に検証します。",
                             reason="見つからない商品を別の商品として更新しないためです。Noneと数量0・空文字は同じ状態ではありません。",
-                            locations=[["app.py", "index", 1283, "業務処理"]],
+                            locations=[["app.py", "index", 1289, "業務処理"]],
                             feature_id="products",
                             feature_label="商品・メニュー登録",
                             snippet=""
@@ -428,7 +428,7 @@
                             meaning="forは反復できるデータから要素を取り出し、順番に処理します。",
                             use="input_sales()は商品IDと数量の各組を確認し、検証済みの売上をまとめて保存します。",
                             reason="1行目だけでなく全商品を検証し、不正な行を含む送信を保存前に拒否するためです。",
-                            locations=[["app.py", "input_sales", 1874, "業務処理"]],
+                            locations=[["app.py", "input_sales", 1937, "業務処理"]],
                             feature_id="sales",
                             feature_label="日次売上入力",
                             snippet="for product_id, quantity in zip(product_ids, quantities):"
@@ -458,7 +458,7 @@
                             meaning="listは順番を持つ要素の集まり。dictはキーと値の対応です。get()はキーから値を取得し、items()はキーと値の組を取り出します。",
                             use="input_sales()は検証済み行をlistへ。dashboard()は商品名と数量のdictをitems()で取り出して並べ替えます。",
                             reason="複数行の順序と商品名から数量への対応を、それぞれに適した構造で表せます。dict.get()とFlaskのrequest.args.get()は同じライブラリの機能ではありません。",
-                            locations=[["app.py", "input_sales", 1874, "業務処理"], ["app.py", "dashboard", 1751, "業務処理"]],
+                            locations=[["app.py", "input_sales", 1937, "業務処理"], ["app.py", "dashboard", 1757, "業務処理"]],
                             feature_id="dashboard",
                             feature_label="売上データ分析",
                             snippet=""
@@ -469,7 +469,7 @@
                             meaning="setは同じ値を重複して持たない集合です。in / not inは要素が含まれるかを確認します。",
                             use="input_sales()のseen_product_idsで同じ商品IDの二重送信を拒否。商品一覧のproduct_catalog()でもsetで同名履歴の重複を避けます。",
                             reason="同じ売上を送信内で二度扱うことと、一覧の重複表示を防ぎます。目的により同名判定とID判定を使い分けます。",
-                            locations=[["app.py", "input_sales", 1874, "業務処理"], ["app.py", "product_catalog", 1670, "業務処理"]],
+                            locations=[["app.py", "input_sales", 1937, "業務処理"], ["app.py", "product_catalog", 1676, "業務処理"]],
                             feature_id="sales",
                             feature_label="日次売上入力",
                             snippet="seen_product_ids = set()"
@@ -499,7 +499,7 @@
                             meaning="defで処理を定義し、引数で必要な値を受け取り、returnで結果を返します。デフォルト引数は省略時の値です。helperは処理を分けた補助関数の呼び方です。",
                             use="dashboard()から_get_sales_from_db(current_dataset, target_year=None, target_month=None, *, row_limit=None)を呼び、集計dictを受け取ります。*の後の引数は名前付きで渡します。",
                             reason="画面処理とDB取得を分け、対象領域・期間・必要な上限を呼び出し側から明示できます。returnはその関数の処理を終了します。",
-                            locations=[["app.py", "_get_sales_from_db", 2131, "業務処理"], ["app.py", "dashboard", 1751, "業務処理"]],
+                            locations=[["app.py", "_get_sales_from_db", 2194, "業務処理"], ["app.py", "dashboard", 1757, "業務処理"]],
                             feature_id="dashboard",
                             feature_label="売上データ分析",
                             snippet=""
@@ -529,7 +529,7 @@
                             meaning="classから作る個々のオブジェクトがインスタンス。__init__で初期化し、selfからそのインスタンスの属性へアクセスします。継承は既存classの仕組みを引き継ぐことです。",
                             use="AdminUserとGuestUserはFlask-LoginのUserMixinを継承。GuestUser.__init__()がdataset_idを持たせ、@propertyのidがguest:で始まる識別子を返します。",
                             reason="Guestごとに領域を持たせ、認証へ渡す識別子を属性のように取得します。propertyは保存済みのDB列を作る機能ではありません。",
-                            locations=[["app.py", "AdminUser", 152, "業務処理"], ["app.py", "GuestUser", 158, "業務処理"], ["app.py", "GuestUser.id", 166, "業務処理"]],
+                            locations=[["app.py", "AdminUser", 158, "業務処理"], ["app.py", "GuestUser", 164, "業務処理"], ["app.py", "GuestUser.id", 172, "業務処理"]],
                             feature_id="auth",
                             feature_label="ログイン・Guest認証",
                             snippet=""
@@ -559,7 +559,7 @@
                             meaning="tryで処理を試し、指定した例外が起きるとexceptで対応します。rollbackはPython構文ではなく、SQLAlchemyの変更取消処理です。",
                             use="input_sales()は日付・商品IDの変換失敗を拒否し、DB保存中のSQLAlchemyErrorではdb.session.rollback()して失敗を返します。",
                             reason="エラー応答だけを返して一部の売上を残すことを避けます。Pythonの例外処理がDBのtransactionを守る呼び出しにつながります。",
-                            locations=[["app.py", "input_sales", 1874, "業務処理"]],
+                            locations=[["app.py", "input_sales", 1937, "業務処理"]],
                             feature_id="sales",
                             feature_label="日次売上入力",
                             snippet=""
@@ -570,7 +570,7 @@
                             meaning="raiseは例外を発生させます。独自classで失敗の種類を定義できます。raise ... from errorは元の原因と新しい例外を結び付けます。",
                             use="商品画像のvalidate_image()はInvalidCatalogImageを発生させ、通信処理はCatalogPublishErrorを使います。GuestCapacityFullは満員と他の503障害を分けます。",
                             reason="画像の形式不正、通信失敗、Guest満員を文字列比較だけで分類せず、それぞれの対応へ進むためです。",
-                            locations=[["catalog_repository.py", "validate_image", 38, "業務処理"], ["catalog_repository.py", "InvalidCatalogImage", 30, "業務処理"], ["catalog_repository.py", "CatalogPublishError", 34, "業務処理"], ["app.py", "GuestCapacityFull", 201, "業務処理"]],
+                            locations=[["catalog_repository.py", "validate_image", 38, "業務処理"], ["catalog_repository.py", "InvalidCatalogImage", 30, "業務処理"], ["catalog_repository.py", "CatalogPublishError", 34, "業務処理"], ["app.py", "GuestCapacityFull", 207, "業務処理"]],
                             feature_id="products",
                             feature_label="商品カタログ申請",
                             snippet=""
@@ -600,7 +600,7 @@
                             meaning="enumerate()は番号と要素を取り出し、既定では0から番号を付けます。zip()は複数の並びから同じ位置の要素を組にします。",
                             use="reorder_tasks()は受信したID順にpositionを保存。input_sales()は商品IDと数量をzip()で対応付けます。",
                             reason="タスクの順番と商品ごとの数量を明示できます。zip()は短い方に合わせて止まるため、売上処理は先に件数一致を検証しています。",
-                            locations=[["shop_tasks.py", "create_shop_tasks_blueprint.reorder_tasks", 375, "業務処理"], ["app.py", "input_sales", 1874, "業務処理"]],
+                            locations=[["shop_tasks.py", "create_shop_tasks_blueprint.reorder_tasks", 375, "業務処理"], ["app.py", "input_sales", 1937, "業務処理"]],
                             feature_id="tasks",
                             feature_label="タスク並び替え",
                             snippet="for position, task_id in enumerate(task_ids):"
@@ -611,7 +611,7 @@
                             meaning="sorted()は新しい並びを作ります。keyは比較に使う値を取り出す関数、lambdaは短い無名関数、reverse=Trueは降順の指定です。",
                             use="dashboard()は商品名・数量の組について、item[1]の数量をkeyにして多い順へ並べます。",
                             reason="商品名順ではなく販売数量順のランキングを作ります。SQLの集計とPythonの表示順の整理は別の担当です。",
-                            locations=[["app.py", "dashboard", 1751, "業務処理"]],
+                            locations=[["app.py", "dashboard", 1757, "業務処理"]],
                             feature_id="dashboard",
                             feature_label="売上ランキング",
                             snippet="ranked_sales = sorted(sales_data.items(), key=lambda item: item[1], reverse=True)"
@@ -663,7 +663,7 @@
                             meaning="str.join()は複数の文字列を区切り付きで連結し、f文字列は値を文章へ埋め込みます。casefold()は大文字・小文字差の比較に使う変換です。",
                             use="_generate_ai_advice()は商品名と数量の文章をjoin()でまとめます。publish_catalog_change()はcasefold()でカタログの同名登録を確認します。",
                             reason="AIへ渡す説明の整形と、文字の大小だけが違う重複登録の防止に使います。SQLAlchemyのquery.join()によるテーブル結合とは別です。",
-                            locations=[["app.py", "_generate_ai_advice", 1064, "業務処理"], ["catalog_repository.py", "publish_catalog_change", 103, "業務処理"]],
+                            locations=[["app.py", "_generate_ai_advice", 1070, "業務処理"], ["catalog_repository.py", "publish_catalog_change", 103, "業務処理"]],
                             feature_id="ai",
                             feature_label="AIに渡す売上説明",
                             snippet=""
@@ -712,7 +712,7 @@
                             meaning="モジュールはコードをまとめた単位。importは他のモジュールの機能を使い、from ... import ...は名前を指定して取り込みます。",
                             use="app.pyはPython標準のdatetimeやhashlib、外部のFlaskやSQLAlchemy、自作のmodels・prompts・shop_tasks等を読み込みます。",
                             reason="すべてを自作せず、日付、HTTP、DB、業務処理を担当ごとに組み合わせます。_generate_ai_advice()から自作build_sales_prompt()へも処理を辿れます。",
-                            locations=[["app.py", "_generate_ai_advice", 1064, "業務処理"], ["prompts.py", "build_sales_prompt", 4, "業務処理"]],
+                            locations=[["app.py", "_generate_ai_advice", 1070, "業務処理"], ["prompts.py", "build_sales_prompt", 4, "業務処理"]],
                             feature_id="ai",
                             feature_label="AIアドバイスの組み立て",
                             snippet=""
@@ -742,7 +742,7 @@
                             meaning="hashlibはハッシュ計算、hmacは秘密鍵を使う照合やメッセージ認証、ipaddressはIPアドレスの解析に使います。",
                             use="_get_admin_auth_fingerprint()は認証設定の指紋を作り、load_user()はhmac.compare_digestで照合。_get_rate_limit_client_key()はIPを正規化しHMACの匿名キーへ変換します。",
                             reason="認証設定の変更を検知し、試行上限をclientごとに管理します。ハッシュと暗号化は同じ処理ではなく、IPや秘密値をこのページに表示しません。",
-                            locations=[["app.py", "_get_admin_auth_fingerprint", 354, "業務処理"], ["app.py", "load_user", 362, "業務処理"], ["app.py", "_get_rate_limit_client_key", 735, "業務処理"]],
+                            locations=[["app.py", "_get_admin_auth_fingerprint", 360, "業務処理"], ["app.py", "load_user", 368, "業務処理"], ["app.py", "_get_rate_limit_client_key", 741, "業務処理"]],
                             feature_id="auth",
                             feature_label="認証状態と試行上限",
                             snippet=""
@@ -753,7 +753,7 @@
                             meaning="wrapsは包んだ関数の名前等を引き継ぎ、contextmanagerはwith用の処理を作ります。threadingは同一プロセス内の同期等を扱います。",
                             use="admin_or_guest_required()はwrapsを使用。_serialize_admin_login_attempt()はSQLiteではthreading.Lock、PostgreSQLではDBのadvisory lockを使用します。",
                             reason="認証デコレータの関数情報を保ち、同時のログイン試行を整理します。threading.Lockだけで別プロセスまで守れるという説明にはしません。",
-                            locations=[["app.py", "admin_or_guest_required", 432, "業務処理"], ["app.py", "_serialize_admin_login_attempt", 696, "業務処理"]],
+                            locations=[["app.py", "admin_or_guest_required", 438, "業務処理"], ["app.py", "_serialize_admin_login_attempt", 702, "業務処理"]],
                             feature_id="auth",
                             feature_label="ログインと同時試行",
                             snippet=""
@@ -810,7 +810,7 @@
                             meaning="withは利用前後の処理をcontext managerへ任せます。@contextmanagerではyieldの位置で呼び出し側へ処理を渡し、戻ってから片付けます。",
                             use="_serialize_admin_login_attempt()はロック取得後にyieldし、finallyでrollback・SQLiteのロック解放を行います。login()がwithで利用します。",
                             reason="認証処理の途中に例外があっても片付けるためです。このyieldは大量データの配信ではなく、ロックを使う期間を囲む用途です。",
-                            locations=[["app.py", "_serialize_admin_login_attempt", 696, "業務処理"], ["app.py", "login", 1217, "業務処理"]],
+                            locations=[["app.py", "_serialize_admin_login_attempt", 702, "業務処理"], ["app.py", "login", 1223, "業務処理"]],
                             feature_id="auth",
                             feature_label="管理者ログイン",
                             snippet=""
@@ -840,7 +840,7 @@
                             meaning="デコレータは関数等に別の処理を適用する書き方です。何をするかはデコレータごとに異なり、@があるだけで認証されるわけではありません。",
                             use="appの@app.route等はURLを登録し、Blueprintの@blueprint.get / postは店舗ツールのURLを登録。@admin_or_guest_requiredや@access_requiredが認証・認可を追加します。",
                             reason="URLと処理を結び、関数本体へ進む前に利用者を確認します。Pythonの書き方、Flaskの登録機能、認証の役割を分けて読みます。",
-                            locations=[["app.py", "dashboard", 1751, "業務処理"], ["app.py", "admin_or_guest_required", 432, "業務処理"], ["shop_tasks.py", "create_shop_tasks_blueprint.list_tasks", 141, "業務処理"]],
+                            locations=[["app.py", "dashboard", 1757, "業務処理"], ["app.py", "admin_or_guest_required", 438, "業務処理"], ["shop_tasks.py", "create_shop_tasks_blueprint.list_tasks", 141, "業務処理"]],
                             feature_id="tasks",
                             feature_label="タスク画面の取得",
                             snippet=""
@@ -851,7 +851,7 @@
                             meaning="@propertyはメソッドを属性のように読める形にし、@contextmanagerはwithの流れを作ります。pytestのmarkはテストに条件やパラメータ等を付けます。",
                             use="GuestUser.id、_serialize_admin_login_attempt()、test_business_today_uses_jst_at_utc_date_boundary()の@pytest.mark.parametrizeを見比べます。",
                             reason="同じ@でも用途が違うと分かります。日付のテストは1つの検証処理に複数の時刻と期待日を与えます。",
-                            locations=[["app.py", "GuestUser.id", 166, "業務処理"], ["app.py", "_serialize_admin_login_attempt", 696, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
+                            locations=[["app.py", "GuestUser.id", 172, "業務処理"], ["app.py", "_serialize_admin_login_attempt", 702, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
                             feature_id="auth",
                             feature_label="認証と日付境界のテスト",
                             snippet=""
@@ -870,7 +870,7 @@
                             meaning="datetimeは日時、dateは日付。ZoneInfoはタイムゾーンを表します。同じ瞬間でも地域によって日付が違います。",
                             use="business_today()はAsia/Tokyoの今日を返し、input_sales()はdate.fromisoformat()で送信された日付を変換します。",
                             reason="売上入力の今月と本日の金額を日本時間でそろえます。月や年をまたぐと対象商品が変わるため、境界をpytestで確認します。",
-                            locations=[["app.py", "business_today", 210, "業務処理"], ["app.py", "input_sales", 1874, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
+                            locations=[["app.py", "business_today", 216, "業務処理"], ["app.py", "input_sales", 1937, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
                             feature_id="sales",
                             feature_label="日本時間の売上入力",
                             snippet="return datetime.datetime.now(BUSINESS_TIMEZONE).date()"
@@ -881,7 +881,7 @@
                             meaning="UTCは時刻の基準、timedeltaは時間差です。日時への加算と比較で有効期限を判断できます。",
                             use="utc_now()はUTCの日時を作り、_guest_dataset_is_expired()は絶対期限と最終操作時刻＋無操作期限を現在時刻と比較します。",
                             reason="店舗の今日という日付と、Guestが何分・何時間使えるかという経過時間を区別し、期限切れの利用を止めます。",
-                            locations=[["models.py", "utc_now", 9, "業務処理"], ["app.py", "_guest_dataset_is_expired", 243, "業務処理"]],
+                            locations=[["models.py", "utc_now", 9, "業務処理"], ["app.py", "_guest_dataset_is_expired", 249, "業務処理"]],
                             feature_id="guest",
                             feature_label="Guestの利用期限",
                             snippet=""
