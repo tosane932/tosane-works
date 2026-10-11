@@ -43,6 +43,15 @@
       <div class="period-sales-graph" role="region" aria-label="期間内の売上金額グラフ" tabindex="0">
         <div class="period-sales-canvas"><canvas id="periodSalesChart"></canvas></div>
       </div>
+      <section class="period-weather" aria-labelledby="period-weather-heading">
+        <h3 id="period-weather-heading">この期間の天気記録 <small>過去の気象データ</small></h3>
+        <p id="periodWeatherStatus" role="status">記録を読み込み中…</p>
+        <div id="periodWeatherEntries" class="period-weather-entries"></div>
+        {% if not current_user.is_guest %}
+        <button type="button" id="periodWeatherImport" class="period-weather-import">過去の天気を取得・保存</button>
+        <small>店舗の座標と気象API利用設定が必要です。新しい記録が公開されるまで数日かかります。</small>
+        {% endif %}
+      </section>
       <h3>この期間の売れ筋商品 <small>販売個数順</small></h3>
       <div id="periodSalesRanking" class="period-sales-ranking" aria-live="polite"></div>
     </section>
@@ -312,12 +321,73 @@ document.addEventListener('DOMContentLoaded', () => {
             status.textContent = '実績：' + data.actual_through +
                 '（未到来の日付は集計していません）';
             document.getElementById('periodSalesNext').disabled = offset >= 0;
+            loadStoredWeather();
         } catch (error) {
             if (current !== requestSerial) return;
             status.textContent = '集計を取得できませんでした。期間を選び直してください。';
             console.error('Sales period summary failed', error);
         }
     }
+    async function loadStoredWeather() {
+        const existing = document.getElementById('periodWeatherEntries');
+        const info = document.getElementById('periodWeatherStatus');
+        existing.replaceChildren();
+        info.textContent = '保存済みの天気を確認中…';
+        const requestedPeriod = period;
+        const requestedOffset = offset;
+        try {
+            const query = new URLSearchParams({period: requestedPeriod, offset: String(requestedOffset)});
+            const response = await fetch('/api/weather-history?' + query);
+            if (!response.ok) throw new Error('weather API failed');
+            const payload = await response.json();
+            if (period !== requestedPeriod || offset !== requestedOffset) return;
+            const entries = payload.weather || [];
+            info.textContent = entries.length
+                ? entries.length + '日分の記録（取得済みの過去データ）'
+                : 'この期間の天気記録は未登録です。';
+            entries.forEach(entry => {
+                const line = document.createElement('div');
+                line.className = 'period-weather-row';
+                const day = document.createElement('strong');
+                day.textContent = entry.date;
+                const result = document.createElement('span');
+                result.textContent = entry.weather +
+                    (entry.precipitation_mm === null ? '' : ' / 降水量 ' + entry.precipitation_mm + 'mm') +
+                    (entry.max_temperature_c === null ? '' : ' / 最高 ' + entry.max_temperature_c + '℃');
+                line.append(day, result);
+                existing.append(line);
+            });
+        } catch (error) {
+            info.textContent = '天気記録を取得できませんでした。';
+            console.error(error);
+        }
+    }
+    const importButton = document.getElementById('periodWeatherImport');
+    if (importButton) importButton.addEventListener('click', async () => {
+        const info = document.getElementById('periodWeatherStatus');
+        if (period === 'year') {
+            info.textContent = '年別の一括取得には対応していません。月別で取り込んでください。';
+            return;
+        }
+        importButton.disabled = true;
+        info.textContent = '過去の天気を取得して保存中…';
+        try {
+            const token = document.querySelector('meta[name="csrf-token"]').content;
+            const response = await fetch('/api/weather-history/import', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': token},
+                body: JSON.stringify({period, offset})
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || '保存に失敗しました。');
+            await loadStoredWeather();
+            info.textContent = data.message + '（新規 ' + data.saved + '日分）';
+        } catch (error) {
+            info.textContent = error.message;
+        } finally {
+            importButton.disabled = false;
+        }
+    });
     buttons.forEach(button => button.addEventListener('click', () => {
         period = button.dataset.salesPeriod;
         offset = 0;
