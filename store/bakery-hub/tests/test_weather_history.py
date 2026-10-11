@@ -5,6 +5,7 @@ import pytest
 
 import app as app_module
 from models import DailyWeather, db
+from bs4 import BeautifulSoup
 from weather_history import WeatherHistoryError, import_weather, stored_weather
 
 
@@ -79,9 +80,14 @@ def test_weather_import_rejects_future_or_year(authenticated_client, admin_datas
     assert authenticated_client.get(
         "/api/weather-history?period=week&offset=1"
     ).status_code == 400
-    assert authenticated_client.post(
-        "/api/weather-history/import", json={"period": "year", "offset": 0}
-    ).status_code in (400, 403)
+    html = authenticated_client.get("/dashboard").get_data(as_text=True)
+    csrf = BeautifulSoup(html, "html.parser").select_one('meta[name="csrf-token"]')["content"]
+    response = authenticated_client.post(
+        "/api/weather-history/import",
+        json={"period": "year", "offset": 0},
+        headers={"X-CSRFToken": csrf},
+    )
+    assert response.status_code == 400
 
 
 def test_guest_weather_write_denied(flask_app, admin_dataset):
@@ -96,6 +102,12 @@ def test_guest_weather_write_denied(flask_app, admin_dataset):
     with client.session_transaction() as session:
         session["_user_id"] = f"guest:{guest.id}"
         session["_fresh"] = True
-    response = client.post("/api/weather-history/import",
-                           json={"period": "day", "offset": -10})
+    html = client.get("/dashboard").get_data(as_text=True)
+    csrf = BeautifulSoup(html, "html.parser").select_one('meta[name="csrf-token"]')["content"]
+    response = client.post(
+        "/api/weather-history/import",
+        json={"period": "day", "offset": -10},
+        headers={"X-CSRFToken": csrf},
+    )
     assert response.status_code == 403
+    assert DailyWeather.query.count() == 0
