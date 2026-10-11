@@ -529,7 +529,7 @@
                             meaning="classから作る個々のオブジェクトがインスタンス。__init__で初期化し、selfからそのインスタンスの属性へアクセスします。継承は既存classの仕組みを引き継ぐことです。",
                             use="AdminUserとGuestUserはFlask-LoginのUserMixinを継承。GuestUser.__init__()がdataset_idを持たせ、@propertyのidがguest:で始まる識別子を返します。",
                             reason="Guestごとに領域を持たせ、認証へ渡す識別子を属性のように取得します。propertyは保存済みのDB列を作る機能ではありません。",
-                            locations=[["app.py", "AdminUser", 152, "業務処理"], ["app.py", "GuestUser", 158, "業務処理"], ["app.py", "GuestUser.id", 166, "業務処理"]],
+                            locations=[["app.py", "AdminUser", 158, "業務処理"], ["app.py", "GuestUser", 164, "業務処理"], ["app.py", "GuestUser.id", 172, "業務処理"]],
                             feature_id="auth",
                             feature_label="ログイン・Guest認証",
                             snippet=""
@@ -570,7 +570,7 @@
                             meaning="raiseは例外を発生させます。独自classで失敗の種類を定義できます。raise ... from errorは元の原因と新しい例外を結び付けます。",
                             use="商品画像のvalidate_image()はInvalidCatalogImageを発生させ、通信処理はCatalogPublishErrorを使います。GuestCapacityFullは満員と他の503障害を分けます。",
                             reason="画像の形式不正、通信失敗、Guest満員を文字列比較だけで分類せず、それぞれの対応へ進むためです。",
-                            locations=[["catalog_repository.py", "validate_image", 38, "業務処理"], ["catalog_repository.py", "InvalidCatalogImage", 30, "業務処理"], ["catalog_repository.py", "CatalogPublishError", 34, "業務処理"], ["app.py", "GuestCapacityFull", 201, "業務処理"]],
+                            locations=[["catalog_repository.py", "validate_image", 38, "業務処理"], ["catalog_repository.py", "InvalidCatalogImage", 30, "業務処理"], ["catalog_repository.py", "CatalogPublishError", 34, "業務処理"], ["app.py", "GuestCapacityFull", 207, "業務処理"]],
                             feature_id="products",
                             feature_label="商品カタログ申請",
                             snippet=""
@@ -851,7 +851,7 @@
                             meaning="@propertyはメソッドを属性のように読める形にし、@contextmanagerはwithの流れを作ります。pytestのmarkはテストに条件やパラメータ等を付けます。",
                             use="GuestUser.id、_serialize_admin_login_attempt()、test_business_today_uses_jst_at_utc_date_boundary()の@pytest.mark.parametrizeを見比べます。",
                             reason="同じ@でも用途が違うと分かります。日付のテストは1つの検証処理に複数の時刻と期待日を与えます。",
-                            locations=[["app.py", "GuestUser.id", 166, "業務処理"], ["app.py", "_serialize_admin_login_attempt", 702, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
+                            locations=[["app.py", "GuestUser.id", 172, "業務処理"], ["app.py", "_serialize_admin_login_attempt", 702, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
                             feature_id="auth",
                             feature_label="認証と日付境界のテスト",
                             snippet=""
