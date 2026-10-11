@@ -8799,3 +8799,50 @@ body.shop-task-reorder-lock .shop-task-card {
     font-weight: 400;
     opacity: 0.58;
 }
+
+/* 期間別売上サマリー：既存の詳細分析とは独立したレスポンシブUI */
+.period-sales-panel {
+  padding: 18px; margin: 14px 0 18px;
+  border: 1px solid #e4d7c9; border-radius: 16px;
+  background: #fffdf9; color: #342d28;
+}
+.period-sales-panel h2 { margin: 0 0 14px; font-size: 1.3rem; }
+.period-sales-panel h3 { margin: 18px 0 8px; font-size: 1.05rem; }
+.period-sales-panel h3 small { font-size: .75rem; font-weight: normal; }
+.period-sales-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.period-sales-tabs button,
+.period-sales-navigation button {
+  min-height: 44px; border: 1px solid #c9b49e;
+  border-radius: 9px; background: #fff; color: #45352c;
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.period-sales-tabs button[aria-pressed="true"] { background: #8d522b; color: white; border-color: #8d522b; }
+.period-sales-tabs button:focus-visible,
+.period-sales-navigation button:focus-visible { outline: 3px solid #3182ce; outline-offset: 2px; }
+.period-sales-navigation { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 13px 0 6px; }
+.period-sales-navigation strong { text-align: center; font-size: .88rem; overflow-wrap: anywhere; }
+.period-sales-navigation button { padding: 0 10px; flex-shrink: 0; }
+.period-sales-navigation button:disabled { cursor: default; opacity: .35; }
+#periodSalesStatus { font-size: .76rem; color: #5a5048; margin: 6px 0 12px; }
+.period-sales-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.period-sales-summary > div { display: flex; flex-direction: column; gap: 6px; padding: 14px 10px; background: #f7f1eb; border-radius: 12px; min-width: 0; }
+.period-sales-summary small { font-size: .76rem; }
+.period-sales-summary strong { font-size: clamp(.9rem, 2.4vw, 1.4rem); overflow-wrap: anywhere; }
+.period-sales-summary strong.negative { color: #b33b3b; }
+.period-sales-graph { margin-top: 14px; overflow-x: auto; overscroll-behavior-x: contain; }
+.period-sales-canvas { height: 245px; min-width: 350px; position: relative; }
+.period-sales-ranking { max-height: 280px; overflow-y: auto; overscroll-behavior-y: auto; }
+.period-sales-ranking-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 11px 4px; border-bottom: 1px solid #eae0d5; font-size: .89rem; }
+.period-sales-ranking-row strong { flex-shrink: 0; font-size: .82rem; text-align: right; }
+.dashboard-legacy-details { margin: 16px 0; }
+.dashboard-legacy-details > summary { cursor: pointer; padding: 12px; border-radius: 8px; background: #eee6db; color: #43342a; font-weight: 600; }
+.dashboard-legacy-details .dashboard-legacy-inner { padding-top: 12px; }
+@media (max-width: 600px) {
+  .period-sales-panel { padding: 12px 10px; }
+  .period-sales-tabs { gap: 4px; }
+  .period-sales-tabs button { font-size: .84rem; padding: 6px 2px; }
+  .period-sales-navigation strong { font-size: .8rem; }
+  .period-sales-canvas { min-width: 460px; height: 230px; }
+  .period-sales-ranking-row { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .period-sales-ranking-row strong { padding-left: 1.5em; }
+}
