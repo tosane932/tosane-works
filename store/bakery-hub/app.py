@@ -46,6 +46,7 @@ from models import (
 from google import genai
 from material_orders import create_material_orders_blueprint
 from prompts import build_sales_prompt
+from sales_period_summary import PERIOD_OFFSETS, sales_period_summary
 from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
 from product_images import available_product_images, available_product_image_assets
@@ -1793,6 +1794,24 @@ def dashboard():
                            available_years=available_years,
                            sales_months=sales_months,
                            period_text=period_text)
+
+
+@app.route("/api/sales-period-summary")
+@admin_or_guest_required
+def api_sales_period_summary():
+    """新しい期間別サマリー。Datasetの識別子はリクエストから受け取らない。"""
+    period = request.args.get("period", "week")
+    offset_text = request.args.get("offset", "0")
+    if period not in PERIOD_OFFSETS:
+        abort(400)
+    try:
+        offset = int(offset_text)
+    except (TypeError, ValueError):
+        abort(400)
+    if not -PERIOD_OFFSETS[period] <= offset <= 0:
+        abort(400)
+    dataset = require_current_dataset()
+    return jsonify(sales_period_summary(dataset.id, period, offset, business_today()))
 
 
 @app.route("/api/dashboard-data")
