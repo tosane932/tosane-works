@@ -16,7 +16,7 @@ MIGRATIONS_DIR = PROJECT_ROOT / "migrations"
 PREVIOUS_REVISION = "9d3c1b7e5a42"
 DATASET_REVISION = "c7a1d9e4f2b6"
 NOT_NULL_REVISION = "f2b6c8d4e1a9"
-HEAD_REVISION = "c4e8a1d7b2f6"
+HEAD_REVISION = "a6b9c2d4e8f0"
 
 
 def _migration_app(tmp_path, name):
