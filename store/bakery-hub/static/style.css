@@ -3153,6 +3153,159 @@ body.app-shell-page {
     --app-menu-color: #9a641f;
 }
 
+.app-sidebar-link-home {
+    --app-menu-color: #72583b;
+}
+
+.app-sidebar-home-row {
+    display: flex;
+    gap: 4px;
+    align-items: stretch;
+}
+
+.app-sidebar-home-row .app-sidebar-link {
+    flex: 1;
+    min-width: 0;
+}
+
+.app-sidebar-submenu-toggle {
+    flex: 0 0 48px;
+    min-height: 48px;
+    color: #5c452b;
+    background: #f8f0e2;
+    border: 1px solid #d6c7ad;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.app-sidebar-submenu-toggle svg {
+    width: 20px;
+    height: 20px;
+    transition: transform .2s ease;
+}
+
+.app-sidebar-submenu-toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+}
+
+.app-sidebar-submenu[hidden] { display: none; }
+
+.app-sidebar-submenu {
+    display: flex;
+    flex-direction: column;
+    padding: 2px 0 6px 14px;
+    border-left: 2px solid #dac9ac;
+}
+
+.app-sidebar-submenu a,
+.app-sidebar-submenu-pending {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    box-sizing: border-box;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #594732;
+    text-decoration: none;
+    border-radius: 8px;
+}
+
+.app-sidebar-submenu a:hover,
+.app-sidebar-submenu a[aria-current="page"] {
+    background: #f3e7d2;
+    text-decoration: underline;
+}
+
+.app-sidebar-submenu-pending { color: #716a5f; }
+.app-sidebar-submenu-pending small { font-size: 11px; }
+
+.app-sidebar-submenu-toggle:focus-visible,
+.app-sidebar-submenu a:focus-visible {
+    outline: 3px solid #2c5d3b;
+    outline-offset: 2px;
+}
+
+.operations-page {
+    color: #493d34;
+    background: #f7f2e9;
+}
+.operations-shell {
+    max-width: 1130px;
+    margin: 0 auto;
+    padding: 22px 20px 60px;
+}
+.operations-heading { margin-bottom: 22px; }
+.operations-heading p { color: #876c48; margin: 0 0 6px; }
+.operations-heading h1 { margin: 0 0 8px; color: #503d29; }
+.operations-heading a, .operations-card a { color: #674823; }
+.operations-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+.operations-card {
+    min-width: 0;
+    padding: 22px;
+    border: 1px solid #e3d7c2;
+    border-radius: 16px;
+    background: #fffdf8;
+    box-shadow: 0 4px 16px rgba(76, 58, 37, .06);
+    margin-bottom: 16px;
+}
+.operations-grid .operations-card { margin: 0; }
+.operations-card h2 { margin: 0 0 14px; font-size: 1.2rem; }
+.operations-card p { line-height: 1.6; }
+.operations-next {
+    grid-column: 1 / -1;
+    border-color: #d9bd8c;
+    background: #fff7e8;
+}
+#operations-current, #operations-upcoming { margin: 8px 0; }
+#operations-current p, #operations-upcoming p { margin: 0; font-size: .9rem; }
+#operations-current a, #operations-upcoming a {
+    display: inline-block;
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin: 4px 0;
+}
+#operations-upcoming small { display: block; margin: 2px 0 12px; }
+.operations-card-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.operations-card ol { padding-left: 22px; }
+.operations-card li { padding: 8px 0; border-bottom: 1px solid #eee4d6; overflow-wrap: anywhere; }
+.operations-card li:last-child { border-bottom: 0; }
+.operations-weather-icon svg { width: 32px; height: 32px; }
+.operations-weather-icon svg[hidden] { display: none; }
+.operations-card small { color: #64594b; }
+#operations-weather-source, #operations-weather-time { display: block; margin-top: 7px; }
+.operations-links a { display: block; padding: 8px 0; min-height: 44px; box-sizing: border-box; }
+.operations-date-form, .operations-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.operations-action { display: inline-block; margin: 18px 0; }
+.operations-form { display: grid; gap: 18px; max-width: 620px; }
+.operations-form label { display: grid; gap: 5px; font-weight: 600; }
+.operations-form input, .operations-form textarea, .operations-date-form input {
+    box-sizing: border-box; width: 100%; min-height: 44px;
+    padding: 8px; border: 1px solid #b7a890; border-radius: 8px; font: inherit;
+}
+.operations-form button, .operations-date-form button, .operations-delete {
+    min-height: 44px; padding: 8px 18px; border-radius: 8px;
+    border: 0; background: #6f4d28; color: white; font: inherit; cursor: pointer;
+}
+.operations-delete { background: #a44040; }
+.operations-error { color: #a12c2c; font-weight: 700; }
+.operations-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.operations-card a:focus-visible, .operations-card button:focus-visible,
+.operations-card input:focus-visible, .operations-card textarea:focus-visible {
+    outline: 3px solid #2c5d3b; outline-offset: 2px;
+}
+@media (max-width: 900px) {
+    .operations-shell { padding: 6px 4px 30px; }
+    .operations-grid { display: flex; flex-direction: column; gap: 12px; }
+    .operations-card { padding: 17px; }
+    .operations-date-form { align-items: stretch; }
+}
+
 .app-sidebar-link-catalog {
     --app-menu-color: #8b4d3b;
 }

@@ -1,0 +1,17 @@
+{% extends "schedule_base.html" %}
+{% block title %}{{ "予定の編集" if editing else "予定の登録" }}{% endblock %}
+{% block heading %}{{ "予定の編集" if editing else "新しい予定" }}{% endblock %}
+{% block content %}
+<section class="operations-card">
+    {% if error %}<p role="alert" class="operations-error">{{ error }}</p>{% endif %}
+    <form method="POST" class="operations-form" action="{{ url_for('shop_schedules.edit', schedule_id=schedule.id) if editing else url_for('shop_schedules.create') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>予定タイトル <input name="title" type="text" value="{{ values.title }}" maxlength="100" required></label>
+        <label>開始日時 <input name="starts_at" type="datetime-local" value="{{ values.starts_at }}" required></label>
+        <label>終了日時（任意） <input name="ends_at" type="datetime-local" value="{{ values.ends_at }}"></label>
+        <label>補足メモ（任意） <textarea name="note" maxlength="1000" rows="4">{{ values.note }}</textarea></label>
+        <button type="submit">{{ "変更を保存" if editing else "予定を登録" }}</button>
+    </form>
+    <a href="{{ url_for('shop_schedules.detail', schedule_id=schedule.id) if editing else url_for('shop_schedules.list_schedules') }}">キャンセル</a>
+</section>
+{% endblock %}

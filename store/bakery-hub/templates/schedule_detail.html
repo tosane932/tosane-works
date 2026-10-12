@@ -1,0 +1,19 @@
+{% extends "schedule_base.html" %}
+{% block title %}予定の詳細{% endblock %}
+{% block heading %}予定の詳細{% endblock %}
+{% block content %}
+<article class="operations-card">
+    <h2>{{ schedule.title }}</h2>
+    <p>開始：<time datetime="{{ as_jst(schedule.starts_at).isoformat(timespec='minutes') }}">{{ as_jst(schedule.starts_at).strftime('%Y年%m月%d日 %H:%M') }}</time></p>
+    {% if schedule.ends_at %}<p>終了：<time datetime="{{ as_jst(schedule.ends_at).isoformat(timespec='minutes') }}">{{ as_jst(schedule.ends_at).strftime('%Y年%m月%d日 %H:%M') }}</time></p>{% endif %}
+    {% if schedule.note %}<p class="operations-note">{{ schedule.note }}</p>{% endif %}
+    <div class="operations-actions">
+        <a href="{{ url_for('shop_schedules.edit', schedule_id=schedule.id) }}">予定を編集</a>
+        <a href="{{ url_for('shop_schedules.list_schedules', date=as_jst(schedule.starts_at).date().isoformat()) }}">この日の予定一覧</a>
+        <form method="POST" action="{{ url_for('shop_schedules.delete', schedule_id=schedule.id) }}" onsubmit="return confirm('この予定を削除しますか？');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="operations-delete">予定を削除</button>
+        </form>
+    </div>
+</article>
+{% endblock %}

@@ -94,6 +94,11 @@ class Dataset(db.Model):
         back_populates="dataset",
         passive_deletes="all",
     )
+    shop_schedules = db.relationship(
+        "ShopSchedule",
+        back_populates="dataset",
+        passive_deletes="all",
+    )
 
 
 class GuestCreationRateLimit(db.Model):
@@ -328,6 +333,32 @@ class ShopTask(db.Model):
         "Dataset",
         back_populates="shop_tasks",
     )
+
+
+class ShopSchedule(db.Model):
+    """Datasetごとに分離された店舗全体の予定。日時はUTCで保存する。"""
+    __tablename__ = "shop_schedules"
+    __table_args__ = (
+        db.CheckConstraint("length(trim(title)) >= 1", name="ck_shop_schedules_title_nonblank"),
+        db.CheckConstraint("length(title) <= 100", name="ck_shop_schedules_title_max_length"),
+        db.CheckConstraint("note IS NULL OR length(note) <= 1000", name="ck_shop_schedules_note_max_length"),
+        db.CheckConstraint("ends_at IS NULL OR ends_at > starts_at", name="ck_shop_schedules_end_after_start"),
+        db.Index("ix_shop_schedules_dataset_starts_id", "dataset_id", "starts_at", "id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(
+        db.Uuid(as_uuid=True),
+        db.ForeignKey("datasets.id", name="fk_shop_schedules_dataset_id_datasets", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title = db.Column(db.String(100), nullable=False)
+    starts_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    ends_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    note = db.Column(db.String(1000), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
+    dataset = db.relationship("Dataset", back_populates="shop_schedules")
 
 
 class Product(db.Model):

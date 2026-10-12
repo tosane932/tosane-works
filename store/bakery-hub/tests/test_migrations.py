@@ -67,6 +67,7 @@ def test_empty_database_upgrades_from_base_to_head(tmp_path):
             "material_order_items",
             "shop_memos",
             "shop_tasks",
+            "shop_schedules",
             "alembic_version",
         }.issubset(table_names)
 

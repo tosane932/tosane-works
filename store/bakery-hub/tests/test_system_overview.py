@@ -92,9 +92,10 @@ def test_existing_pages_link_to_overview_without_losing_navigation(
     link = navigation.select_one('a[href="/system-overview"]')
     assert link.get_text(strip=True) == "システム概要"
     assert link.get("aria-current") is None
-    assert [item["href"] for item in navigation.select("a")] == [
-        "/", "/products", "/input", "/dashboard", "/material-orders", "/system-overview",
+    assert [item["href"] for item in navigation.select("a[data-page]")] == [
+        "/home", "/", "/products", "/input", "/dashboard", "/material-orders", "/system-overview",
     ]
+    assert navigation.select_one('a[href="/schedule"]') is not None
     assert len(navigation.select('a[aria-current="page"]')) == 1
 
 
@@ -104,7 +105,7 @@ def test_overview_has_readable_sections_and_valid_internal_links(client):
     for section_id in ("flow", "features", "basics", "technologies", "tests"):
         assert main.select_one(f"section#{section_id} > h2")
     for feature_id in (
-        "products", "product-catalog", "sales", "dashboard", "materials", "memos", "tasks",
+        "home", "schedule", "products", "product-catalog", "sales", "dashboard", "materials", "memos", "tasks",
         "guest", "auth", "ai",
     ):
         card = main.select_one(f"article#feature-{feature_id}")

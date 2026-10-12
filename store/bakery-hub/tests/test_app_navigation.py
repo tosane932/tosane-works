@@ -10,6 +10,7 @@ from models import Dataset, db
 
 
 APP_ROUTES = {
+    "home": "/home",
     "products": "/",
     "product-catalog": "/products",
     "sales": "/input",
@@ -18,6 +19,7 @@ APP_ROUTES = {
 }
 
 APP_SIDEBAR_ITEMS = {
+    "home": ("ホーム", "house"),
     "products": ("商品・メニュー登録", "package-plus"),
     "product-catalog": ("商品一覧", "list"),
     "sales": ("日次売上入力", "clipboard-pen-line"),
@@ -94,6 +96,7 @@ def _assert_app_navigation(document, active_page, user_label):
     assert sidebar is not None
     navigation = sidebar.select_one('nav[aria-label="主要メニュー"]')
     assert navigation is not None
+    assert navigation.select_one("a[data-page]")["data-page"] == "home"
 
     links = {
         link["data-page"]: link
@@ -122,6 +125,18 @@ def _assert_app_navigation(document, active_page, user_label):
     assert "🍞" not in brand.get_text()
     assert "touch-control-no-select" in brand.get("class", [])
     _assert_inline_icon(brand, "wheat")
+    assert brand["href"] == "/home"
+
+    home_toggle = navigation.select_one(".app-sidebar-submenu-toggle")
+    submenu = navigation.select_one("#app-home-submenu")
+    assert home_toggle["aria-controls"] == "app-home-submenu"
+    assert home_toggle["type"] == "button"
+    assert submenu.select_one('a[href="/schedule"]') is not None
+    assert "タスク一覧" not in submenu.get_text()
+    assert len(submenu.select(".app-sidebar-submenu-pending")) == 3
+    if active_page == "home":
+        assert home_toggle["aria-expanded"] == "false"
+        assert submenu.has_attr("hidden")
 
     for emoji in ("🥐", "📝", "📊", "🧰"):
         assert emoji not in navigation.get_text()
