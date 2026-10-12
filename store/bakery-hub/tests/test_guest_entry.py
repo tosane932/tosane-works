@@ -340,7 +340,7 @@ def test_guest_start_success_creates_identity_and_redirects_with_303(client):
     )
 
     assert response.status_code == 303
-    assert urlparse(response.headers["Location"]).path == "/"
+    assert urlparse(response.headers["Location"]).path == "/home"
     created_guest = Dataset.query.filter_by(kind="guest").one()
     with client.session_transaction() as session_data:
         assert session_data["_user_id"] == f"guest:{created_guest.id}"
@@ -458,7 +458,7 @@ def test_admin_login_form_on_guest_start_error_submits_to_login_endpoint(
 
     assert admin_action == "/login"
     assert login_response.status_code == 302
-    assert urlparse(login_response.headers["Location"]).path == "/"
+    assert urlparse(login_response.headers["Location"]).path == "/home"
     with client.session_transaction() as session_data:
         assert session_data["_user_id"] == "admin"
 

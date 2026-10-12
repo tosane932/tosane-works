@@ -1,5 +1,9 @@
 {% set current_endpoint = request.endpoint or '' %}
-{% if current_endpoint == 'index' %}
+{% if current_endpoint == 'home' %}
+    {% set active_app_page = 'home' %}
+{% elif current_endpoint.startswith('shop_schedules.') %}
+    {% set active_app_page = 'schedule' %}
+{% elif current_endpoint == 'index' %}
     {% set active_app_page = 'products' %}
 {% elif current_endpoint == 'product_catalog' %}
     {% set active_app_page = 'product-catalog' %}
@@ -52,7 +56,7 @@
 
 <aside id="app-sidebar" class="app-sidebar" aria-label="アプリメニュー">
     <div class="app-sidebar-header">
-        <a href="{{ url_for('index') }}" class="app-sidebar-brand touch-control-no-select">
+        <a href="{{ url_for('home') }}" class="app-sidebar-brand touch-control-no-select">
             <span class="app-sidebar-brand-icon" aria-hidden="true">
                 <svg
                     data-icon="wheat"
@@ -99,6 +103,35 @@
     </div>
 
     <nav class="app-sidebar-nav" aria-label="主要メニュー">
+        <div class="app-sidebar-home-row">
+            <a
+                href="{{ url_for('home') }}"
+                data-page="home"
+                class="app-sidebar-link app-sidebar-link-home touch-control-no-select{% if active_app_page in ('home', 'schedule') %} app-sidebar-link-current{% endif %}"
+                {% if active_app_page == 'home' %}aria-current="page"{% endif %}>
+                <span class="app-sidebar-icon" aria-hidden="true">
+                    <svg data-icon="house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                        <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"></path><path d="M9 21v-7h6v7"></path>
+                    </svg>
+                </span>
+                <span>ホーム</span>
+            </a>
+            <button class="app-sidebar-submenu-toggle touch-control-no-select" type="button"
+                aria-label="ホームの子メニューを{{ '閉じる' if active_app_page == 'schedule' else '開く' }}"
+                aria-controls="app-home-submenu"
+                aria-expanded="{{ 'true' if active_app_page == 'schedule' else 'false' }}">
+                <svg data-icon="chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+            </button>
+        </div>
+        <div id="app-home-submenu" class="app-sidebar-submenu" {% if active_app_page != 'schedule' %}hidden{% endif %}>
+            <a href="{{ url_for('home') }}#weather">今日の天気</a>
+            <a href="{{ url_for('home') }}#staff">出勤メンバー</a>
+            <a href="{{ url_for('shop_schedules.list_schedules') }}" {% if active_app_page == 'schedule' %}aria-current="page"{% endif %}>スケジュール</a>
+            <a href="{{ url_for('home') }}#next">次の予定</a>
+            <span class="app-sidebar-submenu-pending">仕込み管理 <small>準備中</small></span>
+            <span class="app-sidebar-submenu-pending">スタッフ管理 <small>準備中</small></span>
+            <span class="app-sidebar-submenu-pending">店舗レイアウト <small>準備中</small></span>
+        </div>
         <a
             href="{{ url_for('index') }}"
             data-page="products"
@@ -305,6 +338,8 @@
         const closeButton = document.querySelector(".app-navigation-close-button");
         const overlay = document.querySelector(".app-navigation-overlay");
         const sidebar = document.getElementById("app-sidebar");
+        const homeToggle = sidebar?.querySelector(".app-sidebar-submenu-toggle");
+        const homeSubmenu = document.getElementById("app-home-submenu");
         const mobileViewport = window.matchMedia("(max-width: 900px)");
         const reducedMotion = window.matchMedia(
             "(prefers-reduced-motion: reduce)"
@@ -319,6 +354,12 @@
         if (!openButton || !closeButton || !overlay || !sidebar) {
             return;
         }
+        homeToggle?.addEventListener("click", () => {
+            const willOpen = homeToggle.getAttribute("aria-expanded") !== "true";
+            homeSubmenu.hidden = !willOpen;
+            homeToggle.setAttribute("aria-expanded", String(willOpen));
+            homeToggle.setAttribute("aria-label", `ホームの子メニューを${willOpen ? "閉じる" : "開く"}`);
+        });
 
         function navigationIsOpen() {
             return document.body.classList.contains("app-navigation-open");

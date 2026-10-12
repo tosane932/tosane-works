@@ -128,7 +128,7 @@ def test_tasks_tool_exposes_writable_checklist_ui_with_existing_svg_language(
 
     assert response.status_code == 200
     assert document.select_one("h1").get_text(strip=True).endswith("タスク")
-    assert "準備中" not in document.get_text()
+    assert "準備中" not in document.select_one("#shop-tools-content").get_text()
     assert document.select_one(
         'form[action="/shop-tools/tasks"] input[name="title"]'
     ) is not None

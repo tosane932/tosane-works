@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ホーム | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='store_home.js') }}" defer></script>
+</head>
+<body class="app-shell-page operations-page">
+{% include "_app_navigation.html" %}
+<main class="operations-shell">
+    <header class="operations-heading">
+        <p>Bakery Hub · 店舗運営</p>
+        <h1>今日のホーム</h1>
+        <time id="operations-date" datetime="{{ today.isoformat() }}">{{ today.strftime('%Y年%m月%d日') }}</time>
+    </header>
+
+    <div class="operations-grid">
+        <section class="operations-card operations-next" id="next" aria-labelledby="next-heading">
+            <h2 id="next-heading">現在・次の予定</h2>
+            <p id="operations-clock" aria-live="off">現在時刻を確認中</p>
+            <div id="operations-current"></div>
+            <div id="operations-upcoming" aria-live="polite">予定を確認中です。</div>
+            <a href="{{ url_for('shop_schedules.list_schedules') }}">スケジュールを見る</a>
+        </section>
+
+        <section class="operations-card" id="weather" aria-labelledby="weather-heading">
+            <h2 id="weather-heading">今日の天気</h2>
+            <div class="operations-weather-icon" aria-hidden="true">
+                <svg data-weather-icon="sun" data-icon="sun" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"></path></svg>
+                <svg data-weather-icon="cloud" data-icon="cloud" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 16.25"></path><path d="M8 16h12"></path></svg>
+                <svg data-weather-icon="rain" data-icon="cloud-rain" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 16"></path><path d="m8 19-1 2m6-2-1 2m6-2-1 2"></path></svg>
+                <svg data-weather-icon="snow" data-icon="cloud-snow" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 16"></path><path d="M8 20h.01M13 20h.01M18 20h.01"></path></svg>
+            </div>
+            <p id="operations-weather-status" role="status">天気を確認中です。</p>
+            <p id="operations-weather-location"></p>
+            <small id="operations-weather-source">過去の天気記録とは別の情報です。</small>
+            <small id="operations-weather-time"></small>
+            <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">気象データ：Open-Meteo</a>
+        </section>
+
+        <section class="operations-card" id="schedule" aria-labelledby="schedule-heading">
+            <div class="operations-card-heading">
+                <h2 id="schedule-heading">今日のスケジュール</h2>
+                <a href="{{ url_for('shop_schedules.create') }}">予定を登録</a>
+            </div>
+            <ol id="operations-schedule-list">
+                {% for row in schedules %}
+                <li><a href="{{ row.url }}"><time datetime="{{ row.start }}">{{ row.start[11:16] }}</time>　{{ row.title }}</a></li>
+                {% else %}
+                <li>今日の予定はありません。</li>
+                {% endfor %}
+            </ol>
+            <a href="{{ url_for('shop_schedules.list_schedules') }}">予定一覧・別の日を見る</a>
+        </section>
+
+        <section class="operations-card" id="staff" aria-labelledby="staff-heading">
+            <h2 id="staff-heading">本日の出勤メンバー</h2>
+            <p>スタッフ・シフト管理は準備中です。出勤情報はまだ登録されていません。</p>
+        </section>
+
+        <section class="operations-card operations-links" aria-labelledby="operations-links-heading">
+            <h2 id="operations-links-heading">次の作業へ</h2>
+            <a href="{{ url_for('material_orders.list_items') }}">店舗メモツールへ</a>
+            <a href="{{ url_for('index') }}">商品・メニュー登録へ</a>
+            <a href="{{ url_for('input_sales') }}">日次売上入力へ</a>
+        </section>
+    </div>
+</main>
+<script id="operations-initial-schedule" type="application/json">{{ schedules | tojson }}</script>
+</body>
+</html>

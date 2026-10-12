@@ -40,6 +40,7 @@ from models import (
     MaterialOrderItem,
     ShopMemo,
     ShopTask,
+    ShopSchedule,
     Product,
     DailySales,
 )
@@ -50,6 +51,8 @@ from sales_period_summary import PERIOD_OFFSETS, sales_period_summary, period_bo
 from weather_history import WeatherHistoryError, import_weather, stored_weather
 from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
+from shop_schedules import create_shop_schedules_blueprint, daily_schedules, schedule_snapshot
+from current_weather import current_weather
 from product_images import available_product_images, available_product_image_assets
 from catalog_repository import (
     CatalogPublishError,
@@ -95,6 +98,7 @@ app.config["WEATHER_LATITUDE"] = config.WEATHER_LATITUDE
 app.config["WEATHER_LONGITUDE"] = config.WEATHER_LONGITUDE
 app.config["WEATHER_API_MODE"] = config.WEATHER_API_MODE
 app.config["WEATHER_API_KEY"] = config.WEATHER_API_KEY
+app.config["WEATHER_LOCATION_NAME"] = config.WEATHER_LOCATION_NAME
 
 app.config["SESSION_COOKIE_SECURE"] = config.SESSION_COOKIE_SECURE
 app.config["SESSION_COOKIE_HTTPONLY"] = config.SESSION_COOKIE_HTTPONLY
@@ -329,6 +333,9 @@ def _cleanup_expired_guest_datasets(*, now=None):
     ShopTask.query.filter(
         ShopTask.dataset_id.in_(expired_dataset_ids)
     ).delete(synchronize_session=False)
+    ShopSchedule.query.filter(
+        ShopSchedule.dataset_id.in_(expired_dataset_ids)
+    ).delete(synchronize_session=False)
 
     product_ids = [
         row[0]
@@ -507,6 +514,12 @@ app.register_blueprint(
 )
 app.register_blueprint(
     create_shop_tasks_blueprint(
+        access_required=admin_or_guest_required,
+        resolve_dataset=require_current_dataset,
+    )
+)
+app.register_blueprint(
+    create_shop_schedules_blueprint(
         access_required=admin_or_guest_required,
         resolve_dataset=require_current_dataset,
     )
@@ -1210,7 +1223,7 @@ def start_guest_demo():
             status_code=500,
         )
 
-    return redirect(url_for("index"), code=303)
+    return redirect(url_for("home"), code=303)
 
 
 @app.get("/system-overview")
@@ -1258,7 +1271,7 @@ def login():
                 session[ADMIN_AUTH_FINGERPRINT_SESSION_KEY] = (
                     _get_admin_auth_fingerprint(configured_password_hash)
                 )
-                return redirect(url_for("index"))
+                return redirect(url_for("home"))
 
             if not _reserve_admin_login_failure(client_key_hash):
                 return _admin_login_rate_limit_response()
@@ -1282,6 +1295,25 @@ def logout():
     logout_user()
     session.pop(ADMIN_AUTH_FINGERPRINT_SESSION_KEY, None)
     return redirect(url_for("login"))
+
+
+@app.get("/home")
+@admin_or_guest_required
+def home():
+    dataset = require_current_dataset()
+    today = business_today()
+    return render_template(
+        "store_home.html",
+        today=today,
+        schedules=schedule_snapshot(daily_schedules(dataset.id, today)),
+    )
+
+
+@app.get("/api/home/weather")
+@admin_or_guest_required
+def home_weather():
+    require_current_dataset()
+    return jsonify(current_weather(app.config))
 
 
 @app.route("/", methods=["GET", "POST"])

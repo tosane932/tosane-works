@@ -1,0 +1,23 @@
+{% extends "schedule_base.html" %}
+{% block content %}
+<section class="operations-card">
+    <form method="GET" action="{{ url_for('shop_schedules.list_schedules') }}" class="operations-date-form">
+        <label for="schedule-date">表示する日付</label>
+        <input id="schedule-date" type="date" name="date" value="{{ day.isoformat() }}" min="2000-01-01" max="2100-12-31" required>
+        <button type="submit">表示</button>
+    </form>
+    <a class="operations-action" href="{{ url_for('shop_schedules.create') }}">＋ 予定を登録</a>
+    <h2>{{ day.strftime('%Y年%m月%d日') }}の予定</h2>
+    <ol class="operations-schedule-list">
+        {% for row in schedules %}
+        <li><a href="{{ url_for('shop_schedules.detail', schedule_id=row.id) }}">
+            <time datetime="{{ as_jst(row.starts_at).isoformat(timespec='minutes') }}">{{ as_jst(row.starts_at).strftime('%H:%M') }}</time>
+            {{ row.title }}
+            {% if row.ends_at %}<small>〜 {{ as_jst(row.ends_at).strftime('%H:%M') }}</small>{% endif %}
+        </a></li>
+        {% else %}
+        <li>この日の予定はありません。</li>
+        {% endfor %}
+    </ol>
+</section>
+{% endblock %}

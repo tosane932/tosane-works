@@ -122,7 +122,7 @@ def test_admin_can_view_task_ui_and_empty_state(
     empty_example = empty_state.select_one(".shop-tools-empty-example")
     assert empty_example is not None
     assert empty_example.get_text(strip=True) == "例：明日の予約分を準備"
-    assert "準備中" not in document.get_text()
+    assert "準備中" not in document.select_one("#shop-tools-content").get_text()
     assert "✅" not in document.get_text()
 
 
