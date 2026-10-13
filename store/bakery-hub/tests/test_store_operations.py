@@ -65,9 +65,29 @@ def test_home_is_separate_from_product_form(authenticated_client, admin_dataset)
     assert document.select_one("#app-home-submenu").has_attr("hidden")
     assert document.select_one("#staff") is None
     assert document.select_one("#weather summary") is not None
+    assert document.select_one("#puoppo form") is None
+    assert "AI分析連携は現在利用できません" in document.select_one("#puoppo").get_text()
     assert document.select_one('#operations-schedule-list li').get_text(strip=True) == "今日の予定はありません。"
     assert authenticated_client.get("/").status_code == 200
     assert "商品・メニュー登録" in authenticated_client.get("/").get_data(as_text=True)
+
+
+def test_puoppo_handoff_is_admin_only_and_get_has_no_ai_side_effect(
+    authenticated_client, admin_dataset, flask_app,
+):
+    flask_app.config["PUOPPO_INTEGRATION_ENABLED"] = True
+    try:
+        document = BeautifulSoup(authenticated_client.get("/home").get_data(as_text=True), "html.parser")
+        form = document.select_one("#puoppo form")
+        assert form["method"].lower() == "get"
+        assert form["action"] == "https://puoppo.onrender.com/"
+        assert form.select_one('input[name="keyword"]')["maxlength"] == "100"
+        guest, _ = guest_client(flask_app)
+        g.pop("_login_user", None)
+        guest_document = BeautifulSoup(guest.get("/home").get_data(as_text=True), "html.parser")
+        assert guest_document.select_one("#puoppo form") is None
+    finally:
+        flask_app.config["PUOPPO_INTEGRATION_ENABLED"] = False
 
 
 def test_schedule_page_opens_parent_submenu(authenticated_client, admin_dataset):
