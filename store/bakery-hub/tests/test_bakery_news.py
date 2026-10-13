@@ -26,6 +26,19 @@ def test_news_filters_old_unrelated_and_external_links():
     assert rows[0]["source"] == "農林水産省"
 
 
+def test_rdf_date_and_https_source_validation():
+    now = dt.datetime.now(dt.timezone.utc)
+    raw = ("<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#' "
+           "xmlns:dc='http://purl.org/dc/elements/1.1/'>"
+           "<item><title>食品表示の更新</title>"
+           "<link>https://www.maff.go.jp/j/press/example.html</link>"
+           f"<dc:date>{now.isoformat()}</dc:date></item>"
+           "<item><title>パンに関する偽記事</title>"
+           "<link>https://www.maff.go.jp.evil.example/</link>"
+           f"<dc:date>{now.isoformat()}</dc:date></item></rdf:RDF>").encode()
+    assert [row["title"] for row in bakery_news._parse(raw, now)] == ["食品表示の更新"]
+
+
 def test_news_cache_limits_requests_and_fails_closed(monkeypatch):
     now = dt.datetime.now(dt.timezone.utc)
     raw = feed(article("バター価格の情報", now))
