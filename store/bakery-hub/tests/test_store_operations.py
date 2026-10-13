@@ -82,7 +82,10 @@ def test_home_today_sales_distinguishes_missing_zero_and_other_dataset(
     guest_product = Product(dataset=guest_dataset, year=2026, month=10, name="ゲストのパン", price=310)
     db.session.add_all([admin_product, guest_product])
     db.session.flush()
-    db.session.add(DailySales(product_id=guest_product.id, date=today, quantity=2))
+    db.session.add_all([
+        DailySales(product_id=admin_product.id, date=today - datetime.timedelta(days=1), quantity=5),
+        DailySales(product_id=guest_product.id, date=today, quantity=2),
+    ])
     db.session.commit()
 
     document = BeautifulSoup(authenticated_client.get("/home").get_data(as_text=True), "html.parser")
@@ -102,7 +105,7 @@ def test_home_today_sales_distinguishes_missing_zero_and_other_dataset(
     guest_document = BeautifulSoup(guest.get("/home").get_data(as_text=True), "html.parser")
     assert "¥620" in guest_document.select_one("#today-sales").get_text()
     g.pop("_login_user", None)
-    db.session.query(DailySales).filter_by(product_id=admin_product.id).update({"quantity": 3})
+    db.session.query(DailySales).filter_by(product_id=admin_product.id, date=today).update({"quantity": 3})
     db.session.commit()
     assert "¥720" in BeautifulSoup(
         authenticated_client.get("/home").get_data(as_text=True), "html.parser"
