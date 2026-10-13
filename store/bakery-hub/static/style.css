@@ -3149,12 +3149,20 @@ body.app-shell-page {
     transition: transform 0.16s ease;
 }
 
+:root {
+    --bakery-home-color: #72583b;
+    --bakery-products-color: #9a641f;
+    --bakery-sales-color: #477b59;
+    --bakery-dashboard-color: #bc4848;
+    --bakery-info-color: #48739c;
+}
+
 .app-sidebar-link-products {
-    --app-menu-color: #9a641f;
+    --app-menu-color: var(--bakery-products-color);
 }
 
 .app-sidebar-link-home {
-    --app-menu-color: #72583b;
+    --app-menu-color: var(--bakery-home-color);
 }
 
 .app-sidebar-home-row {
@@ -3248,32 +3256,37 @@ body.app-shell-page {
     gap: 16px;
 }
 .operations-card {
+    --operations-card-color: var(--bakery-home-color);
     min-width: 0;
     padding: 22px;
-    border: 1px solid #e3d7c2;
+    border: 1px solid color-mix(in srgb, var(--operations-card-color) 22%, white);
     border-radius: 16px;
-    background: #fffdf8;
+    background: color-mix(in srgb, var(--operations-card-color) 5%, white);
     box-shadow: 0 4px 16px rgba(76, 58, 37, .06);
     margin-bottom: 16px;
 }
 .operations-grid .operations-card { margin: 0; }
 .operations-grid .operations-weather { grid-column: 1; }
 .operations-grid #schedule { grid-column: 2; }
+.operations-weather { background: color-mix(in srgb, var(--bakery-home-color) 7%, white); }
 .operations-weather summary { list-style: none; cursor: pointer; min-height: 112px; }
-.operations-weather-heading { display: block; margin-bottom: 8px; font-size: 1.2rem; font-weight: 700; }
+.operations-weather summary:hover .operations-weather-more { text-decoration: underline; }
+.operations-weather-heading { display: block; margin-bottom: 8px; font-size: 1.2rem; font-weight: 700; color: var(--bakery-home-color); }
 #operations-weather-location { display: block; font-size: .82rem; color: #64594b; }
 .operations-weather summary::-webkit-details-marker { display: none; }
 .operations-weather summary:focus-visible { outline: 3px solid #2c5d3b; outline-offset: 3px; }
 .operations-weather-main { display: flex; align-items: center; gap: 12px; font-size: 1.25rem; font-weight: 700; }
+.operations-weather-icon { color: var(--bakery-home-color); }
 .operations-weather-main p { margin: 0; }
 .operations-weather-more { display: block; margin-top: 10px; color: #674823; font-size: .82rem; }
-.operations-weather-details { border-top: 1px solid #e3d7c2; padding-top: 10px; }
-.operations-card h2 { margin: 0 0 14px; font-size: 1.2rem; }
+.operations-weather-details { border-top: 1px solid color-mix(in srgb, var(--bakery-home-color) 22%, white); padding-top: 10px; }
+.operations-card h2 { margin: 0 0 14px; font-size: 1.2rem; color: var(--operations-card-color); }
+.operations-card a:hover { text-decoration: underline; }
+.operations-card a:focus-visible { outline: 3px solid var(--operations-card-color); outline-offset: 2px; }
 .operations-card p { line-height: 1.6; }
 .operations-next {
     grid-column: 1 / -1;
-    border-color: #d9bd8c;
-    background: #fff7e8;
+    background: color-mix(in srgb, var(--bakery-home-color) 6%, white);
 }
 #operations-current, #operations-upcoming { margin: 8px 0; }
 #operations-current p, #operations-upcoming p { margin: 0; font-size: .9rem; }
@@ -3286,20 +3299,25 @@ body.app-shell-page {
 #operations-upcoming small { display: block; margin: 2px 0 12px; }
 .operations-card-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .operations-card ol { padding-left: 22px; }
-.operations-card li { padding: 8px 0; border-bottom: 1px solid #eee4d6; overflow-wrap: anywhere; }
+.operations-card li { padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--operations-card-color) 16%, white); overflow-wrap: anywhere; }
 .operations-card li:last-child { border-bottom: 0; }
 .operations-weather-icon svg { width: 32px; height: 32px; }
 .operations-weather-icon svg[hidden] { display: none; }
 .operations-card small { color: #64594b; }
 #operations-weather-source, #operations-weather-time, #operations-weather-credit { display: block; margin-top: 7px; }
 .operations-links a { display: block; padding: 8px 0; min-height: 44px; box-sizing: border-box; }
+.operations-news { --operations-card-color: var(--bakery-products-color); }
 .operations-news ul { list-style: none; margin: 0; padding: 0; }
-.operations-news li { display: grid; gap: 3px; padding: 9px 0; border-bottom: 1px solid #eee4d6; }
+.operations-news li { display: grid; gap: 3px; padding: 9px 0; border-bottom: 1px solid color-mix(in srgb, var(--bakery-products-color) 16%, white); }
 .operations-news li a { display: block; min-height: 44px; overflow-wrap: anywhere; }
 .operations-news time, .operations-news small { font-size: .78rem; color: #64594b; }
+.operations-puoppo { --operations-card-color: var(--bakery-info-color); }
+.operations-news a { color: #714815; }
+.operations-puoppo a { color: #365d82; }
 .operations-puoppo form { display: grid; gap: 8px; }
 .operations-puoppo input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px; border: 1px solid #b7a890; border-radius: 8px; font: inherit; }
-.operations-puoppo button { min-height: 44px; padding: 8px 12px; border: 0; border-radius: 8px; background: #614d78; color: white; font: inherit; cursor: pointer; }
+.operations-puoppo button { min-height: 44px; padding: 8px 12px; border: 0; border-radius: 8px; background: var(--bakery-info-color); color: white; font: inherit; cursor: pointer; }
+.operations-puoppo button:hover { background: #365d82; }
 .operations-date-form, .operations-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .operations-action { display: inline-block; margin: 18px 0; }
 .operations-form { display: grid; gap: 18px; max-width: 620px; }
@@ -3332,15 +3350,15 @@ body.app-shell-page {
 }
 
 .app-sidebar-link-sales {
-    --app-menu-color: #477b59;
+    --app-menu-color: var(--bakery-sales-color);
 }
 
 .app-sidebar-link-dashboard {
-    --app-menu-color: #bc4848;
+    --app-menu-color: var(--bakery-dashboard-color);
 }
 
 .app-sidebar-link-shop-tools {
-    --app-menu-color: #48739c;
+    --app-menu-color: var(--bakery-info-color);
 }
 
 .app-sidebar-icon {
@@ -9049,14 +9067,17 @@ body.shop-task-reorder-lock .shop-task-card {
 .operations-grid .operations-weather { grid-column: auto; }
 .operations-grid #schedule { grid-column: 1 / -1; }
 .operations-sales {
+    --operations-card-color: var(--bakery-sales-color);
     display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
-    text-decoration: none; color: #493d34;
+    text-decoration: none; color: #2c5d3b;
+    background: color-mix(in srgb, var(--bakery-sales-color) 9%, white);
+    border-color: color-mix(in srgb, var(--bakery-sales-color) 33%, white);
 }
-.operations-sales:hover { border-color: #b9844b; }
+.operations-sales:hover { border-color: var(--bakery-sales-color); background: color-mix(in srgb, var(--bakery-sales-color) 13%, white); }
 .operations-sales:focus-visible { outline: 3px solid #2c5d3b; outline-offset: 3px; }
-.operations-sales-heading { font-size: 1.2rem; font-weight: 700; }
+.operations-sales-heading { font-size: 1.2rem; font-weight: 700; color: #2c5d3b; }
 .operations-sales-amount { font-size: clamp(1.8rem, 4vw, 2.5rem); color: #2c5d3b; overflow-wrap: anywhere; }
-.operations-sales-footer { font-size: .9rem; color: #674823; }
+.operations-sales-footer { font-size: .9rem; color: #2c5d3b; }
 .operations-next-link { display: inline-flex; align-items: center; min-height: 44px; }
 .operations-weather-details [hidden] { display: none; }
 
