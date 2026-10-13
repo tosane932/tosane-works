@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BakeryNews | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="app-shell-page operations-page">
+{% include "_app_navigation.html" %}
+<main class="operations-shell">
+    <header class="operations-heading"><h1>BakeryNews</h1><p>店舗運営に関係する最近の公開情報</p></header>
+    <section class="operations-card operations-news" aria-label="記事一覧">
+        {% if articles %}
+        <ul>
+            {% for article in articles %}
+            <li><a href="{{ article.url }}" target="_blank" rel="noopener noreferrer">{{ article.title }}</a>
+                <time datetime="{{ article.published }}">{{ article.published[:10] }}</time>
+                <small>{{ article.source }}</small></li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p>最近の関連する記事はありません。取得できなかった場合も、時間をおいて再確認してください。</p>
+        {% endif %}
+        <p>出典：<a href="https://www.maff.go.jp/j/press/" target="_blank" rel="noopener noreferrer">農林水産省の報道発表</a>。見出しとリンクのみ掲載し、本文は提供元で確認します。</p>
+    </section>
+    <a href="{{ url_for('home') }}">ホームへ戻る</a>
+</main>
+</body>
+</html>

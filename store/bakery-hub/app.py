@@ -54,6 +54,7 @@ from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
 from shop_schedules import create_shop_schedules_blueprint, daily_schedules, schedule_snapshot
 from current_weather import current_weather
+from bakery_news import get_news
 from forecast_history import save_forecast, stored_forecasts
 from product_images import available_product_images, available_product_image_assets
 from catalog_repository import (
@@ -101,6 +102,7 @@ app.config["WEATHER_LONGITUDE"] = config.WEATHER_LONGITUDE
 app.config["WEATHER_API_MODE"] = config.WEATHER_API_MODE
 app.config["WEATHER_API_KEY"] = config.WEATHER_API_KEY
 app.config["WEATHER_LOCATION_NAME"] = config.WEATHER_LOCATION_NAME
+app.config["PUOPPO_INTEGRATION_ENABLED"] = config.PUOPPO_INTEGRATION_ENABLED
 
 app.config["SESSION_COOKIE_SECURE"] = config.SESSION_COOKIE_SECURE
 app.config["SESSION_COOKIE_HTTPONLY"] = config.SESSION_COOKIE_HTTPONLY
@@ -1311,7 +1313,23 @@ def home():
         "store_home.html",
         today=today,
         schedules=schedule_snapshot(daily_schedules(dataset.id, today)),
+        today_sales=_get_today_sales_amount(dataset, today),
+        has_today_sales=_has_today_sales_record(dataset, today),
     )
+
+
+@app.get("/api/bakery-news")
+@admin_or_guest_required
+def bakery_news_api():
+    require_current_dataset()
+    return jsonify({"articles": get_news(3)})
+
+
+@app.get("/bakery-news")
+@admin_or_guest_required
+def bakery_news_list():
+    require_current_dataset()
+    return render_template("bakery_news.html", articles=get_news(15))
 
 
 @app.get("/api/home/weather")
@@ -2245,6 +2263,16 @@ def _get_today_sales_amount(current_dataset, target_date):
         DailySales.date == target_date,
     ).scalar()
     return int(amount)
+
+
+def _has_today_sales_record(current_dataset, target_date):
+    """売上0円と未入力を区別するため、金額を再計算せず当日行の有無を調べる。"""
+    return db.session.query(DailySales.id).join(
+        Product, DailySales.product_id == Product.id,
+    ).filter(
+        Product.dataset_id == current_dataset.id,
+        DailySales.date == target_date,
+    ).first() is not None
 
 
 def _get_sales_from_db(

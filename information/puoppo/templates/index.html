@@ -44,9 +44,10 @@
                 </div>
             </div>
 
-            <a href="{{ url_for('logout') }}" class="logout-button">
-                ログアウト
-            </a>
+            <form action="{{ url_for('logout') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="logout-button">ログアウト</button>
+            </form>
         </div>
     {% else %}
         <div class="user-panel guest-panel">
@@ -61,13 +62,18 @@
 
     <!-- 検索フォーム -->
     <div class="search-container">
+        {% if analysis_available %}
         <!-- 💡 action と method を追加して、Pythonの /search にデータを送るようにします -->
         <form id="search-form" action="/search" method="POST" onsubmit="startAnimation(event)">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <!-- 💡 name="keyword" を追加して、入力された文字に名前をつけます -->
-            <input type="text" name="keyword" class="search-input" placeholder="何か知りたい情報はありますか？" required>
+            <input type="text" name="keyword" class="search-input" placeholder="何か知りたい情報はありますか？" value="{{ keyword }}" maxlength="100" required>
             <button type="submit" class="search-button">🔍 調査</button>
         </form>
-        <div class="warning-text">※信頼性の高いRSSデータのみを抽出して分析します。</div>
+        <div class="warning-text">ニュース見出しから話題や不満の傾向を推測します。世論調査の結果ではありません。1日5回まで、連続操作は1分以上空けてください。</div>
+        {% else %}
+        <p>分析は許可されたアカウントでのログイン後に利用できます。{% if keyword %}引き渡された検索語：<strong>{{ keyword }}</strong>{% endif %}</p>
+        {% endif %}
     </div>
 
     <!-- 🕊️ 初期状態の鳩とお花 -->
@@ -100,25 +106,6 @@
             }, 500);
         }
     </script>
-
-    <!-- 📋 検索履歴の一覧表示エリア -->
-    <div style="margin-top: 40px; width: 100%; max-width: 500px;">
-        <h3>これまでの検索履歴</h3>
-        <ul style="list-style-type: none; padding: 0;">
-            <!-- Pythonから渡された履歴データをループ処理で1件ずつ表示します -->
-            {% for row in history %}
-                <li style="background-color: #f0f4ee; padding: 10px; margin-bottom: 8px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
-                    <span>🔍 {{ row[1] }}</span>
-
-                    <form action="/delete" method="POST" style="margin: 0;">
-                        <input type="hidden" name="id" value="{{ row[0] }}">
-                        <button type="submit" style="background: none; border: none; color: #d9534f; cursor: pointer; font-size: 14px; font-family: inherit; padding: 0;">削除</button>
-                    </form>
-                </li>
-
-            {% endfor %}
-        </ul>
-    </div>
 
 </body>
 </html>

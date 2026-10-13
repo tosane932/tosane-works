@@ -23,7 +23,7 @@
             <p id="operations-clock" aria-live="off">現在時刻を確認中</p>
             <div id="operations-current"></div>
             <div id="operations-upcoming" aria-live="polite">予定を確認中です。</div>
-            <a href="{{ url_for('shop_schedules.list_schedules') }}">スケジュールを見る</a>
+            <a class="operations-next-link" href="{{ url_for('shop_schedules.list_schedules') }}">予定を見る ›</a>
         </section>
 
         <details class="operations-card operations-weather" id="weather">
@@ -45,7 +45,7 @@
             <div class="operations-weather-details">
             <small id="operations-weather-source">過去の天気記録とは別の情報です。</small>
             <small id="operations-weather-time"></small>
-            <a id="operations-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">気象データ：Open-Meteo</a>
+            <a id="operations-weather-credit" href="https://www.met.no/en" target="_blank" rel="noopener noreferrer" hidden>気象データの出典</a>
             </div>
         </details>
 
@@ -62,6 +62,37 @@
                 {% endfor %}
             </ol>
             <a href="{{ url_for('shop_schedules.list_schedules') }}">予定一覧・別の日を見る</a>
+        </section>
+
+        <a class="operations-card operations-sales" id="today-sales" href="{{ url_for('dashboard') }}" aria-label="本日の売上{% if has_today_sales %} {{ '{:,}'.format(today_sales) }}円{% else %} 未入力{% endif %}。売上分析を見る">
+            <span class="operations-sales-heading">本日の売上</span>
+            <strong class="operations-sales-amount">{% if has_today_sales %}¥{{ '{:,}'.format(today_sales) }}{% else %}未入力{% endif %}</strong>
+            <span class="operations-sales-footer"><time datetime="{{ today.isoformat() }}">{{ today.strftime('%m月%d日') }}</time> · 売上分析を見る ›</span>
+        </a>
+
+        <section class="operations-card operations-news" id="bakery-news" aria-labelledby="bakery-news-heading">
+            <div class="operations-card-heading">
+                <h2 id="bakery-news-heading">BakeryNews</h2>
+                <a href="{{ url_for('bakery_news_list') }}">記事一覧</a>
+            </div>
+            <p id="bakery-news-status" role="status">記事を確認中です。</p>
+            <ul id="bakery-news-list"></ul>
+            <small>出典：農林水産省。記事は提供元で確認できます。</small>
+        </section>
+
+        <section class="operations-card operations-puoppo" id="puoppo" aria-labelledby="puoppo-heading">
+            <h2 id="puoppo-heading">Puoppo｜見出しのAI分析</h2>
+            {% if config.PUOPPO_INTEGRATION_ENABLED and not current_user.is_guest %}
+            <form action="https://puoppo.onrender.com/" method="GET">
+                <label for="puoppo-keyword">調べたいキーワード</label>
+                <input id="puoppo-keyword" name="keyword" type="text" maxlength="100" required autocomplete="off">
+                <button type="submit">Puoppoで検索語を開く</button>
+            </form>
+            <small>Puoppoで許可アカウントへログイン後、内容を確認してから分析を実行します。ホーム表示だけではAIを利用しません。</small>
+            {% else %}
+            <p>AI分析連携は現在利用できません。Puoppo側のアクセス制御を確認してから有効化します。</p>
+            <a href="https://puoppo.onrender.com/" target="_blank" rel="noopener noreferrer">Puoppoを開く</a>
+            {% endif %}
         </section>
 
         <section class="operations-card operations-links" aria-labelledby="operations-links-heading">
