@@ -127,10 +127,17 @@ def test_met_revalidation_uses_last_modified(monkeypatch):
 
 def test_met_failure_timeout_invalid_json_and_old_forecast(monkeypatch):
     config = settings()
+    def broken_gzip():
+        response = Response(compressed=True)
+        response.data = response.data[:-2]
+        return response
+
     bad = [
         lambda: (_ for _ in ()).throw(TimeoutError("timeout")),
         lambda: (_ for _ in ()).throw(URLError("failed")),
         lambda: Response(b"{"),
+        broken_gzip,
+        lambda: Response(b"x" * (2 * 1024 * 1024 + 1)),
         lambda: Response(payload(target=datetime.datetime.now(UTC) - datetime.timedelta(hours=4))),
         lambda: Response(payload(issued=datetime.datetime.now(UTC) - datetime.timedelta(days=2))),
         lambda: Response(payload(symbol="unrecognised")),

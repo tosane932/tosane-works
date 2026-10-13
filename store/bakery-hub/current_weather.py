@@ -6,6 +6,7 @@ import logging
 import math
 import threading
 from email.utils import parsedate_to_datetime
+from io import BytesIO
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -110,7 +111,8 @@ def _read_met_weather(config, last_modified=None):
         if len(raw) > 2 * 1024 * 1024:
             raise ValueError("Oversized forecast response")
         if response.headers.get("Content-Encoding") == "gzip":
-            raw = gzip.decompress(raw)
+            with gzip.GzipFile(fileobj=BytesIO(raw)) as stream:
+                raw = stream.read(2 * 1024 * 1024 + 1)
         if len(raw) > 2 * 1024 * 1024:
             raise ValueError("Oversized forecast response")
         expires_at = _response_expiry(response.headers)
@@ -192,7 +194,7 @@ def current_weather(config):
                     last_modified = cached[2]
             else:
                 result, expires_at, last_modified = _read_weather(config), None, None
-        except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError):
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError, EOFError):
             logger.warning("Current weather could not be retrieved.")
             result, expires_at, last_modified = {"available": False, "reason": UNAVAILABLE}, None, None
         lifetime = datetime.timedelta(minutes=10 if result["available"] else 2)
