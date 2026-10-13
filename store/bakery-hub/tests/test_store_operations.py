@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 import app as app_module
 import current_weather as weather_module
-from models import Dataset, ShopSchedule, ShopTask, db
+from models import DailySales, Dataset, Product, ShopSchedule, ShopTask, db
 from shop_schedules import JST, UTC, daily_schedules, parse_local_minute, schedule_snapshot
 
 
@@ -70,6 +70,47 @@ def test_home_is_separate_from_product_form(authenticated_client, admin_dataset)
     assert document.select_one('#operations-schedule-list li').get_text(strip=True) == "今日の予定はありません。"
     assert authenticated_client.get("/").status_code == 200
     assert "商品・メニュー登録" in authenticated_client.get("/").get_data(as_text=True)
+
+
+def test_home_today_sales_distinguishes_missing_zero_and_other_dataset(
+    flask_app, authenticated_client, admin_dataset, monkeypatch,
+):
+    today = datetime.date(2026, 10, 14)
+    monkeypatch.setattr(app_module, "business_today", lambda: today)
+    guest, guest_dataset = guest_client(flask_app)
+    admin_product = Product(dataset=admin_dataset, year=2026, month=10, name="塩パン", price=240)
+    guest_product = Product(dataset=guest_dataset, year=2026, month=10, name="ゲストのパン", price=310)
+    db.session.add_all([admin_product, guest_product])
+    db.session.flush()
+    db.session.add(DailySales(product_id=guest_product.id, date=today, quantity=2))
+    db.session.commit()
+
+    document = BeautifulSoup(authenticated_client.get("/home").get_data(as_text=True), "html.parser")
+    assert document.select_one("#today-sales").get_text(" ", strip=True).count("未入力") == 1
+    assert document.select_one("#today-sales")["href"] == "/dashboard"
+    assert document.select_one(".operations-next + .operations-weather") is not None
+    assert document.select_one("#schedule + #today-sales") is not None
+    assert document.select_one("#bakery-news + #puoppo") is not None
+
+    db.session.add(DailySales(product_id=admin_product.id, date=today, quantity=0))
+    db.session.commit()
+    assert "¥0" in BeautifulSoup(
+        authenticated_client.get("/home").get_data(as_text=True), "html.parser"
+    ).select_one("#today-sales").get_text()
+
+    g.pop("_login_user", None)
+    guest_document = BeautifulSoup(guest.get("/home").get_data(as_text=True), "html.parser")
+    assert "¥620" in guest_document.select_one("#today-sales").get_text()
+    g.pop("_login_user", None)
+    db.session.query(DailySales).filter_by(product_id=admin_product.id).update({"quantity": 3})
+    db.session.commit()
+    assert "¥720" in BeautifulSoup(
+        authenticated_client.get("/home").get_data(as_text=True), "html.parser"
+    ).select_one("#today-sales").get_text()
+    g.pop("_login_user", None)
+    assert "¥620" in BeautifulSoup(
+        guest.get("/home").get_data(as_text=True), "html.parser"
+    ).select_one("#today-sales").get_text()
 
 
 def test_puoppo_handoff_is_admin_only_and_get_has_no_ai_side_effect(

@@ -23,7 +23,7 @@
             <p id="operations-clock" aria-live="off">現在時刻を確認中</p>
             <div id="operations-current"></div>
             <div id="operations-upcoming" aria-live="polite">予定を確認中です。</div>
-            <a href="{{ url_for('shop_schedules.list_schedules') }}">スケジュールを見る</a>
+            <a class="operations-next-link" href="{{ url_for('shop_schedules.list_schedules') }}">予定を見る ›</a>
         </section>
 
         <details class="operations-card operations-weather" id="weather">
@@ -45,7 +45,7 @@
             <div class="operations-weather-details">
             <small id="operations-weather-source">過去の天気記録とは別の情報です。</small>
             <small id="operations-weather-time"></small>
-            <a id="operations-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">気象データ：Open-Meteo</a>
+            <a id="operations-weather-credit" href="https://www.met.no/en" target="_blank" rel="noopener noreferrer" hidden>気象データの出典</a>
             </div>
         </details>
 
@@ -63,6 +63,12 @@
             </ol>
             <a href="{{ url_for('shop_schedules.list_schedules') }}">予定一覧・別の日を見る</a>
         </section>
+
+        <a class="operations-card operations-sales" id="today-sales" href="{{ url_for('dashboard') }}" aria-label="本日の売上{% if has_today_sales %} {{ '{:,}'.format(today_sales) }}円{% else %} 未入力{% endif %}。売上分析を見る">
+            <span class="operations-sales-heading">本日の売上</span>
+            <strong class="operations-sales-amount">{% if has_today_sales %}¥{{ '{:,}'.format(today_sales) }}{% else %}未入力{% endif %}</strong>
+            <span class="operations-sales-footer"><time datetime="{{ today.isoformat() }}">{{ today.strftime('%m月%d日') }}</time> · 売上分析を見る ›</span>
+        </a>
 
         <section class="operations-card operations-news" id="bakery-news" aria-labelledby="bakery-news-heading">
             <div class="operations-card-heading">

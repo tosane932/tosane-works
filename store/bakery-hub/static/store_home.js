@@ -59,7 +59,7 @@
             note.textContent = "開始予定まで" + remaining + "分";
             upcoming.append(label, link, note);
         } else {
-            upcoming.textContent = "次の予定はありません。";
+            upcoming.textContent = "予定なし";
         }
     }
 
@@ -97,7 +97,7 @@
                 }).catch(() => {});
             }
             document.getElementById("operations-weather-location").textContent =
-                data.available ? data.location + "・取得当時の予報" : "";
+                data.available ? data.location : "";
             document.getElementById("operations-weather-source").textContent =
                 data.available ? data.source + "（観測記録ではありません）" : "過去の天気記録は現在の天気に利用しません。";
             document.getElementById("operations-weather-time").textContent =
