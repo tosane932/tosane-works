@@ -58,9 +58,13 @@ def test_home_requires_identity_and_dataset(client, authenticated_client, admin_
 
 def test_home_is_separate_from_product_form(authenticated_client, admin_dataset):
     document = BeautifulSoup(authenticated_client.get("/home").get_data(as_text=True), "html.parser")
-    assert document.select_one('a[data-page="home"]')["aria-current"] == "page"
+    home_control = document.select_one('button[data-page="home"]')
+    assert home_control["aria-current"] == "page"
+    assert home_control["aria-controls"] == "app-home-submenu"
+    assert home_control["aria-expanded"] == "false"
     assert document.select_one("#app-home-submenu").has_attr("hidden")
-    assert "スタッフ・シフト管理は準備中" in document.get_text()
+    assert document.select_one("#staff") is None
+    assert document.select_one("#weather summary") is not None
     assert document.select_one('#operations-schedule-list li').get_text(strip=True) == "今日の予定はありません。"
     assert authenticated_client.get("/").status_code == 200
     assert "商品・メニュー登録" in authenticated_client.get("/").get_data(as_text=True)
@@ -68,7 +72,7 @@ def test_home_is_separate_from_product_form(authenticated_client, admin_dataset)
 
 def test_schedule_page_opens_parent_submenu(authenticated_client, admin_dataset):
     document = BeautifulSoup(authenticated_client.get("/schedule").get_data(as_text=True), "html.parser")
-    assert document.select_one(".app-sidebar-submenu-toggle")["aria-expanded"] == "true"
+    assert document.select_one(".app-sidebar-submenu-toggle") is None
     assert not document.select_one("#app-home-submenu").has_attr("hidden")
     assert document.select_one('#app-home-submenu a[href="/schedule"]')["aria-current"] == "page"
     assert document.select_one('a[data-page="home"]').get("aria-current") is None

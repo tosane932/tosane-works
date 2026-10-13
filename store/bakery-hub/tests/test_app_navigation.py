@@ -96,27 +96,31 @@ def _assert_app_navigation(document, active_page, user_label):
     assert sidebar is not None
     navigation = sidebar.select_one('nav[aria-label="主要メニュー"]')
     assert navigation is not None
-    assert navigation.select_one("a[data-page]")["data-page"] == "home"
+    home_control = navigation.select_one('[data-page="home"]')
+    assert home_control is not None
+    assert home_control.name == ("button" if active_page == "home" else "a")
 
     links = {
         link["data-page"]: link
         for link in navigation.select("a[data-page]")
     }
-    assert set(links) == set(SIDEBAR_ROUTES)
+    assert set(links) == set(SIDEBAR_ROUTES) - ({"home"} if active_page == "home" else set())
     for page, path in SIDEBAR_ROUTES.items():
         label, icon_name = APP_SIDEBAR_ITEMS[page]
-        assert links[page]["href"] == path
-        assert links[page].get_text(" ", strip=True) == label
-        assert "touch-control-no-select" in links[page].get("class", [])
-        _assert_inline_icon(links[page], icon_name)
+        item = home_control if page == "home" else links[page]
+        if page != "home" or active_page != "home":
+            assert item["href"] == path
+        assert item.get_text(" ", strip=True) == label
+        assert "touch-control-no-select" in item.get("class", [])
+        _assert_inline_icon(item, icon_name)
         if page == active_page:
-            assert links[page].get("aria-current") == "page"
-            assert "app-sidebar-link-current" in links[page].get(
+            assert item.get("aria-current") == "page"
+            assert "app-sidebar-link-current" in item.get(
                 "class",
                 [],
             )
         else:
-            assert links[page].get("aria-current") is None
+            assert item.get("aria-current") is None
 
     assert user_label in sidebar.get_text()
     brand = sidebar.select_one("a.app-sidebar-brand")
@@ -129,11 +133,14 @@ def _assert_app_navigation(document, active_page, user_label):
 
     home_toggle = navigation.select_one(".app-sidebar-submenu-toggle")
     submenu = navigation.select_one("#app-home-submenu")
-    assert home_toggle["aria-controls"] == "app-home-submenu"
-    assert home_toggle["type"] == "button"
+    if active_page == "home":
+        assert home_toggle["aria-controls"] == "app-home-submenu"
+        assert home_toggle["type"] == "button"
+    else:
+        assert home_toggle is None
     assert submenu.select_one('a[href="/schedule"]') is not None
     assert "タスク一覧" not in submenu.get_text()
-    assert len(submenu.select(".app-sidebar-submenu-pending")) == 3
+    assert not submenu.select(".app-sidebar-submenu-pending")
     if active_page == "home":
         assert home_toggle["aria-expanded"] == "false"
         assert submenu.has_attr("hidden")

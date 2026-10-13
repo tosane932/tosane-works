@@ -97,7 +97,7 @@
                 }).catch(() => {});
             }
             document.getElementById("operations-weather-location").textContent =
-                data.available ? "対象地点：" + data.location : "";
+                data.available ? data.location + "・取得当時の予報" : "";
             document.getElementById("operations-weather-source").textContent =
                 data.available ? data.source + "（観測記録ではありません）" : "過去の天気記録は現在の天気に利用しません。";
             document.getElementById("operations-weather-time").textContent =
@@ -113,11 +113,17 @@
             if (data.weather_code === 0) icon = "sun";
             if ([51,53,55,56,57,61,63,65,66,67,80,81,82,95,96,99].includes(data.weather_code)) icon = "rain";
             if ([71,73,75,77,85,86].includes(data.weather_code)) icon = "snow";
+            if ([95,96,99].includes(data.weather_code)) icon = "storm";
             document.querySelectorAll("[data-weather-icon]").forEach(element => {
-                element.hidden = !data.available || element.dataset.weatherIcon !== icon;
+                if (data.available && element.dataset.weatherIcon === icon) {
+                    element.removeAttribute("hidden");
+                } else {
+                    element.setAttribute("hidden", "");
+                }
             });
         } catch {
             status.textContent = "現在の天気を取得できませんでした。";
+            document.querySelectorAll("[data-weather-icon]").forEach(element => element.setAttribute("hidden", ""));
         }
     }
 
