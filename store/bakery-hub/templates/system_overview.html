@@ -180,7 +180,7 @@
         <h2 tabindex="-1">3. メニュー・機能別の仕組み</h2>
         <p>役割を確認してから詳細を開くと、Python・DB・画面・テストのつながりを追えます。ファイル名のリンクはGitHubのmainを開きます。</p>
         <nav class="overview-contents" aria-label="機能別の目次">
-            {% for id, label in [('home', '店舗運営ホーム'), ('schedule', 'スケジュール'), ('products', '商品登録'), ('product-catalog', '商品一覧'), ('sales', '売上入力'), ('dashboard', '売上分析'), ('materials', '材料発注'), ('memos', '店舗メモ'), ('tasks', 'タスク'), ('guest', 'Guest Demo'), ('auth', 'ログイン'), ('ai', 'AI')] %}
+            {% for id, label in [('home', '店舗運営ホーム'), ('schedule', 'スケジュール'), ('staff-shifts', 'スタッフ・シフト管理'), ('products', '商品登録'), ('product-catalog', '商品一覧'), ('sales', '売上入力'), ('dashboard', '売上分析'), ('materials', '材料発注'), ('memos', '店舗メモ'), ('tasks', 'タスク'), ('guest', 'Guest Demo'), ('auth', 'ログイン'), ('ai', 'AI')] %}
             <a href="#feature-{{ id }}">{{ label }}</a>
             {% endfor %}
         </nav>
@@ -189,9 +189,9 @@
             <dt>Python / Flask</dt>
             <dd><code>home()</code>が認証済みDatasetの当日予定を返します。現在の天気は設定済みの地点について別APIで取得し、失敗時は理由を表示します。Open-Meteoの現在モデル推定と、MET Norwayの直近予報を設定で選択できます。MET NorwayのExpiresまでキャッシュし、過去天気の確定記録を現在の天気として流用しません。正常なMET Norway予報の取得後はCSRF付きPOSTがサーバー側の予報を再確認し、Datasetごとに日本時間の当日最初の予報だけを<code>DailyForecast</code>へ保存します。これは観測結果ではありません。ホームを開かなかった日は保存されず、保存失敗時もホーム画面は閲覧できます。</dd>
             <dt>Database</dt>
-            <dd>予定は現在のDatasetの<code>ShopSchedule</code>だけを読みます。当日売上はダッシュボードと同じ集計関数を使い、<code>DailySales</code>の行の有無で未入力と0円を区別します。<code>DailyForecast</code>は取得当時の予報を保存し、<code>DailyWeather</code>の過去の気象データと同じ日でも別々に表示します。DBの一意制約とON CONFLICTで同日の再保存・上書きを防ぎ、Guest期限切れ時は削除します。保存済み記録の閲覧では外部APIを呼びません。Render無料DB切り替え時はデータ移行が必要です。スタッフ・シフト情報は未実装のため架空の出勤者は出しません。</dd>
+            <dd>予定は現在のDatasetの<code>ShopSchedule</code>だけを読みます。当日売上はダッシュボードと同じ集計関数を使い、<code>DailySales</code>の行の有無で未入力と0円を区別します。<code>DailyForecast</code>は取得当時の予報を保存し、<code>DailyWeather</code>の過去の気象データと同じ日でも別々に表示します。DBの一意制約とON CONFLICTで同日の再保存・上書きを防ぎ、Guest期限切れ時は削除します。保存済み記録の閲覧では外部APIを呼びません。Render無料DB切り替え時はデータ移行が必要です。スタッフ・シフトはAdmin専用の別画面で管理し、ホームには出勤予定メンバーをまだ表示しません。</dd>
             <dt>Frontend</dt>
-            <dd><code>store_home.js</code>が日本時間の時計と現在・次の予定を更新し、1分ごとに当日の予定を再取得します。スマホでは予定と天気を2列、スケジュールと売上を全幅で示し、売上カードからダッシュボードへ移動します。ホーム以外では親メニューからホームへ移動し、ホーム上では同じ行をボタンとして子メニューを開閉します。未実装の出勤情報はホームに表示しません。</dd>
+            <dd><code>store_home.js</code>が日本時間の時計と現在・次の予定を更新し、1分ごとに当日の予定を再取得します。スマホでは予定と天気を2列、スケジュールと売上を全幅で示し、売上カードからダッシュボードへ移動します。ホーム以外では親メニューからホームへ移動し、ホーム上では同じ行をボタンとして子メニューを開閉します。勤務予定から実際の出勤・勤務中を断定せず、Phase 3のホーム連携もまだ表示しません。</dd>
             <dd><code>bakery_news.py</code>は農林水産省の公式RSSから、店に関連する最近14日以内の見出し・公開日時・記事リンクだけを選び、30分キャッシュします。ホームのJavaScriptは別APIを非同期で読み込むため、ニュース取得失敗はホーム閲覧を妨げません。AI分析や本文の転載は行いません。</dd>
             <dd>Puoppoカードは独立したアプリへ検索語をGETで引き渡す準備です。初期状態では無効で、Guestは利用できません。Puoppoの認証・許可メール・回数制限を確認して有効化した後も、Bakery HubではGeminiを呼びません。分析はPuoppo側の明示操作でニュース見出しを元に行います。</dd>
             <dt>pytest</dt>
@@ -212,6 +212,18 @@
             <dt>確認するコード</dt>
             <dd>{{ source_links(['shop_schedules.py', 'models.py', 'migrations/versions/d9e4b1c7a630_add_shop_schedules.py', 'templates/schedule_list.html', 'tests/test_store_operations.py']) }}</dd>
         {% endcall %}
+
+        {% call feature('staff-shifts', 'スタッフ・シフト管理', '管理者がスタッフを登録し、日別の出勤・休み予定を保存して月間・日別で確認します。勤怠実績は記録しません。', 'GET /staff-shifts・POST /staff-shifts/staff/new・POST /staff-shifts/shifts/new') %}
+            <dt>Python / Flask</dt>
+            <dd><code>shop_staff_shifts.py</code>のBlueprintがGETでシフト表・フォームを返し、CSRF付きPOSTで登録・編集・退職取扱い・予定の取り消しを行います。<code>admin_required</code>でGuestと未認証利用者のアクセスを拒み、認証済みAdmin DatasetのIDで全ての行を絞ります。スタッフ名はIDで特定し、同名でも別人として扱います。</dd>
+            <dt>Database</dt>
+            <dd><code>ShopStaff</code>は表示名・担当・任意の入社日・在籍状態を、<code>ShopShift</code>はJSTの業務日、出勤予定または休み、UTCの開始・終了予定日時を保存します。スタッフとシフトはDatasetを含む複合外部キーで結び、別DatasetのスタッフIDを使えないようにします。スタッフと業務日の一意制約が二重登録を防ぎます。退職は無効化で、過去のシフトを保持します。DB例外ではrollbackします。既存の<code>ShopSchedule</code>とProduct・DailySalesは変更しません。</dd>
+            <dt>日時と画面</dt>
+            <dd>入力した日本時間を<code>Asia/Tokyo</code>からUTCへ変換して保存し、表示時にJSTへ戻します。22:00〜翌02:00なら終了が翌日であることを明示します。16時間を超える予定と同一スタッフの時間帯重複は拒否します。PCは月間カレンダーと日別詳細、スマホは日付切り替えと日別一覧を表示し、未登録と「休み」を区別します。Phase 3用の<code>planned_work_for_day()</code>は指定したJST業務日の出勤予定だけを返し、実際の出勤済み・勤務中とは判断しません。</dd>
+            <dt>pytest</dt>
+            <dd>Admin専用認可、入力・CSRF・XSS、同姓同名、退職後の履歴、日付またぎと時刻重複、二重POSTとDB一意制約、別Datasetの外部キー拒否、rollback、migrationのupgrade・downgradeと既存データの保全を検証します。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['shop_staff_shifts.py', 'models.py', 'migrations/versions/c8e6a1b9d4f2_add_shop_staff_shifts.py', 'templates/shop_staff_shifts.html', 'templates/shop_shift_form.html', 'tests/test_shop_staff_shifts.py', 'tests/test_shop_staff_shifts_migration.py']) }}</dd>
 
         {% call feature('products', '商品・メニュー登録', '18品の標準テンプレートとAdminが申請した商品カタログから選び、月ごとの商品と売価を登録します。自由入力もできます。', 'GET /・POST /・POST /admin/product-catalog') %}
             <dt>Python / Flask</dt>

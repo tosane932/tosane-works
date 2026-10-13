@@ -53,6 +53,7 @@ from weather_history import WeatherHistoryError, import_weather, stored_weather
 from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
 from shop_schedules import create_shop_schedules_blueprint, daily_schedules, schedule_snapshot
+from shop_staff_shifts import create_shop_staff_shifts_blueprint
 from current_weather import current_weather
 from bakery_news import get_news
 from forecast_history import save_forecast, stored_forecasts
@@ -528,6 +529,12 @@ app.register_blueprint(
 app.register_blueprint(
     create_shop_schedules_blueprint(
         access_required=admin_or_guest_required,
+        resolve_dataset=require_current_dataset,
+    )
+)
+app.register_blueprint(
+    create_shop_staff_shifts_blueprint(
+        access_required=admin_required,
         resolve_dataset=require_current_dataset,
     )
 )

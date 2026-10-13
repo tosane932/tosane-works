@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スタッフ・シフト管理 | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}">
+</head>
+<body class="app-shell-page staff-shifts-page">
+{% include "_app_navigation.html" %}
+<main class="staff-shifts-shell">
+    <header class="staff-shifts-header">
+        <h1>スタッフ・シフト管理</h1>
+        <p>ここに表示するのは勤務予定です。実際の出退勤記録ではありません。</p>
+    </header>
+    {% for category, message in get_flashed_messages(with_categories=True) %}
+    <p class="staff-shifts-feedback" role="status">{{ message }}</p>
+    {% endfor %}
+
+    <section class="staff-shifts-panel" aria-labelledby="month-title">
+        <div class="staff-shifts-toolbar">
+            <h2 id="month-title">{{ first.year }}年{{ first.month }}月のシフト</h2>
+            <nav class="staff-shifts-month-nav" aria-label="月を移動">
+                <a href="{{ url_for('.index', month=prev_month.strftime('%Y-%m')) }}">前月</a>
+                <a href="{{ url_for('.index') }}">今月</a>
+                <a href="{{ url_for('.index', month=next_month.strftime('%Y-%m')) }}">翌月</a>
+            </nav>
+        </div>
+        <div class="staff-shifts-calendar">
+            <table>
+                <caption>各日を選ぶと勤務予定を確認できます</caption>
+                <thead><tr>{% for weekday in ['日', '月', '火', '水', '木', '金', '土'] %}<th scope="col">{{ weekday }}</th>{% endfor %}</tr></thead>
+                <tbody>
+                    {% for week in weeks %}
+                    <tr>
+                        {% for day in week %}
+                        <td{% if day.month != first.month %} class="outside-month"{% elif day == selected %} class="selected-day"{% endif %}>
+                            {% if day.month == first.month %}
+                            {% set rows = by_day.get(day, []) %}
+                            <a href="{{ url_for('.index', month=first.strftime('%Y-%m'), date=day.isoformat()) }}#day-shifts"
+                               {% if day == selected %}aria-current="date"{% endif %}>
+                                <span>{{ day.day }}日</span>
+                                <small>{% if rows %}出勤予定 {{ rows | selectattr('status', 'equalto', 'work') | list | length }}人 · 休み {{ rows | selectattr('status', 'equalto', 'off') | list | length }}人{% else %}未登録{% endif %}</small>
+                            </a>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <nav class="staff-shifts-days" aria-label="日付を選択">
+            {% for day in nearby %}
+            <a href="{{ url_for('.index', month=day.strftime('%Y-%m'), date=day.isoformat()) }}#day-shifts"
+               {% if day == selected %}aria-current="date"{% endif %}>{{ day.month }}/{{ day.day }}（{{ ['月', '火', '水', '木', '金', '土', '日'][day.weekday()] }}）</a>
+            {% endfor %}
+        </nav>
+    </section>
+
+    <section class="staff-shifts-panel" id="day-shifts" aria-labelledby="day-title">
+        <div class="staff-shifts-toolbar">
+            <h2 id="day-title">{{ selected.month }}月{{ selected.day }}日（{{ ['月', '火', '水', '木', '金', '土', '日'][selected.weekday()] }}）の勤務予定</h2>
+            <nav class="staff-shifts-day-nav" aria-label="前後の日へ移動">
+                <a href="{{ url_for('.index', month=prev_day.strftime('%Y-%m'), date=prev_day.isoformat()) }}#day-shifts">前日</a>
+                <a href="{{ url_for('.index', month=next_day.strftime('%Y-%m'), date=next_day.isoformat()) }}#day-shifts">翌日</a>
+            </nav>
+        </div>
+        {% set selected_rows = by_day.get(selected, []) %}
+        {% if selected_rows %}
+        <ul class="staff-shifts-list">
+            {% for shift in selected_rows %}
+            <li>
+                <div>
+                    <strong>{{ shift.staff.display_name }}</strong>
+                    <span class="staff-shifts-badge">{{ status_labels[shift.status] }}</span>
+                    {% if shift.status == 'work' %}
+                    <p><time datetime="{{ as_jst(shift.starts_at).isoformat(timespec='minutes') }}">{{ as_jst(shift.starts_at).strftime('%H:%M') }}</time>
+                        〜 <time datetime="{{ as_jst(shift.ends_at).isoformat(timespec='minutes') }}">{{ as_jst(shift.ends_at).strftime('%H:%M') }}</time>
+                        {% if as_jst(shift.ends_at).date() > selected %}（翌日終了）{% endif %}</p>
+                    {% endif %}
+                    {% if shift.note %}<p class="staff-shifts-note">{{ shift.note }}</p>{% endif %}
+                </div>
+                <a href="{{ url_for('.edit_shift', shift_id=shift.id) }}">予定を編集</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="staff-shifts-empty">この日のシフトは未登録です。</p>
+        {% endif %}
+        <a class="staff-shifts-primary" href="{{ url_for('.new_shift', date=selected.isoformat()) }}">＋ シフトを追加</a>
+    </section>
+
+    <section class="staff-shifts-panel" id="staff" aria-labelledby="staff-title">
+        <div class="staff-shifts-toolbar">
+            <h2 id="staff-title">スタッフ一覧</h2>
+            <a class="staff-shifts-primary" href="{{ url_for('.new_staff') }}">＋ スタッフを登録</a>
+        </div>
+        {% if staff %}
+        <ul class="staff-directory">
+            {% for person in staff %}
+            <li>
+                <div>
+                    <strong>{{ person.display_name }}</strong>
+                    <p>担当：{{ roles[person.role] }} · {% if person.is_active %}在籍中{% else %}退職済み{% endif %}</p>
+                    {% if person.hired_on %}<p>入社日：<time datetime="{{ person.hired_on.isoformat() }}">{{ person.hired_on.isoformat() }}</time></p>{% endif %}
+                </div>
+                <div class="staff-directory-actions">
+                    <a href="{{ url_for('.edit_staff', staff_id=person.id) }}">編集</a>
+                    <form method="POST" action="{{ url_for('.change_staff_status', staff_id=person.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="is_active" value="{{ '0' if person.is_active else '1' }}">
+                        <button type="submit">{{ '退職済みにする' if person.is_active else '在籍に戻す' }}</button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="staff-shifts-empty">スタッフはまだ登録されていません</p>
+        {% endif %}
+    </section>
+</main>
+</body>
+</html>

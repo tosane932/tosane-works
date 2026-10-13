@@ -25,10 +25,12 @@ APP_SIDEBAR_ITEMS = {
     "sales": ("日次売上入力", "clipboard-pen-line"),
     "dashboard": ("売上データ分析", "chart-column"),
     "shop-tools": ("店舗メモツール", "wrench"),
+    "staff-shifts": ("スタッフ・シフト管理", "calendar-days"),
     "system-overview": ("システム概要", "book-open"),
 }
 
 SIDEBAR_ROUTES = {**APP_ROUTES, "system-overview": "/system-overview"}
+ADMIN_ONLY_ROUTES = {"staff-shifts": "/staff-shifts"}
 
 
 def _assert_inline_icon(container, icon_name):
@@ -104,8 +106,9 @@ def _assert_app_navigation(document, active_page, user_label):
         link["data-page"]: link
         for link in navigation.select("a[data-page]")
     }
-    assert set(links) == set(SIDEBAR_ROUTES) - ({"home"} if active_page == "home" else set())
-    for page, path in SIDEBAR_ROUTES.items():
+    expected_routes = {**SIDEBAR_ROUTES, **(ADMIN_ONLY_ROUTES if user_label == "利用中：管理者" else {})}
+    assert set(links) == set(expected_routes) - ({"home"} if active_page == "home" else set())
+    for page, path in expected_routes.items():
         label, icon_name = APP_SIDEBAR_ITEMS[page]
         item = home_control if page == "home" else links[page]
         if page != "home" or active_page != "home":

@@ -88,4 +88,5 @@ jobs:
             tests/test_sales_postgresql.py \
             tests/test_forecast_postgresql.py \
             tests/test_shop_memos_postgresql.py \
+            tests/test_shop_staff_shifts_postgresql.py \
             -v

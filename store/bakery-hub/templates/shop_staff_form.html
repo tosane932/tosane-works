@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'スタッフ編集' if editing else 'スタッフ登録' }} | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}">
+</head>
+<body class="app-shell-page staff-shifts-page">
+{% include "_app_navigation.html" %}
+<main class="staff-shifts-shell">
+    <a href="{{ url_for('.index') }}#staff">← スタッフ一覧へ戻る</a>
+    <section class="staff-shifts-panel staff-shifts-form">
+        <h1>{{ 'スタッフを編集' if editing else 'スタッフを登録' }}</h1>
+        {% if error %}<p class="staff-shifts-error" role="alert">{{ error }}</p>{% endif %}
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if not editing %}<input type="hidden" name="submission_key" value="{{ values.submission_key }}">{% endif %}
+            <label>表示名・呼び名 <span>必須・80文字以内</span>
+                <input name="display_name" value="{{ values.display_name }}" maxlength="80" required autocomplete="off">
+            </label>
+            <label>担当
+                <select name="role" required>
+                    {% for value, label in roles.items() %}
+                    <option value="{{ value }}" {% if values.role == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>入社日 <span>任意</span>
+                <input type="date" name="hired_on" value="{{ values.hired_on }}">
+            </label>
+            <button class="staff-shifts-primary" type="submit">{{ '変更を保存' if editing else '登録する' }}</button>
+        </form>
+    </section>
+</main>
+</body>
+</html>

@@ -11,6 +11,8 @@
     {% set active_app_page = 'sales' %}
 {% elif current_endpoint == 'dashboard' %}
     {% set active_app_page = 'dashboard' %}
+{% elif current_endpoint.startswith('shop_staff_shifts.') %}
+    {% set active_app_page = 'staff-shifts' %}
 {% elif current_endpoint == 'system_overview' %}
     {% set active_app_page = 'system-overview' %}
 {% elif
@@ -239,6 +241,23 @@
             </span>
             <span>店舗メモツール</span>
         </a>
+        {% if current_user.is_authenticated and current_user.is_admin %}
+        <a
+            href="{{ url_for('shop_staff_shifts.index') }}"
+            data-page="staff-shifts"
+            class="app-sidebar-link app-sidebar-link-staff-shifts touch-control-no-select{% if active_app_page == 'staff-shifts' %} app-sidebar-link-current{% endif %}"
+            {% if active_app_page == 'staff-shifts' %}aria-current="page"{% endif %}>
+            <span class="app-sidebar-icon" aria-hidden="true">
+                <svg data-icon="calendar-days" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                    focusable="false" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                    <path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"></path>
+                </svg>
+            </span>
+            <span>スタッフ・シフト管理</span>
+        </a>
+        {% endif %}
         <div class="app-sidebar-nav-divider" aria-hidden="true"></div>
 
         <a

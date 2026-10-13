@@ -99,6 +99,8 @@ class Dataset(db.Model):
         back_populates="dataset",
         passive_deletes="all",
     )
+    shop_staff = db.relationship("ShopStaff", back_populates="dataset")
+    shop_shifts = db.relationship("ShopShift", back_populates="dataset")
     daily_forecasts = db.relationship(
         "DailyForecast", back_populates="dataset", passive_deletes="all",
     )
@@ -362,6 +364,73 @@ class ShopSchedule(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
     dataset = db.relationship("Dataset", back_populates="shop_schedules")
+
+
+
+
+class ShopStaff(db.Model):
+    """Admin Datasetのスタッフ名簿。退職後も過去のシフトから参照する。"""
+    __tablename__ = "shop_staff"
+    __table_args__ = (
+        db.UniqueConstraint("id", "dataset_id", name="uq_shop_staff_id_dataset"),
+        db.UniqueConstraint("dataset_id", "submission_key", name="uq_shop_staff_submission"),
+        db.CheckConstraint("length(trim(display_name)) BETWEEN 1 AND 80", name="ck_shop_staff_name"),
+        db.CheckConstraint("role IN ('production', 'sales', 'both', 'other')", name="ck_shop_staff_role"),
+        db.Index("ix_shop_staff_dataset_active_id", "dataset_id", "is_active", "id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(
+        db.Uuid(as_uuid=True),
+        db.ForeignKey("datasets.id", name="fk_shop_staff_dataset", ondelete="CASCADE"),
+        nullable=False,
+    )
+    display_name = db.Column(db.String(80), nullable=False)
+    role = db.Column(db.String(16), nullable=False)
+    hired_on = db.Column(db.Date, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
+    submission_key = db.Column(db.String(32), nullable=False, default=lambda: uuid.uuid4().hex)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
+    dataset = db.relationship("Dataset", back_populates="shop_staff")
+    shifts = db.relationship("ShopShift", back_populates="staff")
+
+
+class ShopShift(db.Model):
+    """業務日ごとの勤務予定。日時はUTC、business_dateは勤務開始のJST日付。"""
+    __tablename__ = "shop_shifts"
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ["staff_id", "dataset_id"], ["shop_staff.id", "shop_staff.dataset_id"],
+            name="fk_shop_shifts_staff_dataset", ondelete="RESTRICT",
+        ),
+        db.UniqueConstraint("dataset_id", "staff_id", "business_date", name="uq_shop_shifts_staff_day"),
+        db.CheckConstraint("status IN ('work', 'off')", name="ck_shop_shifts_status"),
+        db.CheckConstraint(
+            "(status = 'work' AND starts_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at > starts_at) "
+            "OR (status = 'off' AND starts_at IS NULL AND ends_at IS NULL)",
+            name="ck_shop_shifts_times_by_status",
+        ),
+        db.CheckConstraint("note IS NULL OR length(note) <= 500", name="ck_shop_shifts_note"),
+        db.Index("ix_shop_shifts_dataset_day_id", "dataset_id", "business_date", "id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(
+        db.Uuid(as_uuid=True),
+        db.ForeignKey("datasets.id", name="fk_shop_shifts_dataset", ondelete="CASCADE"),
+        nullable=False,
+    )
+    staff_id = db.Column(db.Integer, nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(8), nullable=False)
+    starts_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    ends_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    note = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
+    dataset = db.relationship("Dataset", back_populates="shop_shifts")
+    staff = db.relationship("ShopStaff", back_populates="shifts")
 
 
 class Product(db.Model):

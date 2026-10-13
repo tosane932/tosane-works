@@ -1,0 +1,72 @@
+.staff-shifts-page { background: #f7f2e9; color: #342d28; }
+.staff-shifts-shell { max-width: 1120px; margin: 0 auto; padding: 24px 20px 64px; }
+.staff-shifts-shell a { color: #315b78; }
+.staff-shifts-shell a:hover { text-decoration: underline; }
+.staff-shifts-shell a:focus-visible,
+.staff-shifts-shell button:focus-visible,
+.staff-shifts-shell input:focus-visible,
+.staff-shifts-shell select:focus-visible,
+.staff-shifts-shell textarea:focus-visible { outline: 3px solid #315b78; outline-offset: 2px; }
+.staff-shifts-header h1 { margin-bottom: 6px; }
+.staff-shifts-header p { margin-top: 0; }
+.staff-shifts-panel { min-width: 0; padding: 20px; margin: 18px 0; background: #fffdf9; border: 1px solid #d6c8b5; border-radius: 16px; }
+.staff-shifts-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.staff-shifts-toolbar h2 { margin: 0; }
+.staff-shifts-month-nav, .staff-shifts-day-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.staff-shifts-month-nav a, .staff-shifts-day-nav a, .staff-shifts-primary,
+.staff-directory-actions a, .staff-directory-actions button, .staff-shifts-cancel button {
+    display: inline-flex; align-items: center; justify-content: center; min-height: 44px;
+    padding: 8px 14px; box-sizing: border-box; border-radius: 8px; font: inherit;
+}
+.staff-shifts-month-nav a, .staff-shifts-day-nav a, .staff-directory-actions a {
+    border: 1px solid #a8b9c6; background: white;
+}
+.staff-shifts-primary { border: 1px solid #315b78; background: #365d82; color: white !important; text-decoration: none; font-weight: 700; cursor: pointer; }
+.staff-shifts-primary:hover { background: #274b6d; }
+.staff-shifts-calendar { margin-top: 16px; }
+.staff-shifts-calendar table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.staff-shifts-calendar caption { text-align: left; margin-bottom: 8px; }
+.staff-shifts-calendar th, .staff-shifts-calendar td { border: 1px solid #d6c8b5; vertical-align: top; }
+.staff-shifts-calendar th { padding: 8px; background: #f4f0e9; }
+.staff-shifts-calendar td { height: 88px; }
+.staff-shifts-calendar td a { display: flex; flex-direction: column; min-height: 88px; padding: 8px; box-sizing: border-box; text-decoration: none; overflow-wrap: anywhere; }
+.staff-shifts-calendar td a:hover { background: #eff4f7; text-decoration: underline; }
+.staff-shifts-calendar td small { margin-top: 8px; color: #494440; }
+.staff-shifts-calendar td.selected-day { box-shadow: inset 0 0 0 3px #365d82; }
+.staff-shifts-calendar td.outside-month { background: #f4f1ed; }
+.staff-shifts-days { display: none; }
+.staff-shifts-list, .staff-directory { padding: 0; list-style: none; }
+.staff-shifts-list li, .staff-directory li { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid #e4dcd1; overflow-wrap: anywhere; }
+.staff-shifts-list li > div, .staff-directory li > div { min-width: 0; }
+.staff-shifts-list p, .staff-directory p { margin: 5px 0; }
+.staff-shifts-list li > a { min-height: 44px; padding: 10px 0; flex-shrink: 0; }
+.staff-shifts-badge { display: inline-block; margin-left: 8px; padding: 3px 8px; border: 1px solid #beced9; border-radius: 10px; color: #315b78; font-size: .86rem; }
+.staff-shifts-note { white-space: pre-wrap; }
+.staff-shifts-empty { padding: 18px; background: #f6f3ee; border-radius: 8px; }
+.staff-shifts-feedback { padding: 12px; border: 1px solid #90b59b; background: #edf5ef; border-radius: 8px; }
+.staff-shifts-error { padding: 12px; border: 1px solid #bd7777; background: #fff2f2; border-radius: 8px; }
+.staff-directory-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.staff-directory-actions button, .staff-shifts-cancel button { border: 1px solid #7c6660; background: white; color: #493d34; cursor: pointer; }
+.staff-shifts-form { max-width: 620px; }
+.staff-shifts-form form:not(.staff-shifts-cancel) { display: grid; gap: 16px; }
+.staff-shifts-form label { display: grid; gap: 6px; font-weight: 700; }
+.staff-shifts-form label span { font-weight: 400; }
+.staff-shifts-form input, .staff-shifts-form select, .staff-shifts-form textarea {
+    min-height: 44px; padding: 8px; box-sizing: border-box; border: 1px solid #a79b8d;
+    border-radius: 8px; font: inherit; width: 100%; max-width: 100%;
+}
+.staff-shifts-time-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.staff-shifts-time-fields[hidden] { display: none; }
+.staff-shifts-check { grid-column: 1 / -1; display: flex !important; align-items: center; }
+.staff-shifts-check input { width: 22px; height: 22px; min-height: 22px; }
+.staff-shifts-cancel { margin-top: 20px; }
+@media (max-width: 700px) {
+    .staff-shifts-shell { padding: 12px 10px 48px; }
+    .staff-shifts-panel { padding: 14px; }
+    .staff-shifts-calendar { display: none; }
+    .staff-shifts-days { display: flex; gap: 8px; overflow-x: auto; padding: 12px 0; scroll-padding: 12px; overscroll-behavior-x: auto; }
+    .staff-shifts-days a { flex: 0 0 auto; min-height: 48px; padding: 12px; border: 1px solid #a8b9c6; border-radius: 8px; text-decoration: none; }
+    .staff-shifts-days a[aria-current="date"] { border: 2px solid #365d82; background: #eff4f7; font-weight: 700; }
+    .staff-shifts-list li, .staff-directory li { align-items: flex-start; flex-direction: column; }
+    .staff-directory-actions { width: 100%; }
+}
