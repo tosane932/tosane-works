@@ -16,7 +16,7 @@
     </div>
     <header class="operations-heading">
         <p>Bakery Hub · 店舗運営</p>
-        <h1>今日のホーム</h1>
+        <h1>パン工房 ひだまり</h1>
         <time id="operations-date" datetime="{{ today.isoformat() }}">{{ today.strftime('%Y年%m月%d日') }}</time>
     </header>
 
@@ -72,6 +72,41 @@
             <strong class="operations-sales-amount">{% if has_today_sales %}¥{{ '{:,}'.format(today_sales) }}{% else %}未入力{% endif %}</strong>
             <span class="operations-sales-footer"><time datetime="{{ today.isoformat() }}">{{ today.strftime('%m月%d日') }}</time> · 売上分析を見る ›</span>
         </a>
+
+        {% if staff_state %}
+        <section class="operations-card operations-staff" id="today-staff" aria-labelledby="today-staff-heading">
+            <h2 id="today-staff-heading">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                今日の出勤予定
+            </h2>
+            <div class="operations-staff-summary">
+                <time datetime="{{ today.isoformat() }}">{{ today.month }}月{{ today.day }}日（{{ ['月', '火', '水', '木', '金', '土', '日'][today.weekday()] }}）</time>
+                {% if staff_count is not none %}<strong>出勤予定 {{ staff_count }}人</strong>{% endif %}
+            </div>
+            {% if staff_state == 'unavailable' %}
+            <p role="status">勤務予定を取得できませんでした。時間をおいてシフト表を確認してください。</p>
+            {% elif staff_state == 'no_staff' %}
+            <p>スタッフはまだ登録されていません</p>
+            <a class="operations-staff-register" href="{{ url_for('shop_staff_shifts.new_staff') }}">スタッフを登録する</a>
+            {% elif staff_state == 'no_shifts' %}
+            <p>今日の出勤予定は登録されていません</p>
+            {% else %}
+            <ul class="operations-staff-list">
+                {% for item in today_staff %}
+                <li>
+                    <span class="operations-staff-name">{{ item.name }}</span>
+                    <span class="operations-staff-time">
+                        {% if item.status == 'all_day' %}終日（時刻未指定）
+                        {% else %}<time datetime="{{ item.start.isoformat(timespec='minutes') }}">{{ item.start.strftime('%H:%M') }}</time>〜<time datetime="{{ item.end.isoformat(timespec='minutes') }}">{{ item.end.strftime('%H:%M') }}</time>{% if item.overnight %}（翌日終了）{% endif %}{% endif %}
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% if remaining_staff %}<p class="operations-staff-more">ほか{{ remaining_staff }}人。全員の予定はシフト表で確認できます。</p>{% endif %}
+            {% endif %}
+            <a class="operations-staff-link" href="{{ url_for('shop_staff_shifts.index') }}">シフト表を見る ›</a>
+        </section>
+        {% endif %}
 
         <section class="operations-card operations-news" id="bakery-news" aria-labelledby="bakery-news-heading">
             <div class="operations-card-heading">

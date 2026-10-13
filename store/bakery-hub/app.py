@@ -41,6 +41,7 @@ from models import (
     ShopMemo,
     ShopTask,
     ShopSchedule,
+    ShopStaff,
     DailyForecast,
     Product,
     DailySales,
@@ -52,8 +53,8 @@ from sales_period_summary import PERIOD_OFFSETS, sales_period_summary, period_bo
 from weather_history import WeatherHistoryError, import_weather, stored_weather
 from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
-from shop_schedules import create_shop_schedules_blueprint, daily_schedules, schedule_snapshot
-from shop_staff_shifts import create_shop_staff_shifts_blueprint
+from shop_schedules import as_jst, create_shop_schedules_blueprint, daily_schedules, schedule_snapshot
+from shop_staff_shifts import create_shop_staff_shifts_blueprint, planned_work_for_day
 from current_weather import current_weather
 from bakery_news import get_news
 from forecast_history import save_forecast, stored_forecasts
@@ -1316,12 +1317,41 @@ def logout():
 def home():
     dataset = require_current_dataset()
     today = business_today()
+    schedules = schedule_snapshot(daily_schedules(dataset.id, today))
+    today_sales = _get_today_sales_amount(dataset, today)
+    has_today_sales = _has_today_sales_record(dataset, today)
+    staff_state, staff_count, today_staff, remaining_staff = None, None, [], 0
+    if current_user.is_admin:
+        try:
+            planned = planned_work_for_day(dataset, today)
+            staff_count = len(planned)
+            staff_state = "ready"
+            if not planned:
+                staff_state = (
+                    "no_staff" if ShopStaff.query.filter_by(dataset_id=dataset.id).first() is None
+                    else "no_shifts"
+                )
+            for shift in planned[:4]:
+                item = {"name": shift.staff.display_name, "status": shift.status}
+                if shift.status == "work":
+                    start, end = as_jst(shift.starts_at), as_jst(shift.ends_at)
+                    item.update(start=start, end=end, overnight=end.date() > today)
+                today_staff.append(item)
+            remaining_staff = staff_count - len(today_staff)
+        except SQLAlchemyError:
+            db.session.rollback()
+            logger.exception("Could not load today's planned staff.")
+            staff_state, staff_count, today_staff, remaining_staff = "unavailable", None, [], 0
     return render_template(
         "store_home.html",
         today=today,
-        schedules=schedule_snapshot(daily_schedules(dataset.id, today)),
-        today_sales=_get_today_sales_amount(dataset, today),
-        has_today_sales=_has_today_sales_record(dataset, today),
+        schedules=schedules,
+        today_sales=today_sales,
+        has_today_sales=has_today_sales,
+        staff_state=staff_state,
+        staff_count=staff_count,
+        today_staff=today_staff,
+        remaining_staff=remaining_staff,
     )
 
 
