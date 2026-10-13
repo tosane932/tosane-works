@@ -54,6 +54,7 @@ from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
 from shop_schedules import create_shop_schedules_blueprint, daily_schedules, schedule_snapshot
 from current_weather import current_weather
+from bakery_news import get_news
 from forecast_history import save_forecast, stored_forecasts
 from product_images import available_product_images, available_product_image_assets
 from catalog_repository import (
@@ -1312,6 +1313,20 @@ def home():
         today=today,
         schedules=schedule_snapshot(daily_schedules(dataset.id, today)),
     )
+
+
+@app.get("/api/bakery-news")
+@admin_or_guest_required
+def bakery_news_api():
+    require_current_dataset()
+    return jsonify({"articles": get_news(3)})
+
+
+@app.get("/bakery-news")
+@admin_or_guest_required
+def bakery_news_list():
+    require_current_dataset()
+    return render_template("bakery_news.html", articles=get_news(15))
 
 
 @app.get("/api/home/weather")
