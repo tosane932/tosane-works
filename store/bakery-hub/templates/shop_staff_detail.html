@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スタッフ詳細 | Bakery Hub</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}"></head>
+<body class="app-shell-page staff-shifts-page">{% include "_app_navigation.html" %}
+<main class="staff-shifts-shell"><a href="{{ url_for('.index') }}#staff">← スタッフ一覧へ戻る</a>
+{% for category, message in get_flashed_messages(with_categories=True) %}<p class="staff-shifts-feedback" role="status">{{ message }}</p>{% endfor %}
+<section class="staff-shifts-panel staff-shifts-detail">
+    <h1>スタッフ詳細</h1>
+    <dl>
+        <dt>表示名</dt><dd>{{ staff.display_name }}</dd>
+        <dt>担当</dt><dd>{{ roles[staff.role] }}</dd>
+        <dt>入社日</dt><dd>{% if staff.hired_on %}<time datetime="{{ staff.hired_on.isoformat() }}">{{ staff.hired_on.isoformat() }}</time>{% else %}未登録{% endif %}</dd>
+        <dt>在籍状態</dt><dd>{{ '在籍中' if staff.is_active else '退職済み' }}</dd>
+    </dl>
+    <div class="staff-shifts-actions">
+        <a class="staff-shifts-primary" href="{{ url_for('.edit_staff', staff_id=staff.id) }}">スタッフ情報を編集</a>
+        <a class="staff-shifts-secondary" href="{{ url_for('.confirm_staff_status', staff_id=staff.id, is_active=0 if staff.is_active else 1) }}">{{ '退職済みにする' if staff.is_active else '在籍に戻す' }}</a>
+    </div>
+    <p>在籍状態を変更しても、過去の勤務予定は残ります。</p>
+</section></main></body></html>

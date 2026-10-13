@@ -213,19 +213,19 @@
             <dd>{{ source_links(['shop_schedules.py', 'models.py', 'migrations/versions/d9e4b1c7a630_add_shop_schedules.py', 'templates/schedule_list.html', 'tests/test_store_operations.py']) }}</dd>
         {% endcall %}
 
-        {% call feature('staff-shifts', 'スタッフ・シフト管理', '管理者がスタッフを登録し、日別の出勤・休み予定を保存して月間・日別で確認します。勤怠実績は記録しません。', 'GET /staff-shifts・POST /staff-shifts/staff/new・POST /staff-shifts/shifts/new') %}
+        {% call feature('staff-shifts', 'スタッフ・シフト管理', '管理者がスタッフを登録し、日別の出勤・終日・休み予定を月間・日別で確認します。勤怠実績は記録しません。', 'GET /staff-shifts・GET /staff-shifts/staff/<id>・GET /staff-shifts/shifts/<id>・POST /staff-shifts/shifts/new') %}
             <dt>Python / Flask</dt>
-            <dd><code>shop_staff_shifts.py</code>のBlueprintがGETでシフト表・フォームを返し、CSRF付きPOSTで登録・編集・退職取扱い・予定の取り消しを行います。<code>admin_required</code>でGuestと未認証利用者のアクセスを拒み、認証済みAdmin DatasetのIDで全ての行を絞ります。スタッフ名はIDで特定し、同名でも別人として扱います。</dd>
+            <dd><code>shop_staff_shifts.py</code>のBlueprintがGETで月間・日別一覧とスタッフ・勤務予定の詳細画面を返します。詳細から編集や確認画面へ進み、CSRF付きPOSTで登録・更新・在籍状態変更・予定の取り消しを行います。<code>admin_required</code>でGuestと未認証利用者を拒み、認証済みAdmin DatasetのIDで詳細IDも含めて全行を絞ります。スタッフ名ではなくIDで特定します。</dd>
             <dt>Database</dt>
-            <dd><code>ShopStaff</code>は表示名・担当・任意の入社日・在籍状態を、<code>ShopShift</code>はJSTの業務日、出勤予定または休み、UTCの開始・終了予定日時を保存します。スタッフとシフトはDatasetを含む複合外部キーで結び、別DatasetのスタッフIDを使えないようにします。スタッフと業務日の一意制約が二重登録を防ぎます。退職は無効化で、過去のシフトを保持します。DB例外ではrollbackします。既存の<code>ShopSchedule</code>とProduct・DailySalesは変更しません。</dd>
+            <dd><code>ShopStaff</code>は表示名・担当・任意の入社日・在籍状態を、<code>ShopShift</code>はJSTの業務日と出勤・終日・休みの区分を保存します。通常の出勤はUTCの開始・終了日時を保持し、終日・休みは時刻をNULLにするCHECK制約で区別します。Datasetを含む複合外部キーが別DatasetのスタッフIDを拒否し、スタッフと業務日の一意制約が二重登録を防ぎます。退職は無効化で履歴を保持し、DB例外ではrollbackします。<code>ShopSchedule</code>とProduct・DailySalesは変更しません。</dd>
             <dt>日時と画面</dt>
-            <dd>入力した日本時間を<code>Asia/Tokyo</code>からUTCへ変換して保存し、表示時にJSTへ戻します。22:00〜翌02:00なら終了が翌日であることを明示します。16時間を超える予定と同一スタッフの時間帯重複は拒否します。PCは月間カレンダーと日別詳細、スマホは日付切り替えと日別一覧を表示し、未登録と「休み」を区別します。Phase 3用の<code>planned_work_for_day()</code>は指定したJST業務日の出勤予定だけを返し、実際の出勤済み・勤務中とは判断しません。</dd>
+            <dd>入力した日本時間を<code>Asia/Tokyo</code>からUTCへ変換して保存し、表示時にJSTへ戻します。新しい時刻付き勤務は同じ日の最大12時間までとし、同一スタッフの時間帯重複を拒否します。既存の22:00〜翌02:00などの日付またぎ・12時間超のデータは自動変更せず、時刻を変えない備考編集で元の日時を維持します。終日は時刻未指定で24時間勤務ではありません。PCは月間カレンダー、スマホは短い日付選択と日別一覧を示し、一覧行から詳細へ進みます。Phase 3用の<code>planned_work_for_day()</code>は指定JST業務日の出勤と終日を返し、勤怠実績は判断しません。</dd>
             <dt>Frontend</dt>
-            <dd>Jinjaのフォームと一覧はスタッフ名・備考を自動エスケープします。<code>shop_staff_shifts.js</code>は休みを選んだとき時刻欄を隠し、サーバー側の入力検証も継続します。</dd>
+            <dd>Jinjaの一覧・詳細・フォームはスタッフ名と備考を自動エスケープします。<code>shop_staff_shifts.js</code>は終日・休みの時刻欄を隠し、スマホで選択中の日付を見やすくします。サーバー側の入力検証は常に適用します。</dd>
             <dt>pytest</dt>
-            <dd>Admin専用認可、入力・CSRF・XSS、同姓同名、退職後の履歴、日付またぎと時刻重複、二重POSTとDB一意制約、別Datasetの外部キー拒否、rollback、migrationのupgrade・downgradeと既存データの保全を検証します。</dd>
+            <dd>詳細IDを含むAdmin専用認可、入力・CSRF・XSS、退職後の履歴、12時間境界、終日と休み・未登録の区別、日付またぎデータ保全、時刻重複、DB一意制約とDataset外部キー、rollback、migrationのupgrade・downgradeをpytestで検証します。</dd>
             <dt>確認するコード</dt>
-            <dd>{{ source_links(['shop_staff_shifts.py', 'models.py', 'migrations/versions/c8e6a1b9d4f2_add_shop_staff_shifts.py', 'templates/shop_staff_shifts.html', 'templates/shop_shift_form.html', 'tests/test_shop_staff_shifts.py', 'tests/test_shop_staff_shifts_migration.py']) }}</dd>
+            <dd>{{ source_links(['shop_staff_shifts.py', 'models.py', 'migrations/versions/c8e6a1b9d4f2_add_shop_staff_shifts.py', 'migrations/versions/d5a9f1b7c204_add_all_day_shop_shifts.py', 'templates/shop_staff_shifts.html', 'templates/shop_staff_detail.html', 'templates/shop_shift_detail.html', 'templates/shop_shift_form.html', 'tests/test_shop_staff_shifts.py', 'tests/test_shop_all_day_migration.py']) }}</dd>
 
         {% endcall %}
 
@@ -1224,3 +1224,4 @@
 </main>
 </body>
 </html>
+

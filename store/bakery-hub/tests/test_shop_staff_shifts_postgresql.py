@@ -53,13 +53,13 @@ def submit(index):
         }
     elif index == 0:
         values = {
-            "business_date": "2026-10-14", "start_time": "22:00",
-            "end_time": "02:00", "end_next_day": "1",
+            "business_date": "2026-10-15", "start_time": "01:00",
+            "end_time": "05:00", "end_next_day": "",
         }
     else:
         values = {
-            "business_date": "2026-10-15", "start_time": "01:00",
-            "end_time": "05:00", "end_next_day": "",
+            "business_date": "2026-10-15", "start_time": "02:00",
+            "end_time": "06:00", "end_next_day": "",
         }
     barrier.wait(timeout=15)
     result = client.post("/staff-shifts/shifts/new", data={
@@ -96,6 +96,13 @@ def test_concurrent_shift_posts_keep_one_valid_plan(mode, expected):
                     role="production", submission_key=uuid.uuid4().hex,
                 ).returning(ShopStaff.id)
             ).scalar_one()
+            if mode == "overlap":
+                connection.execute(ShopShift.__table__.insert().values(
+                    dataset_id=admin_id, staff_id=staff_id,
+                    business_date=datetime.date(2026, 10, 14), status="work",
+                    starts_at=datetime.datetime(2026, 10, 14, 13, tzinfo=datetime.timezone.utc),
+                    ends_at=datetime.datetime(2026, 10, 14, 17, tzinfo=datetime.timezone.utc),
+                ))
 
         env = os.environ.copy()
         env.update(
@@ -111,9 +118,10 @@ def test_concurrent_shift_posts_keep_one_valid_plan(mode, expected):
         statuses = json.loads(worker.stdout.strip().splitlines()[-1])
         assert sorted(statuses) == expected
         with engine.connect() as connection:
-            assert connection.execute(text("SELECT count(*) FROM shop_shifts")).scalar_one() == 1
+            assert connection.execute(text("SELECT count(*) FROM shop_shifts")).scalar_one() == (2 if mode == "overlap" else 1)
     finally:
         with engine.begin() as connection:
             connection.execute(text("DROP SCHEMA public CASCADE"))
             connection.execute(text("CREATE SCHEMA public"))
         engine.dispose()
+

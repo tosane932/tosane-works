@@ -11,10 +11,13 @@
 <body class="app-shell-page staff-shifts-page">
 {% include "_app_navigation.html" %}
 <main class="staff-shifts-shell">
-    <a href="{{ url_for('.index') }}#day-shifts">← シフト表へ戻る</a>
+    <a href="{% if editing %}{{ url_for('.shift_detail', shift_id=shift.id) }}{% else %}{{ url_for('.index', month=values.business_date[:7], date=values.business_date) }}#day-shifts{% endif %}">← {{ '勤務予定の詳細' if editing else 'この日の勤務予定' }}へ戻る</a>
     <section class="staff-shifts-panel staff-shifts-form">
         <h1>{{ '勤務予定を編集' if editing else '勤務予定を登録' }}</h1>
         <p>出勤・休みの予定を登録します。実際の勤怠を記録する画面ではありません。</p>
+        {% if editing and legacy_interval %}
+        <p class="staff-shifts-feedback">この予定には、以前登録した翌日終了または12時間超の勤務時刻が含まれています。時刻を変えずに備考を編集すると元の日時を保持します。時刻を変更する場合は同じ日の12時間以内にしてください。</p>
+        {% endif %}
         {% if error %}<p class="staff-shifts-error" role="alert">{{ error }}</p>{% endif %}
         <form method="POST" id="shift-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -32,6 +35,7 @@
             <label>勤務予定
                 <select name="status" id="shift-status">
                     <option value="work" {% if values.status == 'work' %}selected{% endif %}>出勤予定</option>
+                    <option value="all_day" {% if values.status == 'all_day' %}selected{% endif %}>終日（時刻未指定）</option>
                     <option value="off" {% if values.status == 'off' %}selected{% endif %}>休み</option>
                 </select>
             </label>
@@ -42,20 +46,15 @@
                 <label>退勤予定時刻
                     <input type="time" name="end_time" value="{{ values.end_time }}">
                 </label>
-                <label class="staff-shifts-check"><input type="checkbox" name="end_next_day" value="1" {% if values.end_next_day == '1' %}checked{% endif %}>終了は翌日（例：22:00〜翌02:00）</label>
             </div>
+            <p class="staff-shifts-help">通常の出勤予定は同じ日内で最大12時間です。終日は時刻を指定しない予定で、24時間勤務を意味しません。</p>
             <label>備考 <span>任意・500文字以内</span>
                 <textarea name="note" maxlength="500" rows="3">{{ values.note }}</textarea>
             </label>
             <button class="staff-shifts-primary" type="submit">{{ '変更を保存' if editing else '保存する' }}</button>
         </form>
-        {% if editing %}
-        <form method="POST" action="{{ url_for('.cancel_shift', shift_id=shift.id) }}" class="staff-shifts-cancel">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit">この勤務予定を取り消す</button>
-        </form>
-        {% endif %}
     </section>
 </main>
 </body>
 </html>
+

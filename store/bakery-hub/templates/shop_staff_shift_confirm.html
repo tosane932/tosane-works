@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>操作の確認 | Bakery Hub</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}"></head>
+<body class="app-shell-page staff-shifts-page">{% include "_app_navigation.html" %}
+<main class="staff-shifts-shell"><section class="staff-shifts-panel staff-shifts-detail">
+    <h1>操作を確認</h1>
+    {% if kind == 'staff' %}
+    <p>{{ row.display_name }}さんを{{ '退職済み' if target == '0' else '在籍中' }}に変更しますか？過去のシフトは残ります。</p>
+    <form method="POST" action="{{ url_for('.change_staff_status', staff_id=row.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="is_active" value="{{ target }}">
+        <button class="staff-shifts-secondary" type="submit">変更を確定する</button>
+    </form>
+    <a href="{{ url_for('.staff_detail', staff_id=row.id) }}">変更せず戻る</a>
+    {% else %}
+    <p>{{ row.staff.display_name }}さんの{{ row.business_date.isoformat() }}の勤務予定を取り消しますか？</p>
+    <form method="POST" action="{{ url_for('.cancel_shift', shift_id=row.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="staff-shifts-secondary" type="submit">取り消しを確定する</button>
+    </form>
+    <a href="{{ url_for('.shift_detail', shift_id=row.id) }}">取り消さず戻る</a>
+    {% endif %}
+</section></main></body></html>
