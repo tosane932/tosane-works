@@ -9082,6 +9082,27 @@ body.shop-task-reorder-lock .shop-task-card {
 .operations-sales-heading { font-size: 1.2rem; font-weight: 700; color: #2c5d3b; }
 .operations-sales-amount { font-size: clamp(1.8rem, 4vw, 2.5rem); color: #2c5d3b; overflow-wrap: anywhere; }
 .operations-sales-footer { font-size: .9rem; color: #2c5d3b; }
+.operations-staff {
+    grid-column: 1 / -1;
+    --operations-card-color: var(--bakery-home-color);
+}
+.operations-staff h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.operations-staff h2 svg { width: 22px; height: 22px; flex: 0 0 auto; }
+.operations-staff-summary { display: flex; flex-wrap: wrap; gap: 4px 16px; color: #503d29; }
+.operations-staff-summary strong { color: #503d29; }
+.operations-staff-list { list-style: none; margin: 10px 0; padding: 0; }
+.operations-staff-list li {
+    display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+    align-items: start; gap: 12px; padding: 6px 0;
+}
+.operations-staff-name { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.operations-staff-time { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+.operations-staff-more { margin: 6px 0; color: #503d29; }
+.operations-staff-link, .operations-staff-register {
+    display: inline-flex; align-items: center; min-height: 44px; padding: 6px 0;
+    box-sizing: border-box; font-weight: 600;
+}
+.operations-staff-register { display: flex; width: fit-content; }
 .operations-next-link { display: inline-flex; align-items: center; min-height: 44px; }
 .operations-weather-details [hidden] { display: none; }
 
