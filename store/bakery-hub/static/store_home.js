@@ -95,6 +95,13 @@
                 data.available ? data.source + "（観測記録ではありません）" : "過去の天気記録は現在の天気に利用しません。";
             document.getElementById("operations-weather-time").textContent =
                 data.available ? "対象 " + data.valid_at.slice(11, 16) + " ／取得 " + data.fetched_at.slice(11, 16) : "";
+            const credit = document.getElementById("operations-weather-credit");
+            credit.hidden = !data.available;
+            if (data.available) {
+                credit.href = data.credit_url;
+                credit.textContent = data.source.startsWith("MET Norway") ?
+                    "気象データ：MET Norway（天気区分を要約・CC BY 4.0）" : "気象データ：Open-Meteo";
+            }
             let icon = "cloud";
             if (data.weather_code === 0) icon = "sun";
             if ([51,53,55,56,57,61,63,65,66,67,80,81,82,95,96,99].includes(data.weather_code)) icon = "rain";

@@ -63,7 +63,11 @@ Geminiへ経営アドバイスを依頼する
 
 ログインまたはGuest Demo開始後は、商品登録とは独立した **ホーム** を開きます。今日の予定を時刻順に確認し、開始時刻・終了時刻のある現在の予定と次の予定を見られます。予定は登録・編集・削除でき、日本時間で表示します。ホームを開いたままでも時計と予定を更新します。時刻が来ただけでは予定を完了扱いにしません。
 
-天気は店舗の設定地点について、利用設定があるときだけOpen-Meteoの **現在のモデル推定** を取得します。過去の天気記録とは別の情報です。GPSは使わず、設定や通信が不足する場合は取得できない理由を表示します。商用利用には契約済みのAPIキーが必要で、無償APIはローカルの非商用設定時だけ使用します。設定には `WEATHER_LATITUDE`、`WEATHER_LONGITUDE`、`WEATHER_API_MODE`、`WEATHER_API_KEY` を使い、`WEATHER_LOCATION_NAME` で表示する地点名を指定できます。
+天気は設定地点の**現在のモデル推定または直近の予報**を表示します。過去の天気記録とは別の情報です。GPSは使わず、設定や通信が不足する場合は取得できない理由を表示します。地点には `WEATHER_LATITUDE`・`WEATHER_LONGITUDE` を設定し、`WEATHER_LOCATION_NAME` で表示名を指定できます。広島市中心部の例は GeoNames の[広島市地点](https://www.geonames.org/1862415/hiroshima.html)（北緯34.4、東経132.45）です。店舗に合わせて変更できます。
+
+本番で無料の予報を取得する場合は `WEATHER_API_MODE=met_norway` を指定し、`WEATHER_API_KEY` は空欄にします。MET NorwayのLocationforecastは観測記録ではなく予報です。運用時には[利用条件](https://api.met.no/doc/TermsOfService)を守り、画面上で出典と[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)を示します。識別可能なUser-Agentを付け、地点を小数4桁へ丸め、レスポンスのExpiresまでキャッシュし、再取得時はLast-Modifiedがあれば条件付きリクエストを送ります。直近の予報がない場合や古い場合は天気を表示しません。無料APIの可用性保証はありません。このモードは過去天気の取り込みには対応しません。
+
+Open-Meteoを使う場合は、商用の契約済みAPIキーで `WEATHER_API_MODE=commercial` と `WEATHER_API_KEY` を設定します。Open-Meteoの無料APIは、既存どおりローカルの非商用開発に限る `WEATHER_API_MODE=noncommercial` と `LOCAL_DEVELOPMENT=true` の組み合わせだけで利用できます。公開ポートフォリオの非商用該当性が不明な状態で、本番へ `LOCAL_DEVELOPMENT=true` を設定しないでください。
 
 出勤メンバー、仕込み管理、スタッフ管理、店舗レイアウトは **準備中** です。架空のスタッフを登録・表示しません。Taskは既存の店舗メモツールが管理し、スケジュールの予定とは別です。
 

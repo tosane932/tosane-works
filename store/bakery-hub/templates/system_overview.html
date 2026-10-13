@@ -187,7 +187,7 @@
         <div class="overview-feature-grid">
         {% call feature('home', '店舗運営ホーム', '今日の予定と次の予定、設定地点の現在の天気を確認し、店舗メモツールや商品登録へ移動します。', 'GET /home・GET /api/home/schedule・GET /api/home/weather') %}
             <dt>Python / Flask</dt>
-            <dd><code>home()</code>が認証済みDatasetの当日予定を返します。現在の天気は設定済みの地点について別APIで取得し、失敗時は理由を表示します。過去天気の確定記録を現在の天気として流用しません。</dd>
+            <dd><code>home()</code>が認証済みDatasetの当日予定を返します。現在の天気は設定済みの地点について別APIで取得し、失敗時は理由を表示します。Open-Meteoの現在モデル推定と、MET Norwayの直近予報を設定で選択できます。予報は観測記録と区別し、MET NorwayのExpiresまでキャッシュします。過去天気の確定記録を現在の天気として流用しません。</dd>
             <dt>Database</dt>
             <dd>予定は現在のDatasetの<code>ShopSchedule</code>だけを読みます。現在天気は保存せず、過去の<code>DailyWeather</code>とも混同しません。スタッフ・シフト情報は未実装のため架空の出勤者は出しません。</dd>
             <dt>Frontend</dt>
