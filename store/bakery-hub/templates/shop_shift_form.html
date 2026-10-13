@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'シフト編集' if editing else 'シフト登録' }} | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}">
+    <script src="{{ url_for('static', filename='shop_staff_shifts.js') }}" defer></script>
+</head>
+<body class="app-shell-page staff-shifts-page">
+{% include "_app_navigation.html" %}
+<main class="staff-shifts-shell">
+    <a href="{{ url_for('.index') }}#day-shifts">← シフト表へ戻る</a>
+    <section class="staff-shifts-panel staff-shifts-form">
+        <h1>{{ '勤務予定を編集' if editing else '勤務予定を登録' }}</h1>
+        <p>出勤・休みの予定を登録します。実際の勤怠を記録する画面ではありません。</p>
+        {% if error %}<p class="staff-shifts-error" role="alert">{{ error }}</p>{% endif %}
+        <form method="POST" id="shift-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>対象日（日本時間）
+                <input type="date" name="business_date" value="{{ values.business_date }}" required>
+            </label>
+            <label>スタッフ
+                <select name="staff_id" required>
+                    <option value="">選択してください</option>
+                    {% for person in staff %}
+                    <option value="{{ person.id }}" {% if values.staff_id == person.id|string %}selected{% endif %}>{{ person.display_name }}{% if not person.is_active %}（退職済み・この予定のみ編集可）{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>勤務予定
+                <select name="status" id="shift-status">
+                    <option value="work" {% if values.status == 'work' %}selected{% endif %}>出勤予定</option>
+                    <option value="off" {% if values.status == 'off' %}selected{% endif %}>休み</option>
+                </select>
+            </label>
+            <div class="staff-shifts-time-fields" id="shift-time-fields">
+                <label>出勤予定時刻
+                    <input type="time" name="start_time" value="{{ values.start_time }}">
+                </label>
+                <label>退勤予定時刻
+                    <input type="time" name="end_time" value="{{ values.end_time }}">
+                </label>
+                <label class="staff-shifts-check"><input type="checkbox" name="end_next_day" value="1" {% if values.end_next_day == '1' %}checked{% endif %}>終了は翌日（例：22:00〜翌02:00）</label>
+            </div>
+            <label>備考 <span>任意・500文字以内</span>
+                <textarea name="note" maxlength="500" rows="3">{{ values.note }}</textarea>
+            </label>
+            <button class="staff-shifts-primary" type="submit">{{ '変更を保存' if editing else '保存する' }}</button>
+        </form>
+        {% if editing %}
+        <form method="POST" action="{{ url_for('.cancel_shift', shift_id=shift.id) }}" class="staff-shifts-cancel">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit">この勤務予定を取り消す</button>
+        </form>
+        {% endif %}
+    </section>
+</main>
+</body>
+</html>
