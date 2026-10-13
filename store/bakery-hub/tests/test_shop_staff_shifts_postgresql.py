@@ -27,11 +27,13 @@ import app as app_module
 
 app = app_module.app
 app.config.update(
+    TESTING=True,
     SECRET_KEY="only-for-isolated-integration-test",
     ADMIN_USERNAME="shift-test-admin",
     ADMIN_PASSWORD_HASH=generate_password_hash("shift-test-password"),
     SESSION_COOKIE_SECURE=False,
     WTF_CSRF_ENABLED=False,
+    ADMIN_LOGIN_RATE_LIMIT_TEST_CLIENT_IP="127.0.0.1",
 )
 barrier = threading.Barrier(2)
 staff_id = os.environ["TEST_STAFF_ID"]

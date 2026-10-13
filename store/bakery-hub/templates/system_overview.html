@@ -220,10 +220,14 @@
             <dd><code>ShopStaff</code>は表示名・担当・任意の入社日・在籍状態を、<code>ShopShift</code>はJSTの業務日、出勤予定または休み、UTCの開始・終了予定日時を保存します。スタッフとシフトはDatasetを含む複合外部キーで結び、別DatasetのスタッフIDを使えないようにします。スタッフと業務日の一意制約が二重登録を防ぎます。退職は無効化で、過去のシフトを保持します。DB例外ではrollbackします。既存の<code>ShopSchedule</code>とProduct・DailySalesは変更しません。</dd>
             <dt>日時と画面</dt>
             <dd>入力した日本時間を<code>Asia/Tokyo</code>からUTCへ変換して保存し、表示時にJSTへ戻します。22:00〜翌02:00なら終了が翌日であることを明示します。16時間を超える予定と同一スタッフの時間帯重複は拒否します。PCは月間カレンダーと日別詳細、スマホは日付切り替えと日別一覧を表示し、未登録と「休み」を区別します。Phase 3用の<code>planned_work_for_day()</code>は指定したJST業務日の出勤予定だけを返し、実際の出勤済み・勤務中とは判断しません。</dd>
+            <dt>Frontend</dt>
+            <dd>Jinjaのフォームと一覧はスタッフ名・備考を自動エスケープします。<code>shop_staff_shifts.js</code>は休みを選んだとき時刻欄を隠し、サーバー側の入力検証も継続します。</dd>
             <dt>pytest</dt>
             <dd>Admin専用認可、入力・CSRF・XSS、同姓同名、退職後の履歴、日付またぎと時刻重複、二重POSTとDB一意制約、別Datasetの外部キー拒否、rollback、migrationのupgrade・downgradeと既存データの保全を検証します。</dd>
             <dt>確認するコード</dt>
             <dd>{{ source_links(['shop_staff_shifts.py', 'models.py', 'migrations/versions/c8e6a1b9d4f2_add_shop_staff_shifts.py', 'templates/shop_staff_shifts.html', 'templates/shop_shift_form.html', 'tests/test_shop_staff_shifts.py', 'tests/test_shop_staff_shifts_migration.py']) }}</dd>
+
+        {% endcall %}
 
         {% call feature('products', '商品・メニュー登録', '18品の標準テンプレートとAdminが申請した商品カタログから選び、月ごとの商品と売価を登録します。自由入力もできます。', 'GET /・POST /・POST /admin/product-catalog') %}
             <dt>Python / Flask</dt>

@@ -1,12 +1,11 @@
 """Staff and shift migration round trip on an isolated SQLite database."""
 from pathlib import Path
-import uuid
 
 from flask import Flask
 from flask_migrate import Migrate, downgrade, upgrade
 from sqlalchemy import inspect, text
 
-from models import Dataset, db
+from models import db
 
 MIGRATIONS = Path(__file__).resolve().parent.parent / "migrations"
 PREVIOUS = "b7f2a1c9d603"
@@ -23,10 +22,9 @@ def test_staff_shift_migration_preserves_existing_tables_and_rows(tmp_path):
     Migrate(app, db, directory=str(MIGRATIONS))
     with app.app_context():
         upgrade(directory=str(MIGRATIONS), revision=PREVIOUS)
-        admin = Dataset(id=uuid.uuid4(), kind="admin", system_key="admin")
-        db.session.add(admin)
-        db.session.commit()
-        admin_id = admin.id.hex
+        admin_id = db.session.execute(text(
+            "SELECT id FROM datasets WHERE system_key = 'admin'"
+        )).scalar_one()
         db.session.execute(text(
             "INSERT INTO products (id, dataset_id, year, month, name, price, is_active) "
             "VALUES (9001, :dataset_id, 2026, 10, '既存商品', 200, 1)"

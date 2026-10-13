@@ -14,6 +14,7 @@ from shop_staff_shifts import planned_work_for_day
 
 
 def _form(client, path):
+    g.pop("_login_user", None)
     page = client.get(path)
     assert page.status_code == 200
     soup = BeautifulSoup(page.get_data(as_text=True), "html.parser")
@@ -135,7 +136,8 @@ def test_staff_create_edit_retire_and_historical_shift(authenticated_client, adm
     page = authenticated_client.get("/staff-shifts?month=2026-10&date=2026-10-14").get_data(as_text=True)
     assert "田中さん" in page and "退職済み" in page
     new_form = authenticated_client.get("/staff-shifts/shifts/new").get_data(as_text=True)
-    assert 'value="' + str(staff.id) + '"' not in new_form
+    options = BeautifulSoup(new_form, "html.parser").select('select[name="staff_id"] option')
+    assert str(staff.id) not in [option.get("value") for option in options]
     assert add_shift(authenticated_client, staff, day="2026-10-15").status_code == 400
 
 
@@ -186,7 +188,9 @@ def test_shift_work_off_and_not_registered_are_distinct(authenticated_client, ad
     assert ShopShift.query.one().id == row.id
     assert as_jst(ShopShift.query.one().starts_at).hour == 5
     page = authenticated_client.get("/staff-shifts?month=2026-10&date=2026-10-14").get_data(as_text=True)
-    assert "&lt;script&gt;" in page and "<script>" not in page
+    note = BeautifulSoup(page, "html.parser").select_one(".staff-shifts-note")
+    assert note is not None
+    assert "&lt;script&gt;" in str(note) and note.find("script") is None
 
 
 def test_overnight_and_adjacent_day_overlap(authenticated_client, admin_dataset):
