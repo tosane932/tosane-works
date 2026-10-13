@@ -1313,6 +1313,8 @@ def home():
         "store_home.html",
         today=today,
         schedules=schedule_snapshot(daily_schedules(dataset.id, today)),
+        today_sales=_get_today_sales_amount(dataset, today),
+        has_today_sales=_has_today_sales_record(dataset, today),
     )
 
 
@@ -2261,6 +2263,16 @@ def _get_today_sales_amount(current_dataset, target_date):
         DailySales.date == target_date,
     ).scalar()
     return int(amount)
+
+
+def _has_today_sales_record(current_dataset, target_date):
+    """売上0円と未入力を区別するため、金額を再計算せず当日行の有無を調べる。"""
+    return db.session.query(DailySales.id).join(
+        Product, DailySales.product_id == Product.id,
+    ).filter(
+        Product.dataset_id == current_dataset.id,
+        DailySales.date == target_date,
+    ).first() is not None
 
 
 def _get_sales_from_db(

@@ -80,7 +80,7 @@
         <button type="button" id="rankingPeriodTab" aria-pressed="true">売上推移の期間</button>
         <button type="button" id="rankingLegacyTab" aria-pressed="false">年月指定</button>
     </div>
-    <div id="periodSalesRanking" class="ranking-container" aria-live="polite"></div>
+    <div id="periodSalesRanking" class="ranking-container" tabindex="0" role="region" aria-label="売上推移の期間の商品別ランキング（スクロールで全件表示）" aria-live="polite"></div>
     <div class="ranking-container" hidden id="rankingContainer" tabindex="0" role="region" aria-label="商品別ランキング（スクロールで全件表示）">
         {% if ranked_sales %}
             {% for name, qty in ranked_sales %}
@@ -100,7 +100,6 @@
         {% endif %}
     </div>
 
-    </section>
     </section>
 
     <section class="dashboard-monthly-analysis" aria-labelledby="monthly-analysis-heading">
@@ -235,7 +234,6 @@
         </button>
     </div>
 
-    </section>
     </section>
     <div class="dashboard-actions">
         <a
