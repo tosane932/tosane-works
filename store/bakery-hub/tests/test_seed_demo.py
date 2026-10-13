@@ -4,6 +4,7 @@ import pytest
 
 import seed_demo as seed_demo_module
 from models import DailySales, Dataset, Product, db
+from product_images import PRODUCT_IMAGE_OPTIONS
 from seed_demo import DEMO_PRODUCTS, DEMO_QUANTITIES, seed_demo_data
 
 
@@ -90,10 +91,21 @@ def test_seed_demo_data_inserts_demo_data(flask_app, admin_dataset):
     )
 
     assert result is True
-    assert Product.query.count() == 8
-    assert DailySales.query.count() == 56
+    assert Product.query.count() == 7
+    assert DailySales.query.count() == 49
 
     products = Product.query.all()
+    assert [(product.name, product.price) for product in products] == DEMO_PRODUCTS
+    assert [name for name, _ in DEMO_PRODUCTS] == [
+        "食パン", "クロワッサン", "メロンパン", "あんぱん",
+        "クリームパン", "塩パン", "くるみパン",
+    ]
+    assert len(DEMO_QUANTITIES) == 7
+    assert all(len(row) == len(DEMO_PRODUCTS) for row in DEMO_QUANTITIES)
+    assert "カレーパン" not in [product.name for product in products]
+    assert [sale.quantity for sale in DailySales.query.order_by(DailySales.id)] == [
+        quantity for row in DEMO_QUANTITIES for quantity in row
+    ]
 
     assert all(product.year == 2026 for product in products)
     assert all(product.month == 8 for product in products)
@@ -140,8 +152,8 @@ def test_seed_demo_data_does_not_duplicate_existing_data(
     assert first_result is True
     assert second_result is False
 
-    assert Product.query.count() == 8
-    assert DailySales.query.count() == 56
+    assert Product.query.count() == 7
+    assert DailySales.query.count() == 49
 
 
 def test_seed_demo_data_requires_admin_dataset(flask_app):
@@ -236,3 +248,28 @@ def test_admin_seed_skips_existing_admin_data_without_affecting_guest_data(
     assert _dataset_snapshot(guest_dataset.id) == guest_before
     assert db.session.get(Product, admin_product.id) is not None
     assert db.session.get(DailySales, admin_sale.id) is not None
+
+def test_image_template_curry_bread_remains_available():
+    curry_bread = PRODUCT_IMAGE_OPTIONS["curry_bread"]
+    assert curry_bread["label"] == "カレーパン"
+    assert curry_bread["default_price"] == 220
+    assert curry_bread["filename"] == "curry_bread.png"
+
+
+def test_seed_preserves_existing_unpictured_curry_bread_and_sales(
+    flask_app, admin_dataset,
+):
+    existing, sale = _create_dataset_records(
+        admin_dataset,
+        name="カレーパン",
+        price=280,
+        is_active=True,
+        sale_date=datetime.date(2026, 8, 2),
+        quantity=14,
+    )
+    before = _dataset_snapshot(admin_dataset.id)
+
+    assert seed_demo_data(reference_date=datetime.date(2026, 8, 13)) is False
+    assert _dataset_snapshot(admin_dataset.id) == before
+    assert db.session.get(Product, existing.id) is not None
+    assert db.session.get(DailySales, sale.id) is not None

@@ -609,7 +609,7 @@
                             meaning="except内で引数なしのraiseを使うと元の例外を再送出します。finallyはtryの終了時に実行する後片付けです。",
                             use="seed_demo_data()はrollback後に再raiseし、失敗を成功に見せません。Dataset移行の_validate_backfill()は件数や所有者を確認し、不整合ならRuntimeErrorを発生させます。",
                             reason="初期データ作成やDB移行の失敗を呼び出し側へ伝え、変更前後のデータ保全を確認します。ロックを解放するfinallyの例は「with / yield」で辿れます。",
-                            locations=[["seed_demo.py", "seed_demo_data", 31, "初期データ作成"], ["migrations/versions/c7a1d9e4f2b6_create_datasets_and_backfill_products.py", "_validate_backfill", 58, "migration"]],
+                            locations=[["seed_demo.py", "seed_demo_data", 30, "初期データ作成"], ["migrations/versions/c7a1d9e4f2b6_create_datasets_and_backfill_products.py", "_validate_backfill", 58, "migration"]],
                             feature_id="guest",
                             feature_label="Datasetの分離と移行",
                             snippet=""
