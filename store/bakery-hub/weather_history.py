@@ -37,6 +37,8 @@ class WeatherHistoryError(Exception):
 
 
 def _settings(config):
+    if config.get("WEATHER_API_MODE") == "met_norway":
+        raise WeatherHistoryError("MET Norwayの直近予報から過去の観測データは取得できません。過去データの取り込みには別途利用許諾済みの設定が必要です。")
     try:
         lat = float(config["WEATHER_LATITUDE"])
         lon = float(config["WEATHER_LONGITUDE"])

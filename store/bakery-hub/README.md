@@ -67,6 +67,10 @@ Geminiへ経営アドバイスを依頼する
 
 本番で無料の予報を取得する場合は `WEATHER_API_MODE=met_norway` を指定し、`WEATHER_API_KEY` は空欄にします。MET NorwayのLocationforecastは観測記録ではなく予報です。運用時には[利用条件](https://api.met.no/doc/TermsOfService)を守り、画面上で出典と[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)を示します。識別可能なUser-Agentを付け、地点を小数4桁へ丸め、レスポンスのExpiresまでキャッシュし、再取得時はLast-Modifiedがあれば条件付きリクエストを送ります。直近の予報がない場合や古い場合は天気を表示しません。無料APIの可用性保証はありません。このモードは過去天気の取り込みには対応しません。
 
+MET Norwayの正常な予報をホームで取得したときは、認証・CSRF保護された保存リクエストで、現在のDatasetに日本時間の**その日最初の予報**を1件だけ記録します。予報コード、対象時刻、取得時刻、地点、出典を`daily_forecasts`へ保存し、売上ダッシュボードの「この期間の天気記録」で表示します。表示する日本語・SVGアイコンは保存コードから生成し、履歴の閲覧では気象APIへ通信しません。従来の`daily_weather`（過去の観測・再解析データ）とは別に表示し、双方を上書きしません。**保存値は取得当時の予報であり、実際の観測結果ではありません。** ホームを開かなかった日や取得に失敗した日は記録されません。Guestの記録はDataset期限切れ時に削除されます。
+
+本番では新しいmigrationをデプロイ前に適用する必要があります。既存の`daily_weather`と売上データは変更しません。Render無料PostgreSQLを新しいDBへ切り替える場合、保存済みの予報や既存データは自動移行されず、別途バックアップ・復元が必要です。
+
 Open-Meteoを使う場合は、商用の契約済みAPIキーで `WEATHER_API_MODE=commercial` と `WEATHER_API_KEY` を設定します。Open-Meteoの無料APIは、既存どおりローカルの非商用開発に限る `WEATHER_API_MODE=noncommercial` と `LOCAL_DEVELOPMENT=true` の組み合わせだけで利用できます。公開ポートフォリオの非商用該当性が不明な状態で、本番へ `LOCAL_DEVELOPMENT=true` を設定しないでください。
 
 出勤メンバー、仕込み管理、スタッフ管理、店舗レイアウトは **準備中** です。架空のスタッフを登録・表示しません。Taskは既存の店舗メモツールが管理し、スケジュールの予定とは別です。

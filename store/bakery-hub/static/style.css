@@ -9006,6 +9006,10 @@ body.shop-task-reorder-lock .shop-task-card {
 .period-weather > p, .period-weather > small { font-size: .78rem; color: #5b5148; }
 .period-weather-entries { max-height: 220px; overflow-y: auto; }
 .period-weather-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 9px 2px; border-bottom: 1px solid #ded3c7; font-size: .85rem; }
+.period-weather-row > div { flex: 1 1 190px; }
+.period-weather-row > div > div { display: flex; align-items: center; gap: 5px; }
+.period-weather-row small { display: block; margin: 2px 0 5px 23px; color: #5b5148; }
+.period-weather-icon { width: 18px; height: 18px; flex: none; }
 .period-weather-import { min-height: 44px; margin: 10px 0 5px; border: 1px solid #95633f; border-radius: 8px; padding: 0 12px; background: #fff; color: #533a29; cursor: pointer; font-weight: 600; }
 .period-weather-import:disabled { opacity: .5; cursor: wait; }
 .period-weather-import:focus-visible { outline: 3px solid #3182ce; outline-offset: 2px; }

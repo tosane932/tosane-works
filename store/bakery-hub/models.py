@@ -99,6 +99,9 @@ class Dataset(db.Model):
         back_populates="dataset",
         passive_deletes="all",
     )
+    daily_forecasts = db.relationship(
+        "DailyForecast", back_populates="dataset", passive_deletes="all",
+    )
 
 
 class GuestCreationRateLimit(db.Model):
@@ -430,3 +433,25 @@ class DailyWeather(db.Model):
     longitude = db.Column(db.Float, nullable=False)
     source = db.Column(db.String(64), nullable=False)
     recorded_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class DailyForecast(db.Model):
+    """ホームで取得した当日の最初のMET Norway予報。観測記録とは別。"""
+    __tablename__ = "daily_forecasts"
+    __table_args__ = (
+        db.UniqueConstraint("dataset_id", "business_date", name="uq_daily_forecasts_dataset_date"),
+        db.CheckConstraint("weather_code BETWEEN 0 AND 99", name="ck_daily_forecasts_code"),
+        db.CheckConstraint("latitude BETWEEN -90 AND 90", name="ck_daily_forecasts_latitude"),
+        db.CheckConstraint("longitude BETWEEN -180 AND 180", name="ck_daily_forecasts_longitude"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    weather_code = db.Column(db.Integer, nullable=False)
+    forecast_valid_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    fetched_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    location_name = db.Column(db.String(80), nullable=False)
+    source = db.Column(db.String(64), nullable=False)
+    dataset = db.relationship("Dataset", back_populates="daily_forecasts")

@@ -41,6 +41,7 @@ from models import (
     ShopMemo,
     ShopTask,
     ShopSchedule,
+    DailyForecast,
     Product,
     DailySales,
 )
@@ -53,6 +54,7 @@ from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
 from shop_schedules import create_shop_schedules_blueprint, daily_schedules, schedule_snapshot
 from current_weather import current_weather
+from forecast_history import save_forecast, stored_forecasts
 from product_images import available_product_images, available_product_image_assets
 from catalog_repository import (
     CatalogPublishError,
@@ -335,6 +337,9 @@ def _cleanup_expired_guest_datasets(*, now=None):
     ).delete(synchronize_session=False)
     ShopSchedule.query.filter(
         ShopSchedule.dataset_id.in_(expired_dataset_ids)
+    ).delete(synchronize_session=False)
+    DailyForecast.query.filter(
+        DailyForecast.dataset_id.in_(expired_dataset_ids)
     ).delete(synchronize_session=False)
 
     product_ids = [
@@ -1316,6 +1321,20 @@ def home_weather():
     return jsonify(current_weather(app.config))
 
 
+@app.post("/api/home/weather/record")
+@admin_or_guest_required
+def record_home_weather():
+    dataset = require_current_dataset()
+    forecast = current_weather(app.config)
+    try:
+        saved = save_forecast(dataset.id, forecast, app.config)
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Daily forecast could not be stored")
+        return jsonify({"saved": False, "error": "予報記録を保存できませんでした。"}), 503
+    return jsonify({"saved": saved})
+
+
 @app.route("/", methods=["GET", "POST"])
 @admin_or_guest_required
 def index():
@@ -1848,7 +1867,12 @@ def api_weather_history():
     dataset = require_current_dataset()
     start, end = period_bounds(period, offset, business_today())
     # Only read persisted records. Never query an external service from page views.
-    return jsonify({"weather": stored_weather(dataset.id, start, end)})
+    return jsonify({
+        "weather": stored_weather(dataset.id, start, end),
+        "forecasts": stored_forecasts(dataset.id, start, end),
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+    })
 
 
 @app.route("/api/weather-history/import", methods=["POST"])
