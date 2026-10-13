@@ -265,11 +265,12 @@ def test_sidebar_category_colors_use_contrasting_white_foreground():
         Path(app_module.app.root_path) / "static" / "style.css"
     ).read_text()
     category_colors = {
-        ".app-sidebar-link-products": "#9a641f",
-        ".app-sidebar-link-catalog": "#8b4d3b",
-        ".app-sidebar-link-sales": "#477b59",
-        ".app-sidebar-link-dashboard": "#bc4848",
-        ".app-sidebar-link-shop-tools": "#48739c",
+        ".app-sidebar-link-home": ("#72583b", "--bakery-home-color"),
+        ".app-sidebar-link-products": ("#9a641f", "--bakery-products-color"),
+        ".app-sidebar-link-catalog": ("#8b4d3b", None),
+        ".app-sidebar-link-sales": ("#477b59", "--bakery-sales-color"),
+        ".app-sidebar-link-dashboard": ("#bc4848", "--bakery-dashboard-color"),
+        ".app-sidebar-link-shop-tools": ("#48739c", "--bakery-info-color"),
     }
 
     link_rule = _css_rule_body(style_source, ".app-sidebar-link")
@@ -283,9 +284,14 @@ def test_sidebar_category_colors_use_contrasting_white_foreground():
     assert "background: var(--app-menu-color);" in current_rule
     assert "text-decoration: underline;" in current_rule
 
-    for selector, color in category_colors.items():
+    palette_rule = _css_rule_body(style_source, ":root")
+    for selector, (color, variable) in category_colors.items():
         category_rule = _css_rule_body(style_source, selector)
-        assert f"--app-menu-color: {color};" in category_rule
+        if variable is None:
+            assert f"--app-menu-color: {color};" in category_rule
+        else:
+            assert f"{variable}: {color};" in palette_rule
+            assert f"--app-menu-color: var({variable});" in category_rule
         assert _contrast_with_white(color) >= 4.5
 
 
