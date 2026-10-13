@@ -10,7 +10,7 @@
 <body class="app-shell-page staff-shifts-page">
 {% include "_app_navigation.html" %}
 <main class="staff-shifts-shell">
-    <a href="{{ url_for('.index') }}#staff">← スタッフ一覧へ戻る</a>
+    <a href="{% if editing %}{{ url_for('.staff_detail', staff_id=staff.id) }}{% else %}{{ url_for('.index') }}#staff{% endif %}">← {{ 'スタッフ詳細' if editing else 'スタッフ一覧' }}へ戻る</a>
     <section class="staff-shifts-panel staff-shifts-form">
         <h1>{{ 'スタッフを編集' if editing else 'スタッフを登録' }}</h1>
         {% if error %}<p class="staff-shifts-error" role="alert">{{ error }}</p>{% endif %}
@@ -36,3 +36,4 @@
 </main>
 </body>
 </html>
+

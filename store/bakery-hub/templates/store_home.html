@@ -11,6 +11,9 @@
 <body class="app-shell-page operations-page">
 {% include "_app_navigation.html" %}
 <main class="operations-shell">
+    <div class="hidamari-banner">
+        <img src="{{ url_for('static', filename='hidamari-banner.png') }}" alt="パン工房 ひだまり" fetchpriority="high">
+    </div>
     <header class="operations-heading">
         <p>Bakery Hub · 店舗運営</p>
         <h1>今日のホーム</h1>
@@ -106,3 +109,4 @@
 <script id="operations-initial-schedule" type="application/json">{{ schedules | tojson }}</script>
 </body>
 </html>
+

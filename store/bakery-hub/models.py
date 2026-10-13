@@ -405,10 +405,10 @@ class ShopShift(db.Model):
             name="fk_shop_shifts_staff_dataset", ondelete="RESTRICT",
         ),
         db.UniqueConstraint("dataset_id", "staff_id", "business_date", name="uq_shop_shifts_staff_day"),
-        db.CheckConstraint("status IN ('work', 'off')", name="ck_shop_shifts_status"),
+        db.CheckConstraint("status IN ('work', 'all_day', 'off')", name="ck_shop_shifts_status"),
         db.CheckConstraint(
             "(status = 'work' AND starts_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at > starts_at) "
-            "OR (status = 'off' AND starts_at IS NULL AND ends_at IS NULL)",
+            "OR (status IN ('all_day', 'off') AND starts_at IS NULL AND ends_at IS NULL)",
             name="ck_shop_shifts_times_by_status",
         ),
         db.CheckConstraint("note IS NULL OR length(note) <= 500", name="ck_shop_shifts_note"),
@@ -524,3 +524,4 @@ class DailyForecast(db.Model):
     location_name = db.Column(db.String(80), nullable=False)
     source = db.Column(db.String(64), nullable=False)
     dataset = db.relationship("Dataset", back_populates="daily_forecasts")
+

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>勤務予定の詳細 | Bakery Hub</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}"></head>
+<body class="app-shell-page staff-shifts-page">{% include "_app_navigation.html" %}
+<main class="staff-shifts-shell"><a href="{{ url_for('.index', month=shift.business_date.strftime('%Y-%m'), date=shift.business_date.isoformat()) }}#day-shifts">← この日の勤務予定へ戻る</a>
+<section class="staff-shifts-panel staff-shifts-detail">
+    <h1>勤務予定の詳細</h1>
+    <p>実際の出退勤記録ではありません。</p>
+    <dl>
+        <dt>スタッフ名</dt><dd>{{ shift.staff.display_name }}</dd>
+        <dt>対象日</dt><dd><time datetime="{{ shift.business_date.isoformat() }}">{{ shift.business_date.isoformat() }}</time></dd>
+        <dt>勤務区分</dt><dd>{{ status_labels[shift.status] }}</dd>
+        <dt>出勤予定時刻</dt><dd>{% if shift.status == 'work' %}<time datetime="{{ as_jst(shift.starts_at).isoformat(timespec='minutes') }}">{{ as_jst(shift.starts_at).strftime('%Y年%m月%d日 %H:%M') }}</time>{% else %}時刻未指定{% endif %}</dd>
+        <dt>退勤予定時刻</dt><dd>{% if shift.status == 'work' %}<time datetime="{{ as_jst(shift.ends_at).isoformat(timespec='minutes') }}">{{ as_jst(shift.ends_at).strftime('%Y年%m月%d日 %H:%M') }}</time>{% else %}時刻未指定{% endif %}</dd>
+        <dt>備考</dt><dd class="staff-shifts-note">{{ shift.note or 'なし' }}</dd>
+    </dl>
+    <div class="staff-shifts-actions">
+        <a class="staff-shifts-primary" href="{{ url_for('.edit_shift', shift_id=shift.id) }}">勤務予定を編集</a>
+        <a class="staff-shifts-secondary" href="{{ url_for('.confirm_cancel_shift', shift_id=shift.id) }}">この予定を取り消す</a>
+    </div>
+</section></main></body></html>

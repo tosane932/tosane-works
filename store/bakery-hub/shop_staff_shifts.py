@@ -18,11 +18,11 @@ ROLES = {
     "both": "兼任",
     "other": "その他",
 }
-STATUS_LABELS = {"work": "出勤予定", "off": "休み"}
+STATUS_LABELS = {"work": "出勤予定", "all_day": "終日（時刻未指定）", "off": "休み"}
 TIME_RE = re.compile(r"[0-9]{2}:[0-9]{2}\Z")
 MONTH_RE = re.compile(r"[0-9]{4}-[0-9]{2}\Z")
 TOKEN_RE = re.compile(r"[0-9a-f]{32}\Z")
-MAX_SHIFT = datetime.timedelta(hours=16)
+MAX_SHIFT = datetime.timedelta(hours=12)
 
 
 def planned_work_for_day(dataset, day):
@@ -30,7 +30,10 @@ def planned_work_for_day(dataset, day):
     if dataset.kind != "admin" or dataset.system_key != "admin":
         raise ValueError("Admin Datasetが必要です。")
     return (
-        ShopShift.query.filter_by(dataset_id=dataset.id, business_date=day, status="work")
+        ShopShift.query.filter(
+            ShopShift.dataset_id == dataset.id, ShopShift.business_date == day,
+            ShopShift.status.in_(("work", "all_day")),
+        )
         .order_by(ShopShift.starts_at, ShopShift.id).all()
     )
 
@@ -58,7 +61,7 @@ def form_datetime(day, clock):
     return datetime.datetime.combine(day, clock, JST).astimezone(datetime.timezone.utc)
 
 
-def shift_payload(values):
+def shift_payload(values, row=None):
     day = parse_day(values["business_date"])
     status = values["status"]
     if status not in STATUS_LABELS:
@@ -66,20 +69,24 @@ def shift_payload(values):
     note = values["note"].strip()
     if len(note) > 500:
         raise ValueError("備考は500文字以内で入力してください。")
-    if status == "off":
+    if status in ("off", "all_day"):
         if values["start_time"] or values["end_time"] or values["end_next_day"]:
-            raise ValueError("休みには勤務時刻を入力しないでください。")
+            raise ValueError("休み・終日には勤務時刻を入力しないでください。")
         return day, status, None, None, note
     start = parse_clock(values["start_time"])
     end = parse_clock(values["end_time"])
-    if values["end_next_day"] not in ("", "1"):
-        raise ValueError("終了日の指定が正しくありません。")
-    ends_on = day + datetime.timedelta(days=1) if values["end_next_day"] else day
+    if values["end_next_day"]:
+        raise ValueError("新しい予定は同じ日内で登録してください。")
+    # Preserve a legacy overnight or long shift if only its note changes.
+    if row is not None and row.status == "work" and row.business_date == day:
+        old_start, old_end = as_jst(row.starts_at), as_jst(row.ends_at)
+        if old_start.strftime("%H:%M") == values["start_time"] and old_end.strftime("%H:%M") == values["end_time"]:
+            return day, status, row.starts_at, row.ends_at, note
     starts_at = form_datetime(day, start)
-    ends_at = form_datetime(ends_on, end)
+    ends_at = form_datetime(day, end)
     duration = ends_at - starts_at
     if not datetime.timedelta(0) < duration <= MAX_SHIFT:
-        raise ValueError("終了は開始後16時間以内にしてください。翌日終了はチェックを入れてください。")
+        raise ValueError("終了は開始後、同じ日の12時間以内にしてください。")
     return day, status, starts_at, ends_at, note
 
 
@@ -103,6 +110,36 @@ def create_shop_staff_shifts_blueprint(*, access_required, resolve_dataset):
         if lock:
             query = query.with_for_update()
         return query.first_or_404()
+
+    @bp.get("/staff-shifts/staff/<int:staff_id>")
+    @access_required
+    def staff_detail(staff_id):
+        dataset = admin_dataset()
+        return render_template("shop_staff_detail.html", staff=owned_staff(staff_id, dataset.id), roles=ROLES)
+
+    @bp.get("/staff-shifts/staff/<int:staff_id>/status")
+    @access_required
+    def confirm_staff_status(staff_id):
+        dataset = admin_dataset()
+        row = owned_staff(staff_id, dataset.id)
+        target = request.args.get("is_active")
+        if target not in ("0", "1") or (target == "1") == row.is_active:
+            abort(400)
+        return render_template("shop_staff_shift_confirm.html", kind="staff", row=row, target=target)
+
+    @bp.get("/staff-shifts/shifts/<int:shift_id>")
+    @access_required
+    def shift_detail(shift_id):
+        dataset = admin_dataset()
+        return render_template("shop_shift_detail.html", shift=owned_shift(shift_id, dataset.id),
+                               as_jst=as_jst, status_labels=STATUS_LABELS)
+
+    @bp.get("/staff-shifts/shifts/<int:shift_id>/cancel")
+    @access_required
+    def confirm_cancel_shift(shift_id):
+        dataset = admin_dataset()
+        return render_template("shop_staff_shift_confirm.html", kind="shift",
+                               row=owned_shift(shift_id, dataset.id))
 
     def staff_values(row=None):
         if request.method == "POST":
@@ -215,7 +252,7 @@ def create_shop_staff_shifts_blueprint(*, access_required, resolve_dataset):
                 abort(503)
             else:
                 flash("スタッフ情報を更新しました。", "success")
-                return redirect(url_for(".index") + "#staff", code=303)
+                return redirect(url_for(".staff_detail", staff_id=row.id), code=303)
         return render_template("shop_staff_form.html", values=values, error=error, editing=True, roles=ROLES, staff=row), 400 if error else 200
 
     @bp.post("/staff-shifts/staff/<int:staff_id>/status")
@@ -234,7 +271,7 @@ def create_shop_staff_shifts_blueprint(*, access_required, resolve_dataset):
             logger.exception("Failed to change staff status.")
             abort(503)
         flash("在籍状態を更新しました。過去のシフトは保持します。", "success")
-        return redirect(url_for(".index") + "#staff", code=303)
+        return redirect(url_for(".staff_detail", staff_id=row.id), code=303)
 
     def shift_values(row=None):
         if request.method == "POST":
@@ -267,7 +304,9 @@ def create_shop_staff_shifts_blueprint(*, access_required, resolve_dataset):
             staff = owned_staff(int(raw_staff_id), dataset.id, lock=True)
             if not staff.is_active and (row is None or row.staff_id != staff.id):
                 raise ValueError("退職済みスタッフの新規シフトは登録できません。")
-            day, status, starts_at, ends_at, note = shift_payload(values)
+            day, status, starts_at, ends_at, note = shift_payload(
+                values, row=row if row is not None and row.staff_id == staff.id else None
+            )
             if status == "work":
                 overlap = ShopShift.query.filter(
                     ShopShift.dataset_id == dataset.id,
@@ -323,6 +362,7 @@ def create_shop_staff_shifts_blueprint(*, access_required, resolve_dataset):
     def edit_shift(shift_id):
         dataset = admin_dataset()
         row = owned_shift(shift_id, dataset.id, lock=request.method == "POST")
+        original = row.business_date
         values = shift_values(row)
         error = None
         status_code = 200
@@ -330,11 +370,16 @@ def create_shop_staff_shifts_blueprint(*, access_required, resolve_dataset):
             error, status_code, day = save_shift(dataset, row, values)
             if error is None:
                 flash("勤務予定を更新しました。", "success")
-                return redirect(url_for(".index", month=day.strftime("%Y-%m"), date=day.isoformat()) + "#day-shifts", code=303)
+                return redirect(url_for(".index", month=original.strftime("%Y-%m"), date=original.isoformat()) + "#day-shifts", code=303)
         staff = ShopStaff.query.filter_by(dataset_id=dataset.id, is_active=True).order_by(ShopStaff.id).all()
         if row.staff not in staff:
             staff.append(row.staff)
-        return render_template("shop_shift_form.html", values=values, error=error, editing=True, staff=staff, shift=row, status_labels=STATUS_LABELS), status_code
+        legacy_interval = row.status == "work" and (
+            as_jst(row.ends_at).date() > row.business_date or row.ends_at - row.starts_at > MAX_SHIFT
+        )
+        return render_template("shop_shift_form.html", values=values, error=error, editing=True,
+                               staff=staff, shift=row, legacy_interval=legacy_interval,
+                               status_labels=STATUS_LABELS), status_code
 
     @bp.post("/staff-shifts/shifts/<int:shift_id>/cancel")
     @access_required
@@ -353,3 +398,4 @@ def create_shop_staff_shifts_blueprint(*, access_required, resolve_dataset):
         return redirect(url_for(".index", month=day.strftime("%Y-%m"), date=day.isoformat()) + "#day-shifts", code=303)
 
     return bp
+

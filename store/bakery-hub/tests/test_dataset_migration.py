@@ -16,7 +16,7 @@ MIGRATIONS_DIR = PROJECT_ROOT / "migrations"
 PREVIOUS_REVISION = "9d3c1b7e5a42"
 DATASET_REVISION = "c7a1d9e4f2b6"
 NOT_NULL_REVISION = "f2b6c8d4e1a9"
-HEAD_REVISION = "c8e6a1b9d4f2"
+HEAD_REVISION = "d5a9f1b7c204"
 
 
 def _migration_app(tmp_path, name):
@@ -348,3 +348,4 @@ def test_not_null_downgrade_only_restores_nullable_dataset_id(tmp_path):
         assert db.session.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one() == DATASET_REVISION
+
