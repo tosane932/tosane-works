@@ -100,7 +100,7 @@
             if (data.available) {
                 credit.href = data.credit_url;
                 credit.textContent = data.source.startsWith("MET Norway") ?
-                    "気象データ：MET Norway（CC BY 4.0）" : "気象データ：Open-Meteo";
+                    "気象データ：MET Norway（天気区分を要約・CC BY 4.0）" : "気象データ：Open-Meteo";
             }
             let icon = "cloud";
             if (data.weather_code === 0) icon = "sun";
