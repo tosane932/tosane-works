@@ -41,6 +41,22 @@ def _dashboard_document(response):
     return BeautifulSoup(response.get_data(as_text=True), "html.parser")
 
 
+def test_dashboard_keeps_sales_charts_with_one_visible_ranking_and_weather_detail(
+    authenticated_client, admin_dataset,
+):
+    document = _dashboard_document(authenticated_client.get("/dashboard"))
+    assert document.select_one("#periodSalesChart") is not None
+    assert document.select_one("#salesChart") is not None
+    assert document.select_one("#rankingPeriodTab") is not None
+    assert document.select_one("#rankingLegacyTab") is not None
+    assert not document.select_one("#periodSalesRanking").has_attr("hidden")
+    assert document.select_one("#rankingContainer").has_attr("hidden")
+    assert document.select_one("#periodWeatherDialog #periodWeatherEntries") is not None
+    assert document.select_one(".dashboard-legacy-details") is None
+    assert document.select_one("#selectYear") is not None
+    assert document.select_one("#aiAdviceButton") is not None
+
+
 def _dashboard_year_values(document):
     return [
         option["value"]

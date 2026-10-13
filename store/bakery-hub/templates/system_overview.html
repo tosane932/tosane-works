@@ -191,7 +191,7 @@
             <dt>Database</dt>
             <dd>予定は現在のDatasetの<code>ShopSchedule</code>だけを読みます。<code>DailyForecast</code>は取得当時の予報を保存し、<code>DailyWeather</code>の過去の気象データと同じ日でも別々に表示します。DBの一意制約とON CONFLICTで同日の再保存・上書きを防ぎ、Guest期限切れ時は削除します。保存済み記録の閲覧では外部APIを呼びません。Render無料DB切り替え時はデータ移行が必要です。スタッフ・シフト情報は未実装のため架空の出勤者は出しません。</dd>
             <dt>Frontend</dt>
-            <dd><code>store_home.js</code>が日本時間の時計と現在・次の予定を更新し、1分ごとに当日の予定を再取得します。親の「ホーム」は画面へ移動し、独立したボタンで子メニューを開閉します。仕込み管理・スタッフ管理・店舗レイアウトは準備中です。</dd>
+            <dd><code>store_home.js</code>が日本時間の時計と現在・次の予定を更新し、1分ごとに当日の予定を再取得します。ホーム以外では親メニューからホームへ移動し、ホーム上では同じ行をボタンとして子メニューを開閉します。未実装の出勤情報はホームに表示しません。</dd>
             <dt>pytest</dt>
             <dd>未認証アクセス、CSRF、Dataset分離、同時保存の一意制約、日時の境界、Guest cleanup、migrationの往復、予報と観測記録の区別をpytestで確認します。</dd>
             <dt>確認するコード</dt>
@@ -258,7 +258,7 @@
             <dt>Database</dt>
             <dd><code>Product</code>と<code>DailySales</code>をjoinし、Datasetと日付で絞り、商品名ごとに数量を合計します。本日の金額は<code>単価 × 数量</code>を別に合計するため、選んだ分析期間に左右されません。</dd>
             <dt>Frontend</dt>
-            <dd><code>dashboard.html</code>のJavaScriptが<code>fetch()</code>でJSONを取得。ランキングの表示とChart.jsのグラフを更新し、AIボタンは別のPOSTを送ります。</dd>
+            <dd><code>dashboard.html</code>のJavaScriptが<code>fetch()</code>でJSONを取得。Chart.jsの売上推移と一つのランキング欄を更新し、年月指定の分析も別セクションから使えます。日付単位のグラフだけに保存済み天気のアイコンを重ね、選択すると予報と過去気象データの両方の詳細を確認できます。履歴を開く際に気象APIは呼びません。AIボタンは別のPOSTを送ります。</dd>
             <dt>pytest</dt>
             <dd>HTMLとAPIの期間一致、年・月の不正値、数量とグラフの一致、販売終了商品の履歴、他Datasetの除外、本日の金額の期間独立性を確認します。</dd>
             <dt>確認するコード</dt>

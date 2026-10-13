@@ -26,20 +26,28 @@
             <a href="{{ url_for('shop_schedules.list_schedules') }}">スケジュールを見る</a>
         </section>
 
-        <section class="operations-card" id="weather" aria-labelledby="weather-heading">
-            <h2 id="weather-heading">今日の天気</h2>
-            <div class="operations-weather-icon" aria-hidden="true">
+        <details class="operations-card operations-weather" id="weather">
+            <summary aria-labelledby="weather-heading">
+            <span class="operations-weather-heading" id="weather-heading">今日の天気</span>
+            <span id="operations-weather-location"></span>
+            <span class="operations-weather-main">
+            <span class="operations-weather-icon" aria-hidden="true">
                 <svg data-weather-icon="sun" data-icon="sun" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"></path></svg>
                 <svg data-weather-icon="cloud" data-icon="cloud" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 16.25"></path><path d="M8 16h12"></path></svg>
                 <svg data-weather-icon="rain" data-icon="cloud-rain" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 16"></path><path d="m8 19-1 2m6-2-1 2m6-2-1 2"></path></svg>
                 <svg data-weather-icon="snow" data-icon="cloud-snow" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 16"></path><path d="M8 20h.01M13 20h.01M18 20h.01"></path></svg>
-            </div>
-            <p id="operations-weather-status" role="status">天気を確認中です。</p>
-            <p id="operations-weather-location"></p>
+                <svg data-weather-icon="storm" data-icon="cloud-lightning" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 16"></path><path d="m13 16-3 4h3l-1 3"></path></svg>
+            </span>
+            <span id="operations-weather-status" role="status">天気を確認中です。</span>
+            </span>
+            <span class="operations-weather-more">対象時刻・出典を見る</span>
+            </summary>
+            <div class="operations-weather-details">
             <small id="operations-weather-source">過去の天気記録とは別の情報です。</small>
             <small id="operations-weather-time"></small>
             <a id="operations-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">気象データ：Open-Meteo</a>
-        </section>
+            </div>
+        </details>
 
         <section class="operations-card" id="schedule" aria-labelledby="schedule-heading">
             <div class="operations-card-heading">
@@ -54,11 +62,6 @@
                 {% endfor %}
             </ol>
             <a href="{{ url_for('shop_schedules.list_schedules') }}">予定一覧・別の日を見る</a>
-        </section>
-
-        <section class="operations-card" id="staff" aria-labelledby="staff-heading">
-            <h2 id="staff-heading">本日の出勤メンバー</h2>
-            <p>スタッフ・シフト管理は準備中です。出勤情報はまだ登録されていません。</p>
         </section>
 
         <section class="operations-card operations-links" aria-labelledby="operations-links-heading">

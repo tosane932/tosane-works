@@ -104,33 +104,28 @@
 
     <nav class="app-sidebar-nav" aria-label="主要メニュー">
         <div class="app-sidebar-home-row">
-            <a
-                href="{{ url_for('home') }}"
-                data-page="home"
-                class="app-sidebar-link app-sidebar-link-home touch-control-no-select{% if active_app_page in ('home', 'schedule') %} app-sidebar-link-current{% endif %}"
-                {% if active_app_page == 'home' %}aria-current="page"{% endif %}>
+            {% if active_app_page == 'home' %}
+            <button type="button" data-page="home" class="app-sidebar-link app-sidebar-link-home app-sidebar-submenu-toggle touch-control-no-select app-sidebar-link-current"
+                aria-label="ホームの子メニューを開く" aria-controls="app-home-submenu" aria-expanded="false" aria-current="page">
+            {% else %}
+            <a href="{{ url_for('home') }}" data-page="home"
+                class="app-sidebar-link app-sidebar-link-home touch-control-no-select{% if active_app_page == 'schedule' %} app-sidebar-link-current{% endif %}">
+            {% endif %}
                 <span class="app-sidebar-icon" aria-hidden="true">
                     <svg data-icon="house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
                         <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"></path><path d="M9 21v-7h6v7"></path>
                     </svg>
                 </span>
                 <span>ホーム</span>
-            </a>
-            <button class="app-sidebar-submenu-toggle touch-control-no-select" type="button"
-                aria-label="ホームの子メニューを{{ '閉じる' if active_app_page == 'schedule' else '開く' }}"
-                aria-controls="app-home-submenu"
-                aria-expanded="{{ 'true' if active_app_page == 'schedule' else 'false' }}">
-                <svg data-icon="chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                {% if active_app_page == 'home' %}
+                <svg class="app-sidebar-home-chevron" data-icon="chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
             </button>
+                {% else %}</a>{% endif %}
         </div>
         <div id="app-home-submenu" class="app-sidebar-submenu" {% if active_app_page != 'schedule' %}hidden{% endif %}>
             <a href="{{ url_for('home') }}#weather">今日の天気</a>
-            <a href="{{ url_for('home') }}#staff">出勤メンバー</a>
             <a href="{{ url_for('shop_schedules.list_schedules') }}" {% if active_app_page == 'schedule' %}aria-current="page"{% endif %}>スケジュール</a>
             <a href="{{ url_for('home') }}#next">次の予定</a>
-            <span class="app-sidebar-submenu-pending">仕込み管理 <small>準備中</small></span>
-            <span class="app-sidebar-submenu-pending">スタッフ管理 <small>準備中</small></span>
-            <span class="app-sidebar-submenu-pending">店舗レイアウト <small>準備中</small></span>
         </div>
         <a
             href="{{ url_for('index') }}"

@@ -3158,33 +3158,35 @@ body.app-shell-page {
 }
 
 .app-sidebar-home-row {
-    display: flex;
-    gap: 4px;
-    align-items: stretch;
+    display: block;
 }
 
 .app-sidebar-home-row .app-sidebar-link {
-    flex: 1;
+    width: 100%;
     min-width: 0;
 }
 
 .app-sidebar-submenu-toggle {
-    flex: 0 0 48px;
+    display: flex;
+    align-items: center;
     min-height: 48px;
     color: #5c452b;
     background: #f8f0e2;
     border: 1px solid #d6c7ad;
     border-radius: 10px;
     cursor: pointer;
+    font: inherit;
+    text-align: left;
 }
 
-.app-sidebar-submenu-toggle svg {
+.app-sidebar-home-chevron {
     width: 20px;
     height: 20px;
+    margin-left: auto;
     transition: transform .2s ease;
 }
 
-.app-sidebar-submenu-toggle[aria-expanded="true"] svg {
+.app-sidebar-submenu-toggle[aria-expanded="true"] .app-sidebar-home-chevron {
     transform: rotate(180deg);
 }
 
@@ -3255,6 +3257,17 @@ body.app-shell-page {
     margin-bottom: 16px;
 }
 .operations-grid .operations-card { margin: 0; }
+.operations-grid .operations-weather { grid-column: 1; }
+.operations-grid #schedule { grid-column: 2; }
+.operations-weather summary { list-style: none; cursor: pointer; min-height: 112px; }
+.operations-weather-heading { display: block; margin-bottom: 8px; font-size: 1.2rem; font-weight: 700; }
+#operations-weather-location { display: block; font-size: .82rem; color: #64594b; }
+.operations-weather summary::-webkit-details-marker { display: none; }
+.operations-weather summary:focus-visible { outline: 3px solid #2c5d3b; outline-offset: 3px; }
+.operations-weather-main { display: flex; align-items: center; gap: 12px; font-size: 1.25rem; font-weight: 700; }
+.operations-weather-main p { margin: 0; }
+.operations-weather-more { display: block; margin-top: 10px; color: #674823; font-size: .82rem; }
+.operations-weather-details { border-top: 1px solid #e3d7c2; padding-top: 10px; }
 .operations-card h2 { margin: 0 0 14px; font-size: 1.2rem; }
 .operations-card p { line-height: 1.6; }
 .operations-next {
@@ -3278,7 +3291,7 @@ body.app-shell-page {
 .operations-weather-icon svg { width: 32px; height: 32px; }
 .operations-weather-icon svg[hidden] { display: none; }
 .operations-card small { color: #64594b; }
-#operations-weather-source, #operations-weather-time { display: block; margin-top: 7px; }
+#operations-weather-source, #operations-weather-time, #operations-weather-credit { display: block; margin-top: 7px; }
 .operations-links a { display: block; padding: 8px 0; min-height: 44px; box-sizing: border-box; }
 .operations-date-form, .operations-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .operations-action { display: inline-block; margin: 18px 0; }
@@ -3303,6 +3316,7 @@ body.app-shell-page {
     .operations-shell { padding: 6px 4px 30px; }
     .operations-grid { display: flex; flex-direction: column; gap: 12px; }
     .operations-card { padding: 17px; }
+    .operations-grid .operations-weather, .operations-grid #schedule { grid-column: auto; }
     .operations-date-form { align-items: stretch; }
 }
 
@@ -8984,12 +8998,23 @@ body.shop-task-reorder-lock .shop-task-card {
 .period-sales-summary strong.negative { color: #b33b3b; }
 .period-sales-graph { margin-top: 14px; overflow-x: auto; overscroll-behavior-x: contain; }
 .period-sales-canvas { height: 245px; min-width: 350px; position: relative; }
+.period-weather-markers { position: absolute; inset: 0; pointer-events: none; }
+.period-weather-marker { position: absolute; transform: translateX(-50%); width: 30px; height: 30px; display: grid; place-items: center; padding: 4px; border: 1px solid #cab79e; border-radius: 50%; background: #fffdf8; color: #654820; cursor: pointer; pointer-events: auto; }
+.period-weather-marker .period-weather-icon { width: 18px; height: 18px; }
+.period-weather-marker:focus-visible { outline: 3px solid #2c5d3b; }
+.ranking-period-tabs { display: flex; gap: 8px; margin: 10px 0; }
+.ranking-period-tabs button { min-height: 44px; padding: 6px 12px; border: 1px solid #bda78d; border-radius: 9px; background: #fff; color: #493d34; cursor: pointer; }
+.ranking-period-tabs button[aria-pressed="true"] { background: #7d502f; color: white; }
+.ranking-container[hidden] { display: none; }
+#periodSalesRanking .prod-qty small { display: block; font-size: .72rem; font-weight: 500; }
 .period-sales-ranking { max-height: 280px; overflow-y: auto; overscroll-behavior-y: auto; }
 .period-sales-ranking-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 11px 4px; border-bottom: 1px solid #eae0d5; font-size: .89rem; }
 .period-sales-ranking-row strong { flex-shrink: 0; font-size: .82rem; text-align: right; }
 .dashboard-legacy-details { margin: 16px 0; }
 .dashboard-legacy-details > summary { cursor: pointer; padding: 12px; border-radius: 8px; background: #eee6db; color: #43342a; font-weight: 600; }
 .dashboard-legacy-details .dashboard-legacy-inner { padding-top: 12px; }
+.dashboard-monthly-analysis { margin-top: 20px; }
+.dashboard-monthly-analysis h2 { font-size: 1.2rem; }
 @media (max-width: 600px) {
   .period-sales-panel { padding: 12px 10px; }
   .period-sales-tabs { gap: 4px; }
@@ -9002,6 +9027,13 @@ body.shop-task-reorder-lock .shop-task-card {
 
 /* 日付別の保存済み気象履歴 */
 .period-weather { margin-top: 18px; padding: 12px; background: #f8f4ee; border-radius: 12px; }
+.period-weather-settings { margin-top: 10px; font-size: .82rem; }
+.period-weather-settings summary { cursor: pointer; padding: 9px 0; min-height: 44px; box-sizing: border-box; }
+.period-weather dialog { max-width: min(450px, calc(100vw - 32px)); border: 1px solid #d6c7ad; border-radius: 12px; padding: 20px; color: #493d34; }
+.period-weather dialog::backdrop { background: rgba(32, 25, 19, .52); }
+.period-weather dialog p { display: flex; align-items: center; gap: 6px; }
+.period-weather dialog small { display: block; margin: 8px 0 18px; }
+.period-weather dialog button { min-height: 44px; min-width: 80px; }
 .period-weather h3 { margin-top: 0; }
 .period-weather > p, .period-weather > small { font-size: .78rem; color: #5b5148; }
 .period-weather-entries { max-height: 220px; overflow-y: auto; }

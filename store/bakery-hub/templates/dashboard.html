@@ -41,24 +41,70 @@
         <div><small id="periodSalesComparisonLabel">前期間比</small><strong id="periodSalesComparison">—</strong></div>
       </div>
       <div class="period-sales-graph" role="region" aria-label="期間内の売上金額グラフ" tabindex="0">
-        <div class="period-sales-canvas"><canvas id="periodSalesChart"></canvas></div>
+        <div class="period-sales-canvas"><canvas id="periodSalesChart"></canvas><div id="periodWeatherMarkers" class="period-weather-markers" aria-label="日付ごとの保存済み天気"></div></div>
       </div>
       <section class="period-weather" aria-labelledby="period-weather-heading">
-        <h3 id="period-weather-heading">この期間の天気記録 <small>保存済みの予報・過去の気象データ</small></h3>
+        <h3 id="period-weather-heading">日付の天気 <small>グラフのアイコンを選んで詳細を確認</small></h3>
         <p id="periodWeatherStatus" role="status">記録を読み込み中…</p>
-        <div id="periodWeatherEntries" class="period-weather-entries"></div>
+        <dialog id="periodWeatherDialog" aria-label="天気記録の詳細">
+          <div id="periodWeatherEntries"></div>
+          <button type="button" id="periodWeatherClose">閉じる</button>
+        </dialog>
         {% if not current_user.is_guest %}
-        <button type="button" id="periodWeatherImport" class="period-weather-import">過去の天気を取得・保存</button>
-        <small>店舗の座標と気象API利用設定が必要です。新しい記録が公開されるまで数日かかります。</small>
+        <details class="period-weather-settings">
+          <summary>過去の気象データの取り込み</summary>
+          {% if config.WEATHER_API_MODE == 'met_norway' %}
+          <p>MET Norwayは直近の予報用です。過去の気象データの取り込みには、別途利用許諾済みのAPI設定が必要です。</p>
+          {% else %}
+          <button type="button" id="periodWeatherImport" class="period-weather-import">過去の天気を取得・保存</button>
+          <small>店舗の座標と気象API利用設定が必要です。新しい記録の公開には数日かかります。</small>
+          {% endif %}
+        </details>
         {% endif %}
       </section>
-      <h3>この期間の売れ筋商品 <small>販売個数順</small></h3>
-      <div id="periodSalesRanking" class="period-sales-ranking" aria-live="polite"></div>
+    </section>
+    <section class="dashboard-ranking-panel" aria-labelledby="ranking-heading">
+    <h2 id="ranking-heading" class="ui-icon-layout">
+        <svg class="ui-icon ui-icon-section-heading" data-icon="trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+            <path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"></path>
+            <path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"></path>
+            <path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"></path>
+            <path d="M4 22h16"></path>
+            <path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"></path>
+            <path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"></path>
+        </svg>
+        <span>売れ筋ランキング</span>
+    </h2>
+
+    <div class="ranking-period-tabs" role="group" aria-label="ランキングの対象期間">
+        <button type="button" id="rankingPeriodTab" aria-pressed="true">売上推移の期間</button>
+        <button type="button" id="rankingLegacyTab" aria-pressed="false">年月指定</button>
+    </div>
+    <div id="periodSalesRanking" class="ranking-container" aria-live="polite"></div>
+    <div class="ranking-container" hidden id="rankingContainer" tabindex="0" role="region" aria-label="商品別ランキング（スクロールで全件表示）">
+        {% if ranked_sales %}
+            {% for name, qty in ranked_sales %}
+                <div class="ranking-item">
+                    <div class="rank-badge {% if loop.index <= 3 %}rank-{{ loop.index }}{% endif %}">
+                        {{ loop.index }}
+                    </div>
+                    <div class="prod-name">{{ name }}</div>
+                    <div class="prod-qty">{{ qty }}<span class="prod-unit">個</span></div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-message">
+                該当期間の売上データ（数量）が見つかりませんでした。<br>
+                <small style="color: #bfaea0;">※日次売上入力画面からデータを入力してください。</small>
+            </div>
+        {% endif %}
+    </div>
+
+    </section>
     </section>
 
-    <details class="dashboard-legacy-details" open>
-      <summary>詳細分析・AIアドバイス（従来の年月指定）</summary>
-      <div class="dashboard-legacy-inner">
+    <section class="dashboard-monthly-analysis" aria-labelledby="monthly-analysis-heading">
+      <h2 id="monthly-analysis-heading">年月を指定して分析・AIアドバイス</h2>
     <p class="dashboard-filter-guidance">
         ※表示期間を変更した後は、【データを抽出】ボタンを押してください。
     </p>
@@ -123,39 +169,6 @@
         <span>表示期間：<strong id="periodTitle">{{ period_text }}</strong></span>
     </p>
 
-    <section class="dashboard-ranking-panel" aria-labelledby="ranking-heading">
-    <h2 id="ranking-heading" class="ui-icon-layout">
-        <svg class="ui-icon ui-icon-section-heading" data-icon="trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
-            <path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"></path>
-            <path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"></path>
-            <path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"></path>
-            <path d="M4 22h16"></path>
-            <path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"></path>
-            <path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"></path>
-        </svg>
-        <span>売れ筋ランキング</span>
-    </h2>
-
-    <div class="ranking-container" id="rankingContainer" tabindex="0" role="region" aria-label="商品別ランキング（スクロールで全件表示）">
-        {% if ranked_sales %}
-            {% for name, qty in ranked_sales %}
-                <div class="ranking-item">
-                    <div class="rank-badge {% if loop.index <= 3 %}rank-{{ loop.index }}{% endif %}">
-                        {{ loop.index }}
-                    </div>
-                    <div class="prod-name">{{ name }}</div>
-                    <div class="prod-qty">{{ qty }}<span class="prod-unit">個</span></div>
-                </div>
-            {% endfor %}
-        {% else %}
-            <div class="empty-message">
-                該当期間の売上データ（数量）が見つかりませんでした。<br>
-                <small style="color: #bfaea0;">※日次売上入力画面からデータを入力してください。</small>
-            </div>
-        {% endif %}
-    </div>
-
-    </section>
     <section class="dashboard-chart-panel" aria-labelledby="sales-chart-heading">
     <h2 id="sales-chart-heading" class="ui-icon-layout">
         <svg class="ui-icon ui-icon-section-heading" data-icon="chart-column" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
@@ -223,8 +236,7 @@
     </div>
 
     </section>
-      </div>
-    </details>
+    </section>
     <div class="dashboard-actions">
         <a
             href="{{ url_for('input_sales') }}"
@@ -260,6 +272,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let period = 'week';
     let offset = 0;
     let requestSerial = 0;
+    const periodRank = document.getElementById('periodSalesRanking');
+    const legacyRank = document.getElementById('rankingContainer');
+    const periodTab = document.getElementById('rankingPeriodTab');
+    const legacyTab = document.getElementById('rankingLegacyTab');
+    function selectRanking(showPeriod) {
+        periodRank.hidden = !showPeriod;
+        legacyRank.hidden = showPeriod;
+        periodTab.setAttribute('aria-pressed', String(showPeriod));
+        legacyTab.setAttribute('aria-pressed', String(!showPeriod));
+    }
+    periodTab.addEventListener('click', () => selectRanking(true));
+    legacyTab.addEventListener('click', () => selectRanking(false));
+    selectRanking(true);
     const status = document.getElementById('periodSalesStatus');
     const labels = document.getElementById('periodSalesLabel');
     const money = value => '¥' + Number(value).toLocaleString('ja-JP');
@@ -272,6 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }] },
         options: {
             responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 28 } },
             plugins: { legend: { display: false },
                 tooltip: { callbacks: { label: ctx => money(ctx.parsed.y || 0) } } },
             scales: { y: { beginAtZero: true, ticks: {
@@ -299,6 +325,9 @@ document.addEventListener('DOMContentLoaded', () => {
             comparison.classList.toggle('negative', data.difference < 0);
             graph.data.labels = data.chart_labels;
             graph.data.datasets[0].data = data.chart_values;
+            document.querySelector('.period-sales-canvas').style.minWidth =
+                period === 'month' ? Math.max(460, data.chart_labels.length * 34) + 'px' : '';
+
             graph.update();
             const rank = document.getElementById('periodSalesRanking');
             rank.replaceChildren();
@@ -309,19 +338,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             data.rankings.forEach((item, index) => {
                 const row = document.createElement('div');
-                row.className = 'period-sales-ranking-row';
-                const title = document.createElement('span');
-                title.textContent = (index + 1) + '位　' + item.name;
-                const values = document.createElement('strong');
-                values.textContent = item.quantity.toLocaleString('ja-JP') +
-                    '個 / ' + money(item.revenue);
-                row.append(title, values);
+                row.className = 'ranking-item';
+                const badge = document.createElement('div');
+                badge.className = 'rank-badge' + (index < 3 ? ' rank-' + (index + 1) : '');
+                badge.textContent = String(index + 1);
+                const title = document.createElement('div');
+                title.className = 'prod-name';
+                title.textContent = item.name;
+                const values = document.createElement('div');
+                values.className = 'prod-qty';
+                values.textContent = item.quantity.toLocaleString('ja-JP') + '個';
+                const revenue = document.createElement('small');
+                revenue.textContent = money(item.revenue);
+                values.append(revenue);
+                row.append(badge, title, values);
                 rank.append(row);
             });
             status.textContent = '実績：' + data.actual_through +
                 '（未到来の日付は集計していません）';
             document.getElementById('periodSalesNext').disabled = offset >= 0;
-            loadStoredWeather();
+            loadStoredWeather(data.chart_labels.length);
         } catch (error) {
             if (current !== requestSerial) return;
             status.textContent = '集計を取得できませんでした。期間を選び直してください。';
@@ -351,10 +387,67 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         return svg;
     }
-    async function loadStoredWeather() {
-        const existing = document.getElementById('periodWeatherEntries');
+    const weatherDialog = document.getElementById('periodWeatherDialog');
+    const markers = document.getElementById('periodWeatherMarkers');
+    let markerRows = [];
+    document.getElementById('periodWeatherClose').addEventListener('click', () => weatherDialog.close());
+    function weatherDetail(date, forecast, observed) {
+        const area = document.getElementById('periodWeatherEntries');
+        area.replaceChildren();
+        const heading = document.createElement('h3');
+        heading.textContent = date + 'の天気記録';
+        area.append(heading);
+        if (forecast) {
+            const row = document.createElement('p');
+            row.append(weatherIcon(forecast.weather_code), document.createTextNode('取得当時の予報：' + forecast.weather));
+            const meta = document.createElement('small');
+            meta.textContent = forecast.location + ' / ' + forecast.valid_at.slice(11, 16) +
+                '対象 / ' + forecast.fetched_at.slice(11, 16) + '取得 / ';
+            const credit = document.createElement('a');
+            credit.href = 'https://creativecommons.org/licenses/by/4.0/';
+            credit.target = '_blank';
+            credit.rel = 'noopener noreferrer';
+            credit.textContent = forecast.source + '（天気区分を要約・CC BY 4.0）';
+            meta.append(credit);
+            area.append(row, meta);
+        }
+        if (observed) {
+            const row = document.createElement('p');
+            row.append(weatherIcon(observed.weather_code), document.createTextNode('過去の気象データ：' + observed.weather +
+                (observed.precipitation_mm === null ? '' : ' / 降水量 ' + observed.precipitation_mm + 'mm') +
+                (observed.max_temperature_c === null ? '' : ' / 最高 ' + observed.max_temperature_c + '℃')));
+            area.append(row);
+        }
+        weatherDialog.showModal();
+    }
+    function renderWeatherMarkers() {
+        markers.replaceChildren();
+        if (period === 'year' || !graph.chartArea) return;
+        for (const row of markerRows) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'period-weather-marker';
+            // 過去の気象データがあればアイコンに優先し、詳細では両方を表示する。
+            const preferred = row.observed || row.forecast;
+            button.append(weatherIcon(preferred.weather_code));
+            button.setAttribute('aria-label', row.date + ' ' +
+                (row.observed ? '過去の気象データ' : '取得当時の予報') + '：' + preferred.weather + '。詳細を開く');
+            button.title = button.getAttribute('aria-label');
+            button.style.left = graph.scales.x.getPixelForValue(row.index) + 'px';
+            button.style.top = Math.max(0, graph.chartArea.top - 27) + 'px';
+            button.addEventListener('click', () => weatherDetail(row.date, row.forecast, row.observed));
+            markers.append(button);
+        }
+    }
+    window.addEventListener('resize', renderWeatherMarkers);
+    async function loadStoredWeather(labelCount) {
         const info = document.getElementById('periodWeatherStatus');
-        existing.replaceChildren();
+        markerRows = [];
+        renderWeatherMarkers();
+        if (period === 'year') {
+            info.textContent = '年別グラフは月単位のため、天気アイコンは表示しません。';
+            return;
+        }
         info.textContent = '保存済みの天気を確認中…';
         const requestedPeriod = period;
         const requestedOffset = offset;
@@ -366,43 +459,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (period !== requestedPeriod || offset !== requestedOffset) return;
             const observed = new Map((payload.weather || []).map(row => [row.date, row]));
             const forecasts = new Map((payload.forecasts || []).map(row => [row.date, row]));
-            info.textContent = observed.size || forecasts.size
-                ? '保存済みの予報 ' + forecasts.size + '日・過去の気象データ ' + observed.size + '日'
-                : 'この期間の天気記録は未登録です。';
-            for (let stamp = Date.parse(payload.end + 'T00:00:00Z'); stamp >= Date.parse(payload.start + 'T00:00:00Z'); stamp -= 86400000) {
+            for (let index = 0; index < labelCount; index++) {
+                const stamp = Date.parse(payload.start + 'T00:00:00Z') + index * 86400000;
                 const date = new Date(stamp).toISOString().slice(0, 10);
-                const line = document.createElement('div');
-                line.className = 'period-weather-row';
-                const day = document.createElement('strong');
-                day.textContent = date;
-                const details = document.createElement('div');
                 const forecast = forecasts.get(date);
-                if (forecast) {
-                    const summary = document.createElement('div');
-                    summary.append(weatherIcon(forecast.weather_code), document.createTextNode('取得当時の予報：' + forecast.weather));
-                    const meta = document.createElement('small');
-                    meta.append(document.createTextNode(forecast.location + ' / ' + forecast.valid_at.slice(11, 16) + '対象 / ' + forecast.fetched_at.slice(11, 16) + '取得 / '));
-                    const credit = document.createElement('a');
-                    credit.href = 'https://creativecommons.org/licenses/by/4.0/';
-                    credit.target = '_blank';
-                    credit.rel = 'noopener noreferrer';
-                    credit.textContent = forecast.source + '（CC BY 4.0）';
-                    meta.append(credit);
-                    details.append(summary, meta);
-                }
-                const entry = observed.get(date);
-                if (entry) {
-                    const result = document.createElement('div');
-                    result.append(weatherIcon(entry.weather_code), document.createTextNode('過去の気象データ：' + entry.weather +
-                        (entry.precipitation_mm === null ? '' : ' / 降水量 ' + entry.precipitation_mm + 'mm') +
-                        (entry.max_temperature_c === null ? '' : ' / 最高 ' + entry.max_temperature_c + '℃')));
-                    details.append(result);
-                }
-                if (!forecast && !entry) details.textContent = '記録なし';
-                line.append(day, details);
-                existing.append(line);
+                const observation = observed.get(date);
+                if (forecast || observation) markerRows.push({index, date, forecast, observed: observation});
             }
+            renderWeatherMarkers();
+            info.textContent = markerRows.length ? '天気記録 ' + markerRows.length + '日（アイコンから詳細）' :
+                'この期間に保存済みの天気はありません。';
         } catch (error) {
+            if (period !== requestedPeriod || offset !== requestedOffset) return;
             info.textContent = '天気記録を取得できませんでした。';
             console.error(error);
         }
@@ -425,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || '保存に失敗しました。');
-            await loadStoredWeather();
+            await loadStoredWeather(graph.data.labels.length);
             info.textContent = data.message + '（新規 ' + data.saved + '日分）';
         } catch (error) {
             info.textContent = error.message;

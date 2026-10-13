@@ -89,7 +89,11 @@ def test_dashboard_contains_period_controls(authenticated_client, period_records
                   'data-sales-period="month"', 'data-sales-period="year"'):
         assert value in html
     assert 'periodSalesChart' in html
-    assert 'dashboard-legacy-details' in html
+    assert 'dashboard-legacy-details' not in html
+    assert 'id="rankingPeriodTab"' in html
+    assert 'id="rankingLegacyTab"' in html
+    assert 'id="selectYear"' in html
+    assert 'id="aiAdviceButton"' in html
 
 
 def test_dataset_isolation_for_period_summary(authenticated_client, period_records, admin_dataset):
