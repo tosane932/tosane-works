@@ -64,6 +64,16 @@
             <a href="{{ url_for('shop_schedules.list_schedules') }}">予定一覧・別の日を見る</a>
         </section>
 
+        <section class="operations-card operations-news" id="bakery-news" aria-labelledby="bakery-news-heading">
+            <div class="operations-card-heading">
+                <h2 id="bakery-news-heading">BakeryNews</h2>
+                <a href="{{ url_for('bakery_news_list') }}">記事一覧</a>
+            </div>
+            <p id="bakery-news-status" role="status">記事を確認中です。</p>
+            <ul id="bakery-news-list"></ul>
+            <small>出典：農林水産省。記事は提供元で確認できます。</small>
+        </section>
+
         <section class="operations-card operations-links" aria-labelledby="operations-links-heading">
             <h2 id="operations-links-heading">次の作業へ</h2>
             <a href="{{ url_for('material_orders.list_items') }}">店舗メモツールへ</a>

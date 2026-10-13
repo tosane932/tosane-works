@@ -127,8 +127,39 @@
         }
     }
 
+    async function loadBakeryNews() {
+        const status = document.getElementById("bakery-news-status");
+        const list = document.getElementById("bakery-news-list");
+        if (!status || !list) return;
+        try {
+            const response = await fetch("/api/bakery-news", {credentials: "same-origin"});
+            if (!response.ok) throw new Error("news");
+            const data = await response.json();
+            list.replaceChildren();
+            for (const article of data.articles) {
+                const item = document.createElement("li");
+                const link = document.createElement("a");
+                link.href = article.url;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = article.title;
+                const date = document.createElement("time");
+                date.dateTime = article.published;
+                date.textContent = new Intl.DateTimeFormat("ja-JP", {
+                    timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric",
+                }).format(new Date(article.published));
+                item.append(link, date);
+                list.append(item);
+            }
+            status.textContent = data.articles.length ? "" : "最近の関連する記事はありません。";
+        } catch {
+            status.textContent = "記事を取得できませんでした。提供元のサイトをご確認ください。";
+        }
+    }
+
     renderClock();
     refreshWeather();
+    loadBakeryNews();
     window.setInterval(() => {
         if (!document.hidden) {
             renderClock();
