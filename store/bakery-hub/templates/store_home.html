@@ -64,6 +64,31 @@
             <a href="{{ url_for('shop_schedules.list_schedules') }}">予定一覧・別の日を見る</a>
         </section>
 
+        <section class="operations-card operations-news" id="bakery-news" aria-labelledby="bakery-news-heading">
+            <div class="operations-card-heading">
+                <h2 id="bakery-news-heading">BakeryNews</h2>
+                <a href="{{ url_for('bakery_news_list') }}">記事一覧</a>
+            </div>
+            <p id="bakery-news-status" role="status">記事を確認中です。</p>
+            <ul id="bakery-news-list"></ul>
+            <small>出典：農林水産省。記事は提供元で確認できます。</small>
+        </section>
+
+        <section class="operations-card operations-puoppo" id="puoppo" aria-labelledby="puoppo-heading">
+            <h2 id="puoppo-heading">Puoppo｜見出しのAI分析</h2>
+            {% if config.PUOPPO_INTEGRATION_ENABLED and not current_user.is_guest %}
+            <form action="https://puoppo.onrender.com/" method="GET">
+                <label for="puoppo-keyword">調べたいキーワード</label>
+                <input id="puoppo-keyword" name="keyword" type="text" maxlength="100" required autocomplete="off">
+                <button type="submit">Puoppoで検索語を開く</button>
+            </form>
+            <small>Puoppoで許可アカウントへログイン後、内容を確認してから分析を実行します。ホーム表示だけではAIを利用しません。</small>
+            {% else %}
+            <p>AI分析連携は現在利用できません。Puoppo側のアクセス制御を確認してから有効化します。</p>
+            <a href="https://puoppo.onrender.com/" target="_blank" rel="noopener noreferrer">Puoppoを開く</a>
+            {% endif %}
+        </section>
+
         <section class="operations-card operations-links" aria-labelledby="operations-links-heading">
             <h2 id="operations-links-heading">次の作業へ</h2>
             <a href="{{ url_for('material_orders.list_items') }}">店舗メモツールへ</a>

@@ -3293,6 +3293,13 @@ body.app-shell-page {
 .operations-card small { color: #64594b; }
 #operations-weather-source, #operations-weather-time, #operations-weather-credit { display: block; margin-top: 7px; }
 .operations-links a { display: block; padding: 8px 0; min-height: 44px; box-sizing: border-box; }
+.operations-news ul { list-style: none; margin: 0; padding: 0; }
+.operations-news li { display: grid; gap: 3px; padding: 9px 0; border-bottom: 1px solid #eee4d6; }
+.operations-news li a { display: block; min-height: 44px; overflow-wrap: anywhere; }
+.operations-news time, .operations-news small { font-size: .78rem; color: #64594b; }
+.operations-puoppo form { display: grid; gap: 8px; }
+.operations-puoppo input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px; border: 1px solid #b7a890; border-radius: 8px; font: inherit; }
+.operations-puoppo button { min-height: 44px; padding: 8px 12px; border: 0; border-radius: 8px; background: #614d78; color: white; font: inherit; cursor: pointer; }
 .operations-date-form, .operations-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .operations-action { display: inline-block; margin: 18px 0; }
 .operations-form { display: grid; gap: 18px; max-width: 620px; }
