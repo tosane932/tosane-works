@@ -60,7 +60,8 @@
             line-height: 1.6;
         }
 
-        /* GeminiのMarkdown出力（リストや強調）が荒れずに表示されるよう最低限だけ整える */
+        /* 外部生成テキストをHTMLとして解釈せず、改行を読みやすく表示する */
+        .analysis-box { white-space: pre-wrap; overflow-wrap: anywhere; }
         .analysis-box ul {
             padding-left: 20px;
             margin: 10px 0;
@@ -107,8 +108,8 @@
         <div class="keyword-badge">検索ワード: {{ keyword }}</div>
 
         <h2>🤖 AI「Puoppo」による分析レポート</h2>
-        <!-- app.py側でMarkdown→HTMLに変換済みのため safe を付けてそのまま表示します -->
-        <div class="analysis-box">{{ result | safe }}</div>
+        <div class="analysis-box">{{ result }}</div>
+        <p>ニュース見出しを元にした推測であり、世論全体を代表する調査結果ではありません。</p>
 
         <h2>📰 分析の元になった最新ニュース</h2>
         <ul class="news-list">

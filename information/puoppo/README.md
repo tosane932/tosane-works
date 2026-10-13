@@ -68,7 +68,9 @@ RSSから集めた最大100件の見出しをもとに、AIが情報をまとめ
 ### **「検索履歴とGoogleログイン関連処理」**
   SQLiteの `history` テーブルへ検索キーワード・日時を保存し、一覧表示・削除ができます。現在の履歴は利用者別に分離していません。
 
-  AuthlibによるGoogle OAuthとFlask-Loginによるログイン状態管理のコードを残していますが、Googleログインは既定で無効です。`GOOGLE_LOGIN_ENABLED=true` と `SECRET_KEY`・`GOOGLE_CLIENT_ID`・`GOOGLE_CLIENT_SECRET` の全設定が揃った場合だけ有効になります。無効時・設定不足時はログインボタンを表示せず、`/login`・`/login/google/callback`・`/logout` は404を返します。検索・分析はログイン必須ではありません。これらはコード上の条件であり、公開環境で実際のGoogle認証が利用できることを確認した記述ではありません。
+  AuthlibによるGoogle OAuthとFlask-Loginによるログイン状態管理のコードを残しています。AI分析には `GOOGLE_LOGIN_ENABLED=true`、`SECRET_KEY`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` と `PUOPPO_ALLOWED_EMAILS`（カンマ区切りの許可メール）がすべて必要です。未設定なら公開POST `/search` は403を返し、Geminiを呼びません。認証済みの許可ユーザーでも1日5回・最短60秒間隔、CSRF付きPOSTのみです。既存の共有検索履歴は表示・新規保存・削除を停止します。既存DBの行は削除しません。実際のOAuth利用可否とGoogle側の請求上限は本番環境で別途確認が必要です。
+
+  Bakery Hubからの連携は検索語をPuoppoのトップへGETで引き渡し、入力欄へ入れるだけです。GETではRSSやGeminiを呼びません。許可アカウントでログイン後、本人がPuoppo側の分析ボタンを押したときだけ費用のかかる処理を実行します。Renderの無料ディスクを使うSQLiteの利用回数記録はサービス再作成時に失われるため、Google側のAPI予算上限も別途設定してください。
 
 ---
 
