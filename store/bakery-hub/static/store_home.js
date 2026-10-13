@@ -89,6 +89,13 @@
             if (!response.ok) throw new Error("weather");
             const data = await response.json();
             status.textContent = data.available ? data.weather : data.reason;
+            if (data.available && data.source === "MET Norway 予報") {
+                // The server reads its validated forecast again; no weather content is sent by the browser.
+                fetch("/api/home/weather/record", {
+                    method: "POST", credentials: "same-origin",
+                    headers: {"X-CSRFToken": document.querySelector('meta[name="csrf-token"]').content},
+                }).catch(() => {});
+            }
             document.getElementById("operations-weather-location").textContent =
                 data.available ? "対象地点：" + data.location : "";
             document.getElementById("operations-weather-source").textContent =
