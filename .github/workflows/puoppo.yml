@@ -73,7 +73,7 @@ jobs:
               assert client.get("/static/style.css").status_code == 200
               assert client.get("/login").status_code == 404
               assert client.get("/login/google/callback").status_code == 404
-              assert client.get("/logout").status_code == 404
+              assert client.get("/logout").status_code == 405
           PY
 
       - name: 認証・履歴・API回数制限を検証
