@@ -5,6 +5,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}"></head>
 <body class="app-shell-page staff-shifts-page">{% include "_app_navigation.html" %}
 <main class="staff-shifts-shell"><a href="{{ url_for('.index', month=shift.business_date.strftime('%Y-%m'), date=shift.business_date.isoformat()) }}#day-shifts">← この日の勤務予定へ戻る</a>
+{% include "_flash_notices.html" %}
 <section class="staff-shifts-panel staff-shifts-detail">
     <h1>勤務予定の詳細</h1>
     <p>実際の出退勤記録ではありません。</p>

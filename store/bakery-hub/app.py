@@ -55,6 +55,7 @@ from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
 from shop_schedules import as_jst, create_shop_schedules_blueprint, daily_schedules, schedule_snapshot
 from shop_staff_shifts import create_shop_staff_shifts_blueprint, planned_work_for_day
+from flash_notices import LOGIN_REQUIRED_MESSAGE, discard_login_required_flashes, visible_flash_messages
 from current_weather import current_weather
 from bakery_news import get_news
 from forecast_history import save_forecast, stored_forecasts
@@ -141,6 +142,9 @@ migrate = Migrate(app, db)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
+login_manager.login_message = LOGIN_REQUIRED_MESSAGE
+login_manager.login_message_category = "warning"
+app.jinja_env.globals["visible_flash_messages"] = visible_flash_messages
 
 
 @app.after_request
@@ -1286,6 +1290,7 @@ def login():
                 session[ADMIN_AUTH_FINGERPRINT_SESSION_KEY] = (
                     _get_admin_auth_fingerprint(configured_password_hash)
                 )
+                discard_login_required_flashes()
                 return redirect(url_for("home"))
 
             if not _reserve_admin_login_failure(client_key_hash):

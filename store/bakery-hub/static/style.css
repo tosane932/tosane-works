@@ -9199,6 +9199,12 @@ body.shop-task-reorder-lock .shop-task-card {
     height: 100%;
     object-fit: contain;
 }
+/* Login and staff-management notices share one readable, category-aware style. */
+.app-flash { margin: 10px 0; padding: 12px; border: 1px solid; border-radius: 8px; overflow-wrap: anywhere; }
+.app-flash--success { border-color: #90b59b; background: #edf5ef; color: #28583b; }
+.app-flash--warning { border-color: #c9a674; background: #fff8e9; color: #654513; }
+.app-flash--error { border-color: #d2a0a0; background: #fff1f1; color: #822f2f; }
+.app-flash--neutral { border-color: #cabfb1; background: #f5f3ef; color: #403831; }
 @media (max-width: 700px) {
     .hidamari-banner { max-height: 170px; }
 }

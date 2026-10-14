@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}"></head>
 <body class="app-shell-page staff-shifts-page">{% include "_app_navigation.html" %}
-<main class="staff-shifts-shell"><section class="staff-shifts-panel staff-shifts-detail">
+<main class="staff-shifts-shell">{% include "_flash_notices.html" %}<section class="staff-shifts-panel staff-shifts-detail">
     <h1>操作を確認</h1>
     {% if kind == 'staff' %}
     <p>{{ row.display_name }}さんを{{ '退職済み' if target == '0' else '在籍中' }}に変更しますか？過去のシフトは残ります。</p>

@@ -11,6 +11,7 @@
 <body class="app-shell-page staff-shifts-page">
 {% include "_app_navigation.html" %}
 <main class="staff-shifts-shell">
+    {% include "_flash_notices.html" %}
     <a href="{% if editing %}{{ url_for('.shift_detail', shift_id=shift.id) }}{% else %}{{ url_for('.index', month=values.business_date[:7], date=values.business_date) }}#day-shifts{% endif %}">← {{ '勤務予定の詳細' if editing else 'この日の勤務予定' }}へ戻る</a>
     <section class="staff-shifts-panel staff-shifts-form">
         <h1>{{ '勤務予定を編集' if editing else '勤務予定を登録' }}</h1>

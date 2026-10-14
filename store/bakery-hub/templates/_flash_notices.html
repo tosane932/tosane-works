@@ -1,0 +1,4 @@
+{% for category, message in visible_flash_messages() %}
+{% set kind = category if category in ('success', 'warning', 'error') else 'neutral' %}
+<p class="app-flash app-flash--{{ kind }}" role="{{ 'alert' if kind in ('warning', 'error') else 'status' }}">{{ message }}</p>
+{% endfor %}
