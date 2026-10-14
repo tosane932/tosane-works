@@ -13,6 +13,8 @@
     {% set active_app_page = 'dashboard' %}
 {% elif current_endpoint.startswith('shop_staff_shifts.') %}
     {% set active_app_page = 'staff-shifts' %}
+{% elif current_endpoint.startswith('production_prep.') %}
+    {% set active_app_page = 'prep' %}
 {% elif current_endpoint == 'system_overview' %}
     {% set active_app_page = 'system-overview' %}
 {% elif
@@ -256,6 +258,16 @@
                 </svg>
             </span>
             <span>スタッフ・シフト管理</span>
+        </a>
+        <a href="{{ url_for('production_prep.index') }}" data-page="prep"
+            class="app-sidebar-link app-sidebar-link-prep touch-control-no-select{% if active_app_page == 'prep' %} app-sidebar-link-current{% endif %}"
+            {% if active_app_page == 'prep' %}aria-current="page"{% endif %}>
+            <span class="app-sidebar-icon" aria-hidden="true">
+                <svg data-icon="wheat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
+                    <path d="M2 22 16 8M9 15l-3-3M11 13l3 3M13 11l-3-3M15 9l3 3M17 7l-3-3M19 5l2-2"/>
+                </svg>
+            </span>
+            <span>仕込み管理</span>
         </a>
         {% endif %}
         <div class="app-sidebar-nav-divider" aria-hidden="true"></div>

@@ -85,6 +85,7 @@
                 {% if item.memo %}
                 <p class="material-order-memo">メモ：{{ item.memo }}</p>
                 {% endif %}
+                {% if phone_links[item.id] %}<a href="{{ phone_links[item.id] }}" aria-label="{{ item.name }}の発注先へ電話をかける">電話をかける</a>{% endif %}
 
                 <div class="material-order-actions">
                     <form method="POST" action="{{ url_for('material_orders.set_completion', item_id=item.id) }}">
@@ -138,6 +139,7 @@
                 {% if item.memo %}
                 <p class="material-order-memo">メモ：{{ item.memo }}</p>
                 {% endif %}
+                {% if phone_links[item.id] %}<a href="{{ phone_links[item.id] }}" aria-label="{{ item.name }}の発注先へ電話をかける">電話をかける</a>{% endif %}
 
                 <div class="material-order-actions">
                     <form method="POST" action="{{ url_for('material_orders.set_completion', item_id=item.id) }}">
