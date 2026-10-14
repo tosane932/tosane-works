@@ -26,11 +26,12 @@ APP_SIDEBAR_ITEMS = {
     "dashboard": ("売上データ分析", "chart-column"),
     "shop-tools": ("店舗メモツール", "wrench"),
     "staff-shifts": ("スタッフ・シフト管理", "calendar-days"),
+    "prep": ("仕込み管理", "wheat"),
     "system-overview": ("システム概要", "book-open"),
 }
 
 SIDEBAR_ROUTES = {**APP_ROUTES, "system-overview": "/system-overview"}
-ADMIN_ONLY_ROUTES = {"staff-shifts": "/staff-shifts"}
+ADMIN_ONLY_ROUTES = {"staff-shifts": "/staff-shifts", "prep": "/prep"}
 
 
 def _assert_inline_icon(container, icon_name):

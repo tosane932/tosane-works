@@ -44,10 +44,13 @@ def test_postgresql_dataset_constraints_and_concurrent_plan_posts():
             conn.execute(text("CREATE SCHEMA public"))
             db.metadata.create_all(conn)
             admin, guest = uuid.uuid4(), uuid.uuid4()
-            conn.execute(Dataset.__table__.insert(), [
-                {"id": admin, "kind": "admin", "system_key": "admin"},
-                {"id": guest, "kind": "guest", "absolute_expires_at": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)},
-            ])
+            conn.execute(Dataset.__table__.insert().values(
+                id=admin, kind="admin", system_key="admin",
+            ))
+            conn.execute(Dataset.__table__.insert().values(
+                id=guest, kind="guest",
+                absolute_expires_at=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2),
+            ))
             recipe_id = conn.execute(PrepRecipe.__table__.insert().values(
                 dataset_id=admin, product_key="template:croissant", display_name="クロワッサン", base_quantity=10
             ).returning(PrepRecipe.id)).scalar_one()
