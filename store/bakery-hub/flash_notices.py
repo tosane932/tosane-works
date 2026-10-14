@@ -1,6 +1,7 @@
 """Present Flash notices without losing their category or unrelated messages."""
 
 from flask import get_flashed_messages, session
+from flask_login import current_user
 
 
 LOGIN_REQUIRED_MESSAGE = "このページを利用するにはログインが必要です。"
@@ -17,6 +18,8 @@ def visible_flash_messages():
     for category, message in get_flashed_messages(with_categories=True):
         category, message = str(category), str(message)
         if (category, message) in _LOGIN_REQUIRED_FLASHES:
+            if current_user.is_authenticated:
+                continue  # An already-valid session may still carry a pre-deployment prompt.
             category, message = "warning", LOGIN_REQUIRED_MESSAGE
         pair = (category, message)
         if pair not in seen:

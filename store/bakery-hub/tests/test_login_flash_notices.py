@@ -111,6 +111,22 @@ def test_duplicate_same_category_is_collapsed_but_other_notices_and_xss_survive(
     assert not page(authenticated_client.get("/staff-shifts")).select(".app-flash")
 
 
+def test_existing_authenticated_session_does_not_show_stale_login_prompt(authenticated_client, admin_dataset):
+    with authenticated_client.session_transaction() as session:
+        session["_flashes"] = [
+            ("message", "Please log in to access this page."),
+            ("warning", LOGIN_WARNING),
+            ("error", "保存内容を確認してください。"),
+        ]
+    clear_user_cache()
+    response = authenticated_client.get("/staff-shifts")
+    assert response.status_code == 200
+    assert [notice.get_text(strip=True) for notice in page(response).select(".app-flash")] == [
+        "保存内容を確認してください。",
+    ]
+    assert "Please log in" not in response.get_data(as_text=True)
+
+
 def test_detail_and_existing_success_notices(authenticated_client, admin_dataset, csrf_token):
     token = csrf_token(authenticated_client, "/staff-shifts/staff/new")
     get_new = page(authenticated_client.get("/staff-shifts/staff/new"))
