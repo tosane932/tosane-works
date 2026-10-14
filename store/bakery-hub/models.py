@@ -465,6 +465,69 @@ class Product(db.Model):
     daily_sales = db.relationship("DailySales", backref="product", lazy=True)
 
 
+class PrepRecipe(db.Model):
+    """月次Productから独立した、Admin用の再利用可能な配合。"""
+    __tablename__ = "prep_recipes"
+    __table_args__ = (
+        db.UniqueConstraint("id", "dataset_id", name="uq_prep_recipes_id_dataset"),
+        db.UniqueConstraint("dataset_id", "product_key", name="uq_prep_recipes_product_key"),
+        db.CheckConstraint("length(trim(display_name)) BETWEEN 1 AND 100", name="ck_prep_recipes_name"),
+        db.CheckConstraint("base_quantity BETWEEN 1 AND 1000", name="ck_prep_recipes_base_quantity"),
+        db.CheckConstraint("length(note) <= 2000", name="ck_prep_recipes_note"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False)
+    product_key = db.Column(db.String(128), nullable=False)
+    display_name = db.Column(db.String(100), nullable=False)
+    image_key = db.Column(db.String(100), nullable=True)
+    base_quantity = db.Column(db.Integer, nullable=False)
+    note = db.Column(db.String(2000), nullable=False, default="", server_default="")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
+    ingredients = db.relationship("PrepIngredient", back_populates="recipe", cascade="all, delete-orphan", order_by="PrepIngredient.id")
+    plans = db.relationship("PrepPlan", back_populates="recipe")
+
+
+class PrepIngredient(db.Model):
+    __tablename__ = "prep_ingredients"
+    __table_args__ = (
+        db.ForeignKeyConstraint(["recipe_id", "dataset_id"], ["prep_recipes.id", "prep_recipes.dataset_id"], name="fk_prep_ingredients_recipe_dataset", ondelete="CASCADE"),
+        db.UniqueConstraint("recipe_id", "name", "unit", name="uq_prep_ingredients_recipe_name_unit"),
+        db.CheckConstraint("length(trim(name)) BETWEEN 1 AND 100", name="ck_prep_ingredients_name"),
+        db.CheckConstraint("unit IN ('g', 'ml', '個')", name="ck_prep_ingredients_unit"),
+        db.CheckConstraint("amount > 0 AND amount <= 1000000", name="ck_prep_ingredients_amount"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False)
+    recipe_id = db.Column(db.Integer, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    unit = db.Column(db.String(4), nullable=False)
+    amount = db.Column(db.Numeric(14, 3), nullable=False)
+    recipe = db.relationship("PrepRecipe", back_populates="ingredients")
+
+
+class PrepPlan(db.Model):
+    """JST業務日ごとの予定数。実際の製造・在庫履歴ではない。"""
+    __tablename__ = "prep_plans"
+    __table_args__ = (
+        db.ForeignKeyConstraint(["recipe_id", "dataset_id"], ["prep_recipes.id", "prep_recipes.dataset_id"], name="fk_prep_plans_recipe_dataset", ondelete="RESTRICT"),
+        db.UniqueConstraint("dataset_id", "recipe_id", "business_date", name="uq_prep_plans_recipe_day"),
+        db.CheckConstraint("quantity BETWEEN 0 AND 1000", name="ck_prep_plans_quantity"),
+        db.Index("ix_prep_plans_dataset_day", "dataset_id", "business_date"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", ondelete="CASCADE"), nullable=False)
+    recipe_id = db.Column(db.Integer, nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
+    recipe = db.relationship("PrepRecipe", back_populates="plans")
+
+
 class DailySales(db.Model):
     """商品ごとの日別の販売数量を記録するテーブル。"""
     __tablename__ = "daily_sales"

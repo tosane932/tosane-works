@@ -48,6 +48,7 @@ from models import (
 )
 from google import genai
 from material_orders import create_material_orders_blueprint
+from production_prep import create_production_prep_blueprint
 from prompts import build_sales_prompt
 from sales_period_summary import PERIOD_OFFSETS, sales_period_summary, period_bounds
 from weather_history import WeatherHistoryError, import_weather, stored_weather
@@ -541,6 +542,13 @@ app.register_blueprint(
     create_shop_staff_shifts_blueprint(
         access_required=admin_required,
         resolve_dataset=require_current_dataset,
+    )
+)
+app.register_blueprint(
+    create_production_prep_blueprint(
+        access_required=admin_required,
+        resolve_dataset=require_current_dataset,
+        business_today=business_today,
     )
 )
 

@@ -3365,6 +3365,10 @@ body.app-shell-page {
     --app-menu-color: #72583b;
 }
 
+.app-sidebar-link-prep {
+    --app-menu-color: var(--bakery-products-color);
+}
+
 .app-sidebar-icon {
     width: 24px;
     height: 24px;

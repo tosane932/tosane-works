@@ -173,6 +173,7 @@ def test_postgresql_migrations_reach_head_and_preserve_existing_data():
                 "material_order_items",
                 "shop_memos",
                 "shop_tasks",
+                "prep_recipes", "prep_ingredients", "prep_plans",
                 "alembic_version",
             }.issubset(inspector.get_table_names())
             assert db.session.execute(

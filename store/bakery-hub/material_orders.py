@@ -1,4 +1,5 @@
 import logging
+import re
 
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 from sqlalchemy.exc import SQLAlchemyError
@@ -12,6 +13,21 @@ MATERIAL_ORDER_ITEM_LIMIT = 100
 MATERIAL_NAME_MAX_LENGTH = 100
 MATERIAL_QUANTITY_TEXT_MAX_LENGTH = 30
 MATERIAL_MEMO_MAX_LENGTH = 300
+
+
+def phone_from_memo(memo):
+    """明示的な「電話:」行の国内番号だけをtelリンクにする。"""
+    if not memo:
+        return None
+    for line in memo.splitlines():
+        matched = re.fullmatch(r"\s*電話\s*[:：]\s*([0-9\-() ]+)\s*", line)
+        if not matched:
+            continue
+        value = matched.group(1)
+        digits = re.sub(r"[\-() ]", "", value)
+        if re.fullmatch(r"0[0-9]{9,10}", digits):
+            return "tel:" + digits
+    return None
 
 
 def _normalize_optional_text(value):
@@ -83,6 +99,7 @@ def create_material_orders_blueprint(*, access_required, resolve_dataset):
                 "material_orders.html",
                 incomplete_items=incomplete_items,
                 completed_items=completed_items,
+                phone_links={item.id: phone_from_memo(item.memo) for item in items},
                 form_values=form_values
                 or {"name": "", "quantity_text": "", "memo": ""},
                 error=error,
