@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}"></head>
 <body class="app-shell-page staff-shifts-page">{% include "_app_navigation.html" %}
 <main class="staff-shifts-shell"><a href="{{ url_for('.index') }}#staff">← スタッフ一覧へ戻る</a>
-{% for category, message in get_flashed_messages(with_categories=True) %}<p class="staff-shifts-feedback" role="status">{{ message }}</p>{% endfor %}
+{% include "_flash_notices.html" %}
 <section class="staff-shifts-panel staff-shifts-detail">
     <h1>スタッフ詳細</h1>
     <dl>

@@ -11,7 +11,7 @@
 {% include "_app_navigation.html" %}
 <main class="staff-shifts-shell">
     <header class="staff-shifts-header"><h1>スタッフ・シフト管理</h1><p>勤務予定を管理します。実際の出退勤記録ではありません。</p></header>
-    {% for category, message in get_flashed_messages(with_categories=True) %}<p class="staff-shifts-feedback" role="status">{{ message }}</p>{% endfor %}
+    {% include "_flash_notices.html" %}
     <section class="staff-shifts-panel staff-shifts-month-panel" aria-labelledby="month-title">
         <div class="staff-shifts-toolbar"><h2 id="month-title">{{ first.year }}年{{ first.month }}月<span class="month-title-suffix">のシフト</span></h2>
             <nav class="staff-shifts-month-nav" aria-label="月を移動">
