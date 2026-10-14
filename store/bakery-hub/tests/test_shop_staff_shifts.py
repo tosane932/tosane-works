@@ -310,7 +310,10 @@ def test_legacy_overnight_and_long_shift_unchanged_on_note_edit(authenticated_cl
     detail = authenticated_client.get(f"/staff-shifts/shifts/{row.id}").get_data(as_text=True)
     assert "2026年10月15日 14:00" in detail
     edit = f"/staff-shifts/shifts/{row.id}/edit"
-    assert "以前登録した翌日終了" in authenticated_client.get(edit).get_data(as_text=True)
+    edit_page = BeautifulSoup(authenticated_client.get(edit).get_data(as_text=True), "html.parser")
+    warning = edit_page.select_one(".app-flash--warning")
+    assert warning is not None
+    assert "以前登録した翌日終了" in warning.get_text()
     data = {**_form(authenticated_client, edit), "business_date": "2026-10-14",
             "staff_id": str(staff.id), "status": "work", "start_time": "22:00",
             "end_time": "14:00", "note": "備考のみ変更"}

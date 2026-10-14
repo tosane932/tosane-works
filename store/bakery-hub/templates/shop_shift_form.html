@@ -17,7 +17,7 @@
         <h1>{{ '勤務予定を編集' if editing else '勤務予定を登録' }}</h1>
         <p>出勤・休みの予定を登録します。実際の勤怠を記録する画面ではありません。</p>
         {% if editing and legacy_interval %}
-        <p class="staff-shifts-feedback">この予定には、以前登録した翌日終了または12時間超の勤務時刻が含まれています。時刻を変えずに備考を編集すると元の日時を保持します。時刻を変更する場合は同じ日の12時間以内にしてください。</p>
+        <p class="app-flash app-flash--warning" role="status">この予定には、以前登録した翌日終了または12時間超の勤務時刻が含まれています。時刻を変えずに備考を編集すると元の日時を保持します。時刻を変更する場合は同じ日の12時間以内にしてください。</p>
         {% endif %}
         {% if error %}<p class="staff-shifts-error" role="alert">{{ error }}</p>{% endif %}
         <form method="POST" id="shift-form">

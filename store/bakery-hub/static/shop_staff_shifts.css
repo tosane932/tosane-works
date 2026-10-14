@@ -43,7 +43,6 @@
 .staff-shifts-badge { display: inline-block; margin-left: 8px; padding: 3px 8px; border: 1px solid #beced9; border-radius: 10px; color: #315b78; font-size: .86rem; }
 .staff-shifts-note { white-space: pre-wrap; }
 .staff-shifts-empty { padding: 18px; background: #f6f3ee; border-radius: 8px; }
-.staff-shifts-feedback { padding: 12px; border: 1px solid #90b59b; background: #edf5ef; border-radius: 8px; }
 .staff-shifts-error { padding: 12px; border: 1px solid #bd7777; background: #fff2f2; border-radius: 8px; }
 .staff-directory-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .staff-directory-actions button, .staff-shifts-cancel button { border: 1px solid #7c6660; background: white; color: #493d34; cursor: pointer; }
