@@ -17,7 +17,7 @@ URL = get_isolated_postgresql_test_url()
 pytestmark = pytest.mark.skipif(not URL, reason="isolated PostgreSQL URL is not configured")
 
 WORKER = r'''
-import concurrent.futures, json, threading
+import concurrent.futures, json, os, threading
 from werkzeug.security import generate_password_hash
 import app as app_module
 app = app_module.app
@@ -30,6 +30,8 @@ def post(_):
     client = app.test_client()
     assert client.post('/login', data={'username':'prep-admin','password':'prep-password'}).status_code == 302
     barrier.wait(timeout=15)
+    if os.environ.get('PREP_BULK'):
+        return client.post('/prep/plans/bulk', data={'recipe_id':'1','business_date':'2026-10-16','quantity_1':'4'}).status_code
     return client.post('/prep/plans',data={'recipe_id':'1','business_date':'2026-10-15','quantity':'3'}).status_code
 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
     print(json.dumps(list(pool.map(post, range(2)))))
@@ -67,8 +69,14 @@ def test_postgresql_dataset_constraints_and_concurrent_plan_posts():
         assert worker.returncode == 0, worker.stderr[-1500:]
         statuses = json.loads(worker.stdout.strip().splitlines()[-1])
         assert sorted(statuses) == [303, 409]
+        bulk_worker = subprocess.run([sys.executable, "-c", WORKER], cwd=Path(__file__).resolve().parent.parent,
+                                     env={**os.environ, "DATABASE_URL": URL, "PREP_BULK": "1"},
+                                     capture_output=True, text=True, timeout=45)
+        assert bulk_worker.returncode == 0, bulk_worker.stderr[-1500:]
+        assert sorted(json.loads(bulk_worker.stdout.strip().splitlines()[-1])) == [303, 303]
         with engine.connect() as conn:
-            assert conn.execute(text("SELECT count(*) FROM prep_plans")).scalar_one() == 1
+            assert conn.execute(text("SELECT count(*) FROM prep_plans")).scalar_one() == 2
+            assert conn.execute(text("SELECT quantity FROM prep_plans WHERE business_date = '2026-10-16'")).scalar_one() == 4
     finally:
         with engine.begin() as conn:
             conn.execute(text("DROP SCHEMA public CASCADE"))

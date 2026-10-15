@@ -218,8 +218,111 @@ def test_prep_html_controls_and_mobile_layout(authenticated_client, admin_datase
     assert index.select_one('a[data-page="prep"][aria-current="page"]')
     plan = BeautifulSoup(authenticated_client.get("/prep/plans").data, "html.parser")
     assert plan.select_one('input[type="range"][step="1"]')
-    assert plan.select_one('input[name="quantity"][type="number"]')
+    assert plan.select_one('input[name^="quantity_"][type="number"]')
     assert plan.select_one('button[data-step="-1"]') and plan.select_one('button[data-step="1"]')
     assert plan.select_one('a[href="/material-orders"]')
     assert plan.select_one('input[name="csrf_token"]')
     assert plan.select_one('meta[name="viewport"]')
+
+
+def _bulk(client, day, quantities):
+    return client.post("/prep/plans/bulk", data={
+        "csrf_token": _token(client, "/prep?date=" + day),
+        "business_date": day,
+        "recipe_id": [str(recipe_id) for recipe_id in quantities],
+        **{f"quantity_{recipe_id}": str(quantity) for recipe_id, quantity in quantities.items()},
+    })
+
+
+def test_three_step_entry_recipe_route_and_selection(authenticated_client, admin_dataset):
+    assert _create(authenticated_client).status_code == 303
+    assert _create(authenticated_client, source="template:melonpan").status_code == 303
+    recipes = PrepRecipe.query.order_by(PrepRecipe.id).all()
+    today = authenticated_client.get("/prep")
+    assert today.status_code == 200
+    soup = BeautifulSoup(today.data, "html.parser")
+    assert [h.get_text(strip=True) for h in soup.select(".prep-step h2")] == [
+        "① 今日作るパンを選ぶ", "② 作る個数を決める", "③ 必要な材料を見る",
+    ]
+    assert soup.select_one('a[href="/prep/recipes"]')
+    assert soup.select_one('form[action="/prep/plans/bulk"]')
+    assert soup.select_one('#prep-stock-details:not([open])')
+    assert soup.select_one('#prep-breakdown:not([open])')
+    assert soup.select_one('details.prep-slider:not([open])')
+    assert len(soup.select('.prep-choice input[name="recipe_id"]')) == 2
+    assert all(not checkbox.has_attr("checked") for checkbox in soup.select(".prep-choice input"))
+    recipe_page = BeautifulSoup(authenticated_client.get("/prep/recipes").data, "html.parser")
+    assert recipe_page.select_one("h1").get_text(strip=True) == "レシピ管理"
+    assert len(recipe_page.select('a[href^="/prep/recipes/"]')) >= 2
+    saved = _bulk(authenticated_client, "2026-10-15", {recipes[0].id: 0, recipes[1].id: 100})
+    assert saved.status_code == 303 and saved.location.endswith("/prep?date=2026-10-15")
+    assert _bulk(authenticated_client, "2026-10-15", {recipes[0].id: 0, recipes[1].id: 100}).status_code == 303
+    assert PrepPlan.query.count() == 2
+    restored = BeautifulSoup(authenticated_client.get("/prep?date=2026-10-15").data, "html.parser")
+    assert len(restored.select('.prep-choice input[checked]')) == 2
+    assert {field["value"] for field in restored.select('input[name^="quantity_"]')} == {"0", "100"}
+    another_day = BeautifulSoup(authenticated_client.get("/prep?date=2026-10-16").data, "html.parser")
+    assert not another_day.select('.prep-choice input[checked]')
+    assert authenticated_client.get("/prep?date=2026-02-30").status_code == 400
+
+
+def test_bulk_atomic_update_no_implicit_deletion_and_rollback(authenticated_client, admin_dataset, monkeypatch):
+    assert _create(authenticated_client).status_code == 303
+    assert _create(authenticated_client, source="template:melonpan").status_code == 303
+    first, second = PrepRecipe.query.order_by(PrepRecipe.id).all()
+    day = "2026-10-15"
+    assert _bulk(authenticated_client, day, {first.id: 1, second.id: 1000}).status_code == 303
+    assert _bulk(authenticated_client, day, {first.id: 20}).status_code == 303
+    assert {(plan.recipe_id, plan.quantity) for plan in PrepPlan.query.all()} == {(first.id, 20), (second.id, 1000)}
+    assert _bulk(authenticated_client, "2026-10-16", {first.id: 0}).status_code == 303
+    assert PrepPlan.query.count() == 3
+    bad = {"csrf_token": _token(authenticated_client, "/prep"), "business_date": day,
+           "recipe_id": [str(first.id), str(second.id)],
+           f"quantity_{first.id}": "8", f"quantity_{second.id}": "1001"}
+    for invalid in ("1001", "-1", "1.5", "1e3", "oops", ""):
+        bad[f"quantity_{second.id}"] = invalid
+        response = authenticated_client.post("/prep/plans/bulk", data=bad)
+        assert response.status_code == 400
+        if invalid == "1001":
+            form = BeautifulSoup(response.data, "html.parser")
+            assert form.select_one(f'input[name="quantity_{first.id}"]')["value"] == "8"
+            assert form.select_one(f'input[name="quantity_{second.id}"]')["value"] == "1001"
+    bad[f"quantity_{second.id}"] = ["2", "3"]
+    assert authenticated_client.post("/prep/plans/bulk", data=bad).status_code == 400
+    assert PrepPlan.query.filter_by(business_date=datetime.date.fromisoformat(day), recipe_id=first.id).one().quantity == 20
+    original_commit = db.session.commit
+    monkeypatch.setattr(db.session, "commit", lambda: (_ for _ in ()).throw(SQLAlchemyError("forced")))
+    assert _bulk(authenticated_client, day, {first.id: 3, second.id: 4}).status_code == 500
+    monkeypatch.setattr(db.session, "commit", original_commit)
+    assert {(p.recipe_id, p.quantity) for p in PrepPlan.query.filter_by(business_date=datetime.date.fromisoformat(day))} == {(first.id, 20), (second.id, 1000)}
+    assert MaterialOrderItem.query.count() == 0
+
+
+def test_bulk_dataset_auth_csrf_xss_and_duplicate_ids(authenticated_client, client, flask_app, admin_dataset):
+    assert _create(authenticated_client).status_code == 303
+    own = PrepRecipe.query.one()
+    guest, other = _guest(flask_app)
+    alien = PrepRecipe(dataset_id=other.id, product_key="product:999", display_name="<script>秘密</script>", base_quantity=10)
+    db.session.add(alien); db.session.commit()
+    day = "2026-10-15"
+    data = {"business_date": day, "recipe_id": [str(own.id), str(alien.id)],
+            f"quantity_{own.id}": "2", f"quantity_{alien.id}": "3"}
+    assert authenticated_client.post("/prep/plans/bulk", data=data).status_code == 400
+    data["csrf_token"] = _token(authenticated_client, "/prep")
+    assert authenticated_client.post("/prep/plans/bulk", data=data).status_code == 404
+    assert PrepPlan.query.count() == 0
+    data["recipe_id"] = [str(own.id), str(own.id)]
+    assert authenticated_client.post("/prep/plans/bulk", data=data).status_code == 400
+    g.pop("_login_user", None)
+    assert guest.get("/prep/recipes").status_code == 403
+    assert guest.post("/prep/plans/bulk", data=data).status_code in (400, 403)
+    g.pop("_login_user", None)
+    assert client.get("/prep").status_code == 302
+    assert client.post("/prep/plans/bulk", data=data).status_code in (302, 400)
+    own.display_name = "<script>危険</script>"
+    db.session.commit()
+    g.pop("_login_user", None)
+    html = authenticated_client.get("/prep").get_data(as_text=True)
+    assert "&lt;script&gt;危険&lt;/script&gt;" in html
+    assert "<script>危険</script>" not in html
+    assert "秘密" not in html
