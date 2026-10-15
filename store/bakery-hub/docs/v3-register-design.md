@@ -58,23 +58,25 @@
 
 | テーブル | カラムと制約案 |
 | --- | --- |
-| `register_products` | `id` PK、`dataset_id` NOT NULL FK `datasets.id`、`template_key` NULL（標準18品なら安定したキー）、`name` NOT NULL、`price_yen` NOT NULL、`image_key` NULL、`is_active` NOT NULL、表示順、作成・更新日時。`UNIQUE(id,dataset_id)`、`UNIQUE(dataset_id,template_key)`（NULLの独自品は重複可能）、価格・名前・キー長のCHECK、Datasetと有効状態の索引。Phase 1Aでは表と制約のみ作り、標準18品の生成・整備はPhase 1BでDatasetごとに冪等に行う。毎月再生成しない。Guest上限は標準18品をどう数えるか別途決める。 |
+| `register_products` | `id` PK、`dataset_id` NOT NULL FK `datasets.id`、`template_key` NULL（標準18品なら安定したキー）、`name` NOT NULL、`price_yen` NOT NULL、`image_key` NULL、`is_active` NOT NULL、表示順、作成・更新日時。`UNIQUE(id,dataset_id)`、`UNIQUE(dataset_id,template_key)`（NULLの独自品は重複可能）、名前・キー長と新レジ単価0〜500円のCHECK、Datasetと有効状態の索引。0円商品を実際に販売するか、価格の刻みは後続Phaseで決める。Phase 1Aでは表と制約のみ作り、標準18品の生成・整備はPhase 1BでDatasetごとに冪等に行う。毎月再生成しない。Guest上限は標準18品をどう数えるか別途決める。 |
 | `register_cutovers` | `dataset_id` PK/FK、`first_register_date` NOT NULL。Datasetごとに営業日境界を一度確定し、不用意に更新・前倒ししない。Adminは切替前日までを旧実績、Guestの新規Datasetはレジ開始日から新実績。切替前・当日の旧行有無を監査する。 |
-| `register_transactions` | `id` UUID PK、`dataset_id` NOT NULL FK、`submission_key` UUID NOT NULL、`request_digest` NOT NULL、`completed_at` NOT NULL、`business_date` NOT NULL、`kind` (`sale`/`refund`)、`total_yen`（返金時は負）、`received_yen` NULL可、`change_yen` NULL可。`UNIQUE(id,dataset_id)`、`UNIQUE(dataset_id,submission_key)`、`INDEX(dataset_id,business_date,completed_at)`、kindと符号・金銭授受の整合CHECK。商品明細の合計一致はCHECKのみでは表現できず、アプリの同一transactionで検証する。 |
-| `register_transaction_lines` | `id` PK、`transaction_id` UUID、`dataset_id`、`register_product_id`、`product_name_snapshot`、`unit_price_yen`、`quantity`、`line_total_yen`。`FK(transaction_id,dataset_id) → register_transactions(id,dataset_id)`、`FK(register_product_id,dataset_id) → register_products(id,dataset_id)`、`UNIQUE(transaction_id,register_product_id)`、数量−50〜−1または1〜50、単価範囲と`line_total_yen = unit_price_yen * quantity`のCHECK、索引 `(dataset_id,register_product_id)`。数量0の行は保存しない。名称・単価は会計時点で固定し、商品の改名・値上げ・論理無効化が過去実績を変えない。 |
+| `register_transactions` | `id` UUID PK、`dataset_id` NOT NULL FK、`submission_key` UUID NOT NULL、`request_digest` NOT NULL、`completed_at` NOT NULL、`business_date` NOT NULL、`kind` (`sale`/`refund`)、`total_yen`（通常の返金時は負。0円の保存可否は未決定）、`received_yen` NULL可、`change_yen` NULL可。`UNIQUE(id,dataset_id)`、`UNIQUE(dataset_id,submission_key)`、`INDEX(dataset_id,business_date,completed_at)`、kindと符号・金銭授受の整合CHECK。Phase 1AのDBは0円を表現できるが、実際の保存可否は後続サービスで判断する。商品明細の合計一致はCHECKのみでは表現できず、アプリの同一transactionで検証する。 |
+| `register_transaction_lines` | `id` PK、`transaction_id` UUID、`dataset_id`、`register_product_id`、`product_name_snapshot`、`unit_price_yen`、`quantity`、`line_total_yen`。`FK(transaction_id,dataset_id) → register_transactions(id,dataset_id)`、`FK(register_product_id,dataset_id) → register_products(id,dataset_id)`、`UNIQUE(transaction_id,register_product_id)`、数量−50〜−1または1〜50、会計時点単価0〜500円と`line_total_yen = unit_price_yen * quantity`のCHECK、索引 `(dataset_id,register_product_id)`。数量0の行は保存しない。名称・単価は会計時点で固定し、商品の改名・値上げ・論理無効化が過去実績を変えない。 |
 
 ### Phase 1Aのmigration順序とデータ保全
 
 現行のAlembicは直列のrevisionで、調査時の単一headは`e2a7c4d9b105`。同revisionの`prep_ingredients`も`(recipe_id,dataset_id)`の複合FKを親テーブル作成後に定義している。Phase 1Aの4表は互いにFKで依存するため、**同一の追加migrationにまとめるのが合理的**。次のmigrationの`down_revision`は着手時のheadを再確認して指定し、`models.py`の定義と手書きDDLを照合する。DBが本番でどのrevisionかは未確認であり、適用は本Phase 0.1の対象外。
 
-1. `register_products`（親は既存`datasets`）を作り、PKの`id`に加えて複合FKの参照先となる`UNIQUE(id,dataset_id)`、`UNIQUE(dataset_id,template_key)`、名前の空白除外・価格の非負と安全な整数範囲・有効状態のCHECKを定義する（販売上限値と10円刻みをDBで固定するかはPhase 1A着手前に確定）。
+1. `register_products`（親は既存`datasets`）を作り、PKの`id`に加えて複合FKの参照先となる`UNIQUE(id,dataset_id)`、`UNIQUE(dataset_id,template_key)`、名前の空白除外・新レジ価格`0 <= price_yen <= 500`のCHECKを定義する。価格の刻みと0円商品の販売可否は未決定なのでDBで狭めない。
 2. `register_cutovers`（`dataset_id`がPKかつ`datasets.id`へのFK）を作る。**Phase 1Aでは切替行を挿入しない**。初回切替日と旧売上行の有無を運用前に確認する。DBのCHECKだけで旧売上・新会計の日付重複は防げないため、保存経路と旧POSTの遮断も必要。
 3. `register_transactions`を作り、`dataset_id`を`datasets.id`に結ぶ。`register_cutovers`へのFKは張らず、切替行の存在・`business_date >= first_register_date`は保存サービスで同一transaction内に検証する。`UNIQUE(id,dataset_id)`と`UNIQUE(dataset_id,submission_key)`を定義し、販売／返金の区分、合計の正負、預かり・お釣りの組合せをCHECKで制限する。切替日以降にしか新会計を記録できないことはCHECKやDataset FKだけでは保証できず、Phase 2Aの保存テストで確認する。
 4. `register_transaction_lines`を作り、`(transaction_id,dataset_id)`から会計へ、`(register_product_id,dataset_id)`から商品へ複合FKで結ぶ。全FK列をNOT NULLとし、`UNIQUE(transaction_id,register_product_id)`、`quantity BETWEEN -50 AND 50 AND quantity <> 0`、単価の非負・安全な整数範囲と`line_total_yen = unit_price_yen * quantity`のCHECKを置く。同じ会計内で販売と返金を混在させない推奨案はアプリの明細検証でも守る。
 
 明細の`dataset_id`は、会計と商品が**同じDataset**に属することをDBで保証するために必要。FK参照先の複合UNIQUEと子のNOT NULLが揃わなければこの保証は成立しない。各表のDataset FK・会計明細のFKは`RESTRICT`相当を基本とし、Admin商品と会計履歴の物理削除を防ぐ。Guest期限切れ時だけ、認可済み対象Guestの明細→会計→レジ商品→切替行→旧売上→旧商品→Datasetを明示的に消す。独立したGuestへの影響と削除途中の失敗時rollbackを検証する。FKの多経路cascade任せにはしない。
 
-Phase 1AのDDL確定前に未決定の0円会計・価格上限を確認し、採用するCHECKとサーバー検証の境界をテストで固定する。追加migrationの`upgrade`は空の4表・制約・索引のみ作成し、**既存の`products`、`daily_sales`、`datasets`の構造・行に触れない**。`downgrade`は明細→会計→切替→商品という逆順で表を落とすが、4表のいずれかに行があればデータ消失を防ぐため明示的に停止する。Phase 1B以降にデータが入った環境では通常のdowngradeを安全な復旧手段と見なさない。SQLiteでFK有効（`PRAGMA foreign_keys=ON`）の接続、PostgreSQLでFK・CHECK・一意制約の適用、両DBでupgrade→空表のみdowngrade、行のあるdowngrade拒否をテストする。価格上限など未決定の仕様値をmigrationで先走って固定しない。
+Phase 1Aでは0円会計をDBで表現できる余地を残す。実際の会計保存可否と価格の刻みは後続サービスで確定する。追加migrationの`upgrade`は空の4表・制約・索引のみ作成し、**既存の`products`、`daily_sales`、`datasets`の構造・行に触れない**。`downgrade`は明細→会計→切替→商品という逆順で表を落とすが、4表のいずれかに行があればデータ消失を防ぐため明示的に停止する。Phase 1B以降にデータが入った環境では通常のdowngradeを安全な復旧手段と見なさない。SQLiteでFK有効（`PRAGMA foreign_keys=ON`）の接続、PostgreSQLでFK・CHECK・一意制約の適用、両DBでupgrade→空表のみdowngrade、行のあるdowngrade拒否をテストする。
+
+実装した会計合計・お預かり・お釣りのDB上限は安全のため絶対値10億円とし、販売件数の業務上限ではない。商品明細の合計と会計ヘッダーの合計が一致すること、Guest利用件数、営業日とUTC時刻の対応は後続の保存サービスで原子的に検証する。
 
 ### 保存と二重登録の防止
 
@@ -118,9 +120,9 @@ UIの「0から負へ」の確認を飛ばす直接POSTにも備え、負数の�
 | 未決定 | 推奨案・確定が必要な理由 |
 | --- | --- |
 | 1. 月次商品から継続マスタへ | 新`register_products`を並設し、標準18をDatasetごと一度だけ生成。旧独自商品は候補提示後に明示的にコピー。既存行に常設用の年月ダミーを入れない。同名別商品・異なる旧価格をどう選ぶか確認する。 |
-| 2. 価格上限 | まず現行の0〜9,990円／10円単位を維持し、0円商品の販売可否と上限緩和は用途・テストを確認して別PR。`±50`は数量制約であって単価制約ではない。預かりと会計合計には独立した安全な上限を設ける。 |
+| 2. 価格上限と刻み | **新レジ商品単価の上限500円は確定**。旧月次`Product`の0〜9,990円／10円単位と過去データは今回変更しない。新レジの価格の刻み・0円商品の実際の販売可否は未決定。`±50`は数量制約。預かりと会計合計には独立した安全な上限を設ける。 |
 | 3. プラス・マイナス明細の混在 | 1会計では販売か返金のどちらか一方に限定し、混在操作時は分けて会計する案。差引0や現金授受の曖昧さを防ぐ。同じ画面を使い、返金専用ページは設けない。 |
-| 4. 合計0円 | 数量0の空会計は保存不可。商品単価0で全体0円になる会計は当面保存不可を推奨（無料提供の履歴要件は別途決定）。販売と返金の相殺0円も3の方針で不可。DB CHECKとAPI両方で確認。 |
+| 4. 合計0円 | 数量0の空会計は保存不可。商品単価0で全体0円になる会計は当面保存不可を推奨（無料提供の履歴要件は別途決定）。販売と返金の相殺0円も3の方針で不可。Phase 1AのDBは0円の余地を残し、保存可否は後続サービスの検証で確定する。 |
 | 5. 旧新の統合 | Dataset別の営業日切替を正本にして、旧日と新日を排他的にUNION相当で集計。旧期間の件数・平均を欠損として明示。切替日の選定・既存旧行の有無を承認してから本番移行する。 |
 | 6. 直接数量入力 | 選択中の商品数量をタップするとテンキー／数値入力で−50〜50を確定する。空・小数・符号だけ・範囲外を拒否。0→負はタイル−と同じ返金確認。 |
 | 7. 実店舗の販売員認証 | 別主体・レジだけのサーバー認可を将来別Phaseで追加。端末共有時のセッション失効・ロックもその設計で扱う。今はAdmin/Guestのみ。 |

@@ -545,6 +545,100 @@ class DailySales(db.Model):
     quantity = db.Column(db.Integer, nullable=False, default=0)
 
 
+class RegisterProduct(db.Model):
+    """Datasetごとに継続利用するレジ商品。月次Productとは独立。"""
+    __tablename__ = "register_products"
+    __table_args__ = (
+        db.UniqueConstraint("id", "dataset_id", name="uq_register_products_id_dataset"),
+        db.UniqueConstraint("dataset_id", "template_key", name="uq_register_products_dataset_template"),
+        db.CheckConstraint("length(trim(name)) BETWEEN 1 AND 100", name="ck_register_products_name"),
+        db.CheckConstraint("template_key IS NULL OR length(trim(template_key)) BETWEEN 1 AND 100", name="ck_register_products_template_key"),
+        db.CheckConstraint("image_key IS NULL OR length(trim(image_key)) BETWEEN 1 AND 100", name="ck_register_products_image_key"),
+        db.CheckConstraint("price_yen BETWEEN 0 AND 500 AND price_yen = CAST(price_yen AS INTEGER)", name="ck_register_products_price"),
+        db.CheckConstraint("is_active IN (true, false)", name="ck_register_products_active"),
+        db.CheckConstraint("display_order >= 0 AND display_order = CAST(display_order AS INTEGER)", name="ck_register_products_display_order"),
+        db.Index("ix_register_products_dataset_active_order", "dataset_id", "is_active", "display_order", "id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", name="fk_register_products_dataset", ondelete="RESTRICT"), nullable=False)
+    template_key = db.Column(db.String(100), nullable=True)
+    name = db.Column(db.String(100), nullable=False)
+    price_yen = db.Column(db.Integer, nullable=False)
+    image_key = db.Column(db.String(100), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
+    display_order = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
+
+
+class RegisterCutover(db.Model):
+    """旧日次売上とレジ会計を営業日単位で切り替える境界。"""
+    __tablename__ = "register_cutovers"
+
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", name="fk_register_cutovers_dataset", ondelete="RESTRICT"), primary_key=True)
+    first_register_date = db.Column(db.Date, nullable=False)
+
+
+class RegisterTransaction(db.Model):
+    """販売または返金の1会計。0円の保存可否は後続サービスで決める。"""
+    __tablename__ = "register_transactions"
+    __table_args__ = (
+        db.UniqueConstraint("id", "dataset_id", name="uq_register_transactions_id_dataset"),
+        db.UniqueConstraint("dataset_id", "submission_key", name="uq_register_transactions_submission"),
+        db.CheckConstraint("length(request_digest) = 64", name="ck_register_transactions_digest"),
+        db.CheckConstraint("kind IN ('sale', 'refund')", name="ck_register_transactions_kind"),
+        db.CheckConstraint("total_yen BETWEEN -1000000000 AND 1000000000 AND total_yen = CAST(total_yen AS INTEGER)", name="ck_register_transactions_total"),
+        db.CheckConstraint(
+            "(kind = 'sale' AND total_yen >= 0 AND received_yen IS NOT NULL "
+            "AND change_yen IS NOT NULL AND received_yen BETWEEN 0 AND 1000000000 "
+            "AND change_yen BETWEEN 0 AND 1000000000 "
+            "AND received_yen = CAST(received_yen AS INTEGER) "
+            "AND change_yen = CAST(change_yen AS INTEGER) "
+            "AND received_yen >= total_yen AND change_yen = received_yen - total_yen) "
+            "OR (kind = 'refund' AND total_yen <= 0 "
+            "AND received_yen IS NULL AND change_yen IS NULL)",
+            name="ck_register_transactions_settlement",
+        ),
+        db.Index("ix_register_transactions_dataset_day_completed", "dataset_id", "business_date", "completed_at"),
+    )
+
+    id = db.Column(db.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", name="fk_register_transactions_dataset", ondelete="RESTRICT"), nullable=False)
+    submission_key = db.Column(db.Uuid(as_uuid=True), nullable=False)
+    request_digest = db.Column(db.String(64), nullable=False)
+    completed_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())
+    business_date = db.Column(db.Date, nullable=False)
+    kind = db.Column(db.String(16), nullable=False)
+    total_yen = db.Column(db.BigInteger, nullable=False)
+    received_yen = db.Column(db.BigInteger, nullable=True)
+    change_yen = db.Column(db.BigInteger, nullable=True)
+
+
+class RegisterTransactionLine(db.Model):
+    """会計時点の商品名と単価を固定した明細。"""
+    __tablename__ = "register_transaction_lines"
+    __table_args__ = (
+        db.ForeignKeyConstraint(["transaction_id", "dataset_id"], ["register_transactions.id", "register_transactions.dataset_id"], name="fk_register_lines_transaction_dataset", ondelete="RESTRICT"),
+        db.ForeignKeyConstraint(["register_product_id", "dataset_id"], ["register_products.id", "register_products.dataset_id"], name="fk_register_lines_product_dataset", ondelete="RESTRICT"),
+        db.UniqueConstraint("transaction_id", "register_product_id", name="uq_register_lines_transaction_product"),
+        db.CheckConstraint("length(trim(product_name_snapshot)) BETWEEN 1 AND 100", name="ck_register_lines_name"),
+        db.CheckConstraint("quantity BETWEEN -50 AND 50 AND quantity <> 0 AND quantity = CAST(quantity AS INTEGER)", name="ck_register_lines_quantity"),
+        db.CheckConstraint("unit_price_yen BETWEEN 0 AND 500 AND unit_price_yen = CAST(unit_price_yen AS INTEGER)", name="ck_register_lines_unit_price"),
+        db.CheckConstraint("line_total_yen = unit_price_yen * quantity", name="ck_register_lines_total"),
+        db.Index("ix_register_lines_dataset_product", "dataset_id", "register_product_id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    transaction_id = db.Column(db.Uuid(as_uuid=True), nullable=False)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), nullable=False)
+    register_product_id = db.Column(db.Integer, nullable=False)
+    product_name_snapshot = db.Column(db.String(100), nullable=False)
+    unit_price_yen = db.Column(db.Integer, nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    line_total_yen = db.Column(db.Integer, nullable=False)
+
+
 class DailyWeather(db.Model):
     """日別天気の保存済み観測・再解析データ。認可済みDatasetと日付で一意。"""
     __tablename__ = "daily_weather"

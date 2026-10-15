@@ -1,0 +1,188 @@
+"""隔離SQLiteで旧データ保全とv3 migrationの往復を確認する。"""
+
+from pathlib import Path
+import uuid
+
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from flask import Flask
+from flask_migrate import Migrate, downgrade, upgrade
+import pytest
+import sqlalchemy as sa
+from sqlalchemy import inspect, text
+
+from models import db
+
+
+MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
+OLD_HEAD = "e2a7c4d9b105"
+NEW_HEAD = "f3b7e5a9c102"
+TABLES = {"register_products", "register_cutovers", "register_transactions", "register_transaction_lines"}
+
+
+@pytest.fixture()
+def migration_app(tmp_path):
+    app = Flask("register_migration_test")
+    app.config.update(
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path / 'register.sqlite'}",
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    )
+    db.init_app(app)
+    Migrate(app, db, directory=str(MIGRATIONS_DIR))
+    with app.app_context():
+        yield app
+        db.session.remove()
+
+
+def migrate(revision):
+    upgrade(directory=str(MIGRATIONS_DIR), revision=revision)
+
+
+def table_state():
+    return set(inspect(db.engine).get_table_names())
+
+
+def assert_previous_rows():
+    assert db.session.execute(text("SELECT id, name, price FROM products WHERE id=901")).one() == (901, "旧商品", 280)
+    assert db.session.execute(text("SELECT id, product_id, quantity FROM daily_sales WHERE id=902")).one() == (902, 901, 3)
+
+
+def test_empty_database_upgrades_to_single_head_without_seeding(migration_app):
+    c = Config(str(MIGRATIONS_DIR / "alembic.ini"))
+    c.set_main_option("script_location", str(MIGRATIONS_DIR))
+    assert ScriptDirectory.from_config(c).get_heads() == [NEW_HEAD]
+    assert table_state() == set()
+    migrate("head")
+    assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
+    assert TABLES <= table_state()
+    for table in TABLES:
+        assert db.session.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one() == 0
+
+
+def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_app):
+    migrate(OLD_HEAD)
+    db.session.execute(text(
+        "INSERT INTO products (id,dataset_id,year,month,name,price,is_active) "
+        "SELECT 901,id,2026,10,'旧商品',280,true FROM datasets WHERE system_key='admin'"
+    ))
+    db.session.execute(text("INSERT INTO daily_sales (id,product_id,date,quantity) VALUES (902,901,'2026-10-15',3)"))
+    db.session.commit()
+    old_inspector = inspect(db.engine)
+    old_product_columns = [x["name"] for x in old_inspector.get_columns("products")]
+    old_sales_columns = [x["name"] for x in old_inspector.get_columns("daily_sales")]
+    assert_previous_rows()
+
+    migrate("head")
+    inspector = inspect(db.engine)
+    assert TABLES <= set(inspector.get_table_names())
+    assert [x["name"] for x in inspector.get_columns("products")] == old_product_columns
+    assert [x["name"] for x in inspector.get_columns("daily_sales")] == old_sales_columns
+    assert_previous_rows()
+
+    expected_columns = {
+        "register_products": {"id", "dataset_id", "template_key", "name", "price_yen", "image_key", "is_active", "display_order", "created_at", "updated_at"},
+        "register_cutovers": {"dataset_id", "first_register_date"},
+        "register_transactions": {"id", "dataset_id", "submission_key", "request_digest", "completed_at", "business_date", "kind", "total_yen", "received_yen", "change_yen"},
+        "register_transaction_lines": {"id", "transaction_id", "dataset_id", "register_product_id", "product_name_snapshot", "unit_price_yen", "quantity", "line_total_yen"},
+    }
+    for table, names in expected_columns.items():
+        columns = {col["name"]: col for col in inspector.get_columns(table)}
+        assert set(columns) == names
+        assert all(not col["nullable"] for name, col in columns.items()
+                   if name not in {"template_key", "image_key", "received_yen", "change_yen"})
+
+    expected_fk = {
+        "register_products": {("dataset_id",): ("datasets", ("id",))},
+        "register_cutovers": {("dataset_id",): ("datasets", ("id",))},
+        "register_transactions": {("dataset_id",): ("datasets", ("id",))},
+        "register_transaction_lines": {
+            ("transaction_id", "dataset_id"): ("register_transactions", ("id", "dataset_id")),
+            ("register_product_id", "dataset_id"): ("register_products", ("id", "dataset_id")),
+        },
+    }
+    for table, expected in expected_fk.items():
+        actual = {tuple(fk["constrained_columns"]):
+                  (fk["referred_table"], tuple(fk["referred_columns"]))
+                  for fk in inspector.get_foreign_keys(table)}
+        assert actual == expected
+        assert all(fk["options"].get("ondelete", "").upper() == "RESTRICT"
+                   for fk in inspector.get_foreign_keys(table))
+
+    for table, names in {
+        "register_products": {"uq_register_products_id_dataset", "uq_register_products_dataset_template"},
+        "register_transactions": {"uq_register_transactions_id_dataset", "uq_register_transactions_submission"},
+        "register_transaction_lines": {"uq_register_lines_transaction_product"},
+    }.items():
+        assert names <= {x["name"] for x in inspector.get_unique_constraints(table)}
+    for table, names in {
+        "register_products": {"ck_register_products_name", "ck_register_products_price"},
+        "register_transactions": {"ck_register_transactions_kind", "ck_register_transactions_settlement"},
+        "register_transaction_lines": {"ck_register_lines_quantity", "ck_register_lines_unit_price", "ck_register_lines_total"},
+    }.items():
+        assert names <= {x["name"] for x in inspector.get_check_constraints(table)}
+    for table, name in {
+        "register_products": "ix_register_products_dataset_active_order",
+        "register_transactions": "ix_register_transactions_dataset_day_completed",
+        "register_transaction_lines": "ix_register_lines_dataset_product",
+    }.items():
+        assert name in {x["name"] for x in inspector.get_indexes(table)}
+
+    # A future edit to the ORM without matching migration (or vice versa)
+    # must be caught before either database gets the new schema.
+    for table in TABLES:
+        model_table = db.metadata.tables[table]
+        checks = {c.name for c in model_table.constraints if isinstance(c, sa.CheckConstraint)}
+        uniques = {c.name for c in model_table.constraints if isinstance(c, sa.UniqueConstraint)}
+        foreign_keys = {c.name for c in model_table.constraints if isinstance(c, sa.ForeignKeyConstraint)}
+        assert checks == {c["name"] for c in inspector.get_check_constraints(table)}
+        assert uniques == {c["name"] for c in inspector.get_unique_constraints(table)}
+        assert foreign_keys == {c["name"] for c in inspector.get_foreign_keys(table)}
+        assert {i.name for i in model_table.indexes} == {i["name"] for i in inspector.get_indexes(table)}
+
+    product_types = {c["name"]: c["type"] for c in inspector.get_columns("register_products")}
+    header_types = {c["name"]: c["type"] for c in inspector.get_columns("register_transactions")}
+    line_types = {c["name"]: c["type"] for c in inspector.get_columns("register_transaction_lines")}
+    assert isinstance(product_types["price_yen"], sa.Integer)
+    assert isinstance(product_types["name"], sa.String) and product_types["name"].length == 100
+    assert isinstance(header_types["total_yen"], sa.BigInteger)
+    assert isinstance(header_types["business_date"], sa.Date)
+    assert isinstance(header_types["completed_at"], sa.DateTime)
+    assert isinstance(line_types["quantity"], sa.Integer)
+
+    downgrade(directory=str(MIGRATIONS_DIR), revision=OLD_HEAD)
+    assert TABLES.isdisjoint(table_state())
+    assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == OLD_HEAD
+    assert_previous_rows()
+
+
+@pytest.mark.parametrize("occupied", ["register_products", "register_cutovers", "register_transactions", "register_transaction_lines"])
+def test_downgrade_refuses_populated_tables_before_dropping_any(migration_app, occupied):
+    migrate("head")
+    admin_id = db.session.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()
+    sale_id, key = uuid.uuid4().hex, uuid.uuid4().hex
+    if occupied in {"register_products", "register_transaction_lines"}:
+        db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) VALUES (11,:owner,'商品',200)"), {"owner": admin_id})
+    if occupied == "register_cutovers":
+        db.session.execute(text("INSERT INTO register_cutovers (dataset_id,first_register_date) VALUES (:owner,'2026-10-16')"), {"owner": admin_id})
+    if occupied in {"register_transactions", "register_transaction_lines"}:
+        db.session.execute(text(
+            "INSERT INTO register_transactions "
+            "(id,dataset_id,submission_key,request_digest,business_date,kind,total_yen,received_yen,change_yen) "
+            "VALUES (:id,:owner,:key,:digest,'2026-10-16','sale',200,200,0)"
+        ), {"id": sale_id, "owner": admin_id, "key": key, "digest": "a" * 64})
+    if occupied == "register_transaction_lines":
+        db.session.execute(text(
+            "INSERT INTO register_transaction_lines "
+            "(transaction_id,dataset_id,register_product_id,product_name_snapshot,unit_price_yen,quantity,line_total_yen) "
+            "VALUES (:id,:owner,11,'商品',200,1,200)"
+        ), {"id": sale_id, "owner": admin_id})
+    db.session.commit()
+
+    # Flask-Migrate's CLI wrapper converts migration RuntimeError to exit(1).
+    with pytest.raises(SystemExit) as error:
+        downgrade(directory=str(MIGRATIONS_DIR), revision=OLD_HEAD)
+    assert error.value.code == 1
+    db.session.rollback()
+    assert TABLES <= table_state()
+    assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
+    assert db.session.execute(text(f"SELECT COUNT(*) FROM {occupied}")).scalar_one() == 1
