@@ -1,0 +1,96 @@
+"""公開前のレジ画面と会計同期API。Datasetは常に認証主体から解決。"""
+
+import uuid
+from pathlib import Path
+
+from flask import Blueprint, abort, current_app, jsonify, render_template, request, session, url_for
+from sqlalchemy.exc import SQLAlchemyError
+
+from models import RegisterProduct, db
+from product_images import PRODUCT_IMAGE_OPTIONS, _safe_image_path
+from register_products import ensure_standard_products
+from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
+                              PriceChanged, SubmissionConflict,
+                              save_register_transaction)
+
+
+REGISTER_BODY_LIMIT = 16_384
+LOCAL_SCOPE_SESSION_KEY = "register_local_scope"
+
+
+def create_register_blueprint(*, access_required, resolve_dataset):
+    blueprint = Blueprint("register", __name__)
+
+    @blueprint.get("/register/preview")
+    @access_required
+    def preview():
+        if not current_app.config["REGISTER_V3_PREVIEW_ENABLED"]:
+            abort(404)
+        owner = resolve_dataset()
+        try:
+            ensure_standard_products(owner)
+            products = (RegisterProduct.query.filter_by(dataset_id=owner.id, is_active=True)
+                        .order_by(RegisterProduct.display_order, RegisterProduct.id).all())
+        except (SQLAlchemyError, ValueError):
+            db.session.rollback()
+            abort(503)
+        image_dir = (Path(current_app.static_folder) / "register_images").resolve()
+        image_urls = {
+            key: url_for("static", filename=f"register_images/{key}.webp")
+            for key in PRODUCT_IMAGE_OPTIONS
+            if _safe_image_path(image_dir, f"{key}.webp") is not None
+        }
+        if LOCAL_SCOPE_SESSION_KEY not in session:
+            session[LOCAL_SCOPE_SESSION_KEY] = uuid.uuid4().hex
+        rows = [{"id": product.id, "name": product.name, "price": product.price_yen,
+                 "image": image_urls.get(product.image_key),
+                 "standard": product.template_key is not None}
+                for product in products]
+        rows.sort(key=lambda row: not row["standard"])
+        save_enabled = bool(current_app.config["REGISTER_V3_SAVE_ENABLED"])
+        return render_template(
+            "register.html", products=rows, save_enabled=save_enabled,
+            local_scope=f"{owner.id}:{session[LOCAL_SCOPE_SESSION_KEY]}",
+        )
+
+    @blueprint.post("/api/register/transactions")
+    @access_required
+    def create_transaction():
+        if not (current_app.config["REGISTER_V3_PREVIEW_ENABLED"]
+                and current_app.config["REGISTER_V3_SAVE_ENABLED"]):
+            return jsonify(error="レジ会計の保存は現在利用できません。", code="disabled"), 403
+        owner = resolve_dataset()
+        if not request.is_json:
+            return jsonify(error="JSON形式の会計データが必要です。", code="invalid"), 400
+        data = request.get_json(silent=True)
+        required = {"submission_key", "kind", "items", "received_yen",
+                    "refund_confirmed", "displayed_prices", "client_business_date"}
+        if not isinstance(data, dict) or set(data) != required:
+            return jsonify(error="会計データの項目が不正です。", code="invalid"), 400
+        try:
+            saved = save_register_transaction(
+                owner, submission_key=data["submission_key"], kind=data["kind"],
+                items=data["items"], received_yen=data["received_yen"],
+                refund_confirmed=data["refund_confirmed"],
+                displayed_prices=data["displayed_prices"],
+                checkout_business_date=data["client_business_date"],
+            )
+        except (PriceChanged, BusinessDayChanged) as error:
+            return jsonify(error=str(error), code="needs_review"), 409
+        except SubmissionConflict as error:
+            return jsonify(error=str(error), code="key_conflict"), 409
+        except (PermissionError, GuestTransactionLimitReached) as error:
+            return jsonify(error=str(error), code="forbidden"), 403
+        except ValueError as error:
+            return jsonify(error=str(error), code="invalid"), 400
+        except SQLAlchemyError:
+            db.session.rollback()
+            current_app.logger.exception("Register transaction failed")
+            return jsonify(error="保存できませんでした。後で同じ会計キーで再送してください。",
+                           code="temporary"), 503
+        return jsonify(submission_key=str(saved.submission_key),
+                       transaction_id=str(saved.id), total_yen=saved.total_yen,
+                       business_date=saved.business_date.isoformat(),
+                       kind=saved.kind), 200
+
+    return blueprint

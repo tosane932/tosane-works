@@ -16,6 +16,7 @@ from models import (Dataset, RegisterCutover, RegisterProduct, RegisterTransacti
                     RegisterTransactionLine, db)
 from postgresql_test_utils import get_isolated_postgresql_test_url
 import register_service as service
+from register_products import update_register_product
 
 
 TEST_URL = get_isolated_postgresql_test_url()
@@ -127,6 +128,23 @@ def test_failed_commit_rolls_back_and_next_request_succeeds(pg_app, monkeypatch)
         service.save_register_transaction(
             owner, submission_key=uuid.uuid4(), kind="sale",
             items=[(product_id, 1)], received_yen=120)
+        assert RegisterTransaction.query.count() == 1
+
+
+def test_price_change_is_checked_under_lock_but_saved_key_replays(pg_app):
+    app, owner_id, product_id = pg_app
+    with app.app_context():
+        owner = db.session.get(Dataset, owner_id)
+        day = service.utc_now().astimezone(service.TOKYO).date().isoformat()
+        key = uuid.uuid4()
+        kwargs = dict(kind="sale", items=[(product_id, 1)], received_yen=200,
+                      displayed_prices=[(product_id, 120)], checkout_business_date=day)
+        first = service.save_register_transaction(owner, submission_key=key, **kwargs)
+        update_register_product(owner, product_id, name="クロワッサン", price_yen=140)
+        replay = service.save_register_transaction(owner, submission_key=key, **kwargs)
+        assert replay.id == first.id and replay.total_yen == 120
+        with pytest.raises(service.PriceChanged):
+            service.save_register_transaction(owner, submission_key=uuid.uuid4(), **kwargs)
         assert RegisterTransaction.query.count() == 1
 
 
