@@ -1,5 +1,8 @@
 """仕込み計算、Admin分離、DB保存、発注電話リンク。"""
 import datetime
+import json
+from pathlib import Path
+import subprocess
 import uuid
 from decimal import Decimal
 
@@ -217,9 +220,13 @@ def test_prep_html_controls_and_mobile_layout(authenticated_client, admin_datase
     index = BeautifulSoup(authenticated_client.get("/prep").data, "html.parser")
     assert index.select_one('a[data-page="prep"][aria-current="page"]')
     plan = BeautifulSoup(authenticated_client.get("/prep/plans").data, "html.parser")
-    assert plan.select_one('input[type="range"][step="1"]')
-    assert plan.select_one('input[name^="quantity_"][type="number"]')
-    assert plan.select_one('button[data-step="-1"]') and plan.select_one('button[data-step="1"]')
+    assert not plan.select('input[type="range"]')
+    assert "スライダーで調整" not in plan.get_text()
+    number = plan.select_one('input[name^="quantity_"][type="number"]')
+    assert number and number["inputmode"] == "numeric"
+    assert number["step"] == "1" and number["min"] == "0" and number["max"] == "1000"
+    assert plan.select_one('button[data-step="-10"]') and plan.select_one('button[data-step="10"]')
+    assert "−10" in plan.get_text() and "＋10" in plan.get_text()
     assert plan.select_one('a[href="/material-orders"]')
     assert plan.select_one('input[name="csrf_token"]')
     assert plan.select_one('meta[name="viewport"]')
@@ -248,7 +255,7 @@ def test_three_step_entry_recipe_route_and_selection(authenticated_client, admin
     assert soup.select_one('form[action="/prep/plans/bulk"]')
     assert soup.select_one('#prep-stock-details:not([open])')
     assert soup.select_one('#prep-breakdown:not([open])')
-    assert soup.select_one('details.prep-slider:not([open])')
+    assert not soup.select('details.prep-slider, input[type="range"]')
     assert len(soup.select('.prep-choice input[name="recipe_id"]')) == 2
     assert all(not checkbox.has_attr("checked") for checkbox in soup.select(".prep-choice input"))
     recipe_page = BeautifulSoup(authenticated_client.get("/prep/recipes").data, "html.parser")
@@ -264,6 +271,40 @@ def test_three_step_entry_recipe_route_and_selection(authenticated_client, admin
     another_day = BeautifulSoup(authenticated_client.get("/prep?date=2026-10-16").data, "html.parser")
     assert not another_day.select('.prep-choice input[checked]')
     assert authenticated_client.get("/prep?date=2026-02-30").status_code == 400
+
+
+def test_quantity_buttons_adjust_from_current_value_and_reject_invalid_input():
+    script = Path(__file__).resolve().parents[1] / "static" / "production_prep.js"
+    values = ["400", "400", "25", "25", "5", "995", "1000", "0", "", "-1", "1.5", "1e3", "oops"]
+    steps = [10, -10, 10, -10, -10, 10, 10, -10, 10, 10, 10, 10, 10]
+    code = """
+const {stepQuantity} = require(process.argv[1]);
+const values = JSON.parse(process.argv[2]);
+const steps = JSON.parse(process.argv[3]);
+process.stdout.write(JSON.stringify(values.map((value, i) => stepQuantity(value, steps[i]))));
+"""
+    result = subprocess.run(
+        ["node", "-e", code, str(script), json.dumps(values), json.dumps(steps)],
+        capture_output=True, text=True, check=True,
+    )
+    assert json.loads(result.stdout) == [410, 390, 35, 15, 0, 1000, 1000, 0,
+                                         None, None, None, None, None]
+
+
+def test_direct_one_unit_quantity_and_odd_quantity_keep_recipe_ratio(authenticated_client, admin_dataset):
+    assert _create(authenticated_client).status_code == 303
+    recipe = PrepRecipe.query.one()
+    day = "2026-10-15"
+    assert _bulk(authenticated_client, day, {recipe.id: 1}).status_code == 303
+    page = authenticated_client.get("/prep?date=" + day).get_data(as_text=True)
+    assert 'value="1"' in page
+    assert "必要 <output>50</output>g" in page
+    assert "必要 <output>2.5</output>g" in page
+    assert _bulk(authenticated_client, day, {recipe.id: 25}).status_code == 303
+    assert PrepPlan.query.one().quantity == 25
+    page = authenticated_client.get("/prep?date=" + day).get_data(as_text=True)
+    assert "必要 <output>1250</output>g" in page
+    assert "必要 <output>62.5</output>g" in page
 
 
 def test_bulk_atomic_update_no_implicit_deletion_and_rollback(authenticated_client, admin_dataset, monkeypatch):
