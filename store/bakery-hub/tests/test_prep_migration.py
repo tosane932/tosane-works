@@ -24,7 +24,12 @@ def test_prep_upgrade_downgrade_preserves_existing_tables(tmp_path):
         db.session.commit()
         upgrade(directory=str(MIGRATIONS_DIR), revision="head")
         after = set(inspect(db.engine).get_table_names())
-        assert after - before == {"prep_recipes", "prep_ingredients", "prep_plans"}
+        added_tables = {
+            "prep_recipes", "prep_ingredients", "prep_plans",
+            "register_products", "register_cutovers", "register_transactions",
+            "register_transaction_lines",
+        }
+        assert after - before == added_tables
         assert db.session.execute(text("SELECT name FROM products WHERE name='従来の商品'")).scalar() == "従来の商品"
         db.session.execute(text("INSERT INTO prep_recipes (dataset_id, product_key,display_name,base_quantity) VALUES (:id,'template:croissant','クロワッサン',10)"), {"id": identifier})
         db.session.commit()
@@ -32,4 +37,4 @@ def test_prep_upgrade_downgrade_preserves_existing_tables(tmp_path):
         assert set(inspect(db.engine).get_table_names()) == before
         assert db.session.execute(text("SELECT name FROM products WHERE name='従来の商品'")).scalar() == "従来の商品"
         upgrade(directory=str(MIGRATIONS_DIR), revision="head")
-        assert {"prep_recipes", "prep_ingredients", "prep_plans"}.issubset(set(inspect(db.engine).get_table_names()))
+        assert added_tables.issubset(set(inspect(db.engine).get_table_names()))
