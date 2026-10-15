@@ -96,6 +96,16 @@ UIの「0から負へ」の確認を飛ばす直接POSTにも備え、負数の�
 
 オフライン会計は後続Phaseで端末内の永続キューを設計する。実会計時刻とサーバー同期時刻を区別して保存する追加カラム、時計改変への対策、価格表の版と同期時の価格差分の確認、認証失効やGuest期限切れ、重複端末・未送信キューの復旧、切替日をまたぐ遅延送信を先に解決する。端末から送られた時刻・価格を無条件に採用して過去売上を改変しない。PWA／IndexedDBとオフライン取込APIはPhase 2Aに含めない。
 
+### Phase 2Bの試験UI・ローカル保存（本番デフォルト無効）
+
+Phase 2Bでは上記の「将来」に記した範囲のうち、**一度開いたページの通信断への対応**だけを実装する。初回表示時にDatasetごとの有効レジ商品を取得し、標準18枚の元PNG（合計37,202,906 byte）ではなく、320pxのレジ専用WebP（合計194,886 byte）を必要に応じて読み込む。商品選択、±50個、金額・釣銭計算、返金への切替は端末内の素のJavaScriptで完結し、タッチごとのHTTPは発生させない。画像が欠損した場合は商品名の文字タイルへ代替する。旧商品登録・旧`/input`・Dashboardは変更しない。
+
+会計開始時に生成したUUIDは同じ会計の再送に使い続ける。下書きはIndexedDBの`drafts`、確定操作後は`queue`へ入れ、両者の移動を1つのIndexedDB transactionで確定する。ローカル保存に失敗した場合はカートを残して「未保存」を表示する。保存に成功したときだけ次の会計に移る。`queue`は認証セッション由来のランダムなスコープとDataset IDで分離し、`pending`／`synced`／`needs_review`を保持する。同期済みでも端末の記録は直ちに消さない。別タブの同期はWeb Locks APIまたは短期IndexedDB leaseで直列化し、通信断では同じキーで指数的な待ち時間を置いて再送する。会計操作中はネットワークを待たない。ブラウザの保存領域の消去・端末故障まで復旧を保証するものではなく、Guest期限やログイン変更後の未同期会計を別Datasetへ移す機能もない。残る未同期・要確認の手動復旧手順は本番公開前に整備する。
+
+サーバーの同期APIはCSRF、認証主体からのDataset解決、16 KiBの要求容量制限を通し、既存の`save_register_transaction()`を呼ぶ。サービスは**既存送信キーを先に照会**し、新規のみDBの商品行をロックして端末表示価格との差を調べる。価格が変わった場合はクライアント価格を採用せず409で停止し、元の会計記録を要確認として保持する。クライアント申告の営業日もサーバーのAsia/Tokyo当日と照合し、異なる場合は自動確定しない。同じキーの保存済み再送は価格や日付が変わっても保存結果を返す。端末時刻の真正性は証明していないため、過去営業日への正式取り込み、価格差額の処理、同期日時のDBカラム追加とお客様番号は後続Phaseの課題。
+
+`REGISTER_V3_PREVIEW_ENABLED`と`REGISTER_V3_SAVE_ENABLED`はそれぞれ独立し、未設定では両方false。環境変数からの有効化は`LOCAL_DEVELOPMENT=true`のときだけ許す。テストは明示的にアプリ設定を切り替える。本番では画面もPOSTも閉じ、切替日行は投入しない。試験画面にも「本番の売上記録に使用できない」と明示し、保存フラグがfalseなら会計完了を無効にする。公開導線と旧入力停止は3A/3Bと切替工程のあとで扱う。
+
 ## 4. 切替・互換性と集計
 
 **最大の危険は旧日次行と新会計を同じ営業日について両方計上すること。** Datasetごとに`first_register_date`を一度記録し、`DailySales.date < first_register_date`と`register_transactions.business_date >= first_register_date`を排他的なデータ源にする。切替日は原則として翌営業日など**旧行が一件もない日**を選ぶ。既に当日の旧行があれば翌日へ延期する。既存の有効Guestが旧売上を持つ場合も同じ規則を適用するか、期限満了後の新規Guestだけを先に切り替える。過去にさかのぼる会計POSTや、切替日以降の旧`/input`へのPOSTをサーバーで遮断する。旧画面の表示停止だけでは不十分。デプロイ中の旧プロセスからの書込も想定し、切替前に実行中ワーカー・ルート・日付条件を運用確認する。段階的リリース時の二重書込を許さない。
@@ -149,7 +159,7 @@ Phase 1Bの`register_products.py`は認可済みDatasetオブジェクトを受�
 | **1A 4表のDBスキーマ・制約** | `models.py`、4表を正しい順で作る単一の新migration、`tests/test_migrations.py`・PostgreSQL版と新しいDB制約テスト | `register_products`→`register_cutovers`→`register_transactions`→`register_transaction_lines`。既存表・既存行無改変、複合FK・Dataset境界・NOT NULL・CHECK・UNIQUE、空表のupgrade/downgrade、行があるdowngrade拒否をSQLite/PostgreSQLで確認。標準18品・切替行は投入しない。 |
 | **1B 商品マスタ運用** | `product_images.py`の既存18品定義を参照する`register_products.py`、商品移行・Dataset分離・並行登録テスト。追加migrationなし | Datasetごとに標準18品を冪等に用意。名前・価格・画像キーを取得し、Admin/Guestを分離。独自品は画像なし・名前／価格だけで登録可能。旧月次行は同名だけで統合せず確認後コピー。月替わり後も登録を維持。Guestのレジ独自品30件は旧月次30件と別枠。旧Product/仕込みキー不変を確認。旧商品登録UIはこの段階では維持。 |
 | **2A 会計保存サービス** | 新`register_service.py`、保存・再送・返金・Guestのテスト | サーバー再計算、±50、二重キー競合、別Dataset商品、価格改定のスナップショット、rollback、期限切れ、件数上限、同時POSTをSQLiteとPostgreSQLで確認。ルート公開前に保存処理を固める。 |
-| **2B レジ画面・接続** | 新レジ用template/JS/CSS、`app.py`のGET/POST、`_app_navigation.html` | 18品と独自品、画像なし、＋／−、確認、直接入力、預かり／お釣り、二重タップ・失敗時保持・成功時次会計、戻る確認、Admin/GuestのCSRFと認可。タブレット横向き・スマホ実機確認。旧`/input`はまだ互換保持。 |
+| **2B レジ画面・ローカル保存・限定接続** | `register_routes.py`、`register_service.py`の価格・営業日照合、`register.html`と軽量WebP/JS/CSS、IndexedDB・Node/pytestテスト | 18品と独自品、画像なし、＋／−、確認、直接入力、預かり／お釣り、下書きと未同期の分離、保存失敗時保持、自動再送、Admin/GuestのCSRFと認可。試験環境だけフラグで有効化。本番導線と切替行は追加せず、旧`/input`は互換保持。実機検証は可能な環境で実施し、未実施なら明記する。 |
 | **3A 排他的な集計層** | 新売上集計サービス、`sales_period_summary.py`、集計・境界テスト | Datasetと営業日の排他条件、旧新・返金・0円と未記録の区別、前日／先週同曜日、月年境界、件数・平均の適用範囲、旧Product価格の既知の限界を確認。既存ダッシュボードを変更する前に契約テストを揃える。 |
 | **3B ダッシュボード反映** | `app.py`の`dashboard()`、`api_dashboard_data()`、`api_sales_period_summary()`、`api_ai_advice()`、`home()`と補助関数、`dashboard.html`・`store_home.html` | 金額・数量ランキング、月年候補、AI入力、Guest結果、会計件数・平均・比較表示を共通層へ切替。旧日の既存表示と旧集計テストを維持。 |
 | **4 商品管理UI・仕込み導線** | `app.py`の`index()`・`product_catalog()`、`index.html`・`products.html`、`production_prep.py`、画像関連テスト | Phase 1Bの独自品登録処理を商品画面から操作可能にする。レジ利用に月次登録不要。後から画像選択、disabledの未実装ボタン、Admin画像PR経路、仕込み参考値の手動反映とAdmin認可を確認。旧`/input`の履歴参照と旧Product保全。 |

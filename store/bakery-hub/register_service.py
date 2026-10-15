@@ -3,6 +3,7 @@
 import datetime
 import hashlib
 import json
+import re
 import uuid
 from zoneinfo import ZoneInfo
 
@@ -26,6 +27,14 @@ class SubmissionConflict(ValueError):
 
 class GuestTransactionLimitReached(ValueError):
     """体験版の会計保存上限に達した。"""
+
+
+class PriceChanged(ValueError):
+    """端末で会計した単価とサーバーの商品単価が異なる。"""
+
+
+class BusinessDayChanged(ValueError):
+    """端末で会計した営業日とサーバーの営業日が異なる。"""
 
 
 def new_submission_key():
@@ -119,11 +128,44 @@ def _reject_zero_total(total):
         raise ValueError("0円会計の保存は現在できません。")
 
 
+def _expected_prices(value, lines):
+    """端末側の表示価格は正本には使わず、差分検知だけに用いる。"""
+    if value is None:
+        return None  # Phase 2Aからの内部呼出しとの互換性。
+    if not isinstance(value, (list, tuple)) or len(value) != len(lines):
+        raise ValueError("表示した商品の単価が不足しています。")
+    expected = {}
+    for entry in value:
+        if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+            raise ValueError("表示した商品単価が不正です。")
+        product_id = _integer(entry[0], "商品ID", maximum=2_147_483_647)
+        price = _integer(entry[1], "表示単価", maximum=500)
+        if product_id in expected:
+            raise ValueError("表示単価に商品IDの重複があります。")
+        expected[product_id] = price
+    if set(expected) != {product_id for product_id, _ in lines}:
+        raise ValueError("表示した商品と会計明細が一致しません。")
+    return expected
+
+
+def _checkout_day(value):
+    if value is None:
+        return None  # Phase 2Aからの内部呼出しとの互換性。
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise ValueError("会計時の営業日が不正です。")
+    try:
+        return datetime.date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("会計時の営業日が不正です。") from exc
+
+
 def save_register_transaction(dataset, *, submission_key, kind, items,
-                              received_yen=None, refund_confirmed=False):
+                              received_yen=None, refund_confirmed=False,
+                              displayed_prices=None, checkout_business_date=None):
     """商品価格をDBから再取得し、1会計と全明細を同一トランザクションで確定する。
 
-    items は (商品ID, 数量) の列。時刻・価格・合計額はクライアントから受け取らない。
+    items は (商品ID, 数量) の列。表示価格・申告営業日は差分検知専用で、
+    クライアントの時刻・単価・合計額をDBの正本として採用しない。
     呼出側は認可済みDatasetを渡し、同じ会計の再送には同じsubmission_keyを使う。
     """
     try:
@@ -135,8 +177,12 @@ def save_register_transaction(dataset, *, submission_key, kind, items,
             db.session.commit()
             return previous
 
+        expected_prices = _expected_prices(displayed_prices, lines)
+        expected_day = _checkout_day(checkout_business_date)
         now = utc_now()
         business_date = now.astimezone(TOKYO).date()
+        if expected_day is not None and expected_day != business_date:
+            raise BusinessDayChanged("営業日が変わりました。端末内の記録を確認してください。")
         cutover = db.session.get(RegisterCutover, owner.id)
         if cutover is None or business_date < cutover.first_register_date:
             raise ValueError("レジ会計の集計切替が未設定、または切替日前です。")
@@ -170,6 +216,11 @@ def save_register_transaction(dataset, *, submission_key, kind, items,
         by_id = {product.id: product for product in products.all()}
         if len(by_id) != len(lines):
             raise PermissionError("現在のDatasetで販売可能な商品ではありません。")
+        if expected_prices is not None and any(
+            by_id[product_id].price_yen != expected_prices[product_id]
+            for product_id, _ in lines
+        ):
+            raise PriceChanged("会計時と現在の商品価格が異なります。確認が必要です。")
         snapshots = [(product, quantity, product.price_yen * quantity)
                      for product_id, quantity in lines
                      for product in [by_id[product_id]]]

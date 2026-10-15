@@ -17,6 +17,14 @@ LOCAL_DEVELOPMENT = _environment_flag_is_true(
     os.environ.get("LOCAL_DEVELOPMENT")
 )
 
+# 単独のtrue設定だけでは本番で有効にならない。テストまたは明示的なローカル開発環境に限定。
+REGISTER_V3_PREVIEW_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_PREVIEW_ENABLED")
+)
+REGISTER_V3_SAVE_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_SAVE_ENABLED")
+)
+
 # AIアドバイス生成で使用するGeminiの最新モデル名
 GEMINI_MODEL = "gemini-3.8-flash"
 

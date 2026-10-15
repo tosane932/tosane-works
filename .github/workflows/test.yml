@@ -33,6 +33,10 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: JavaScriptテストを実行
+        run: |
+          node --test tests_js/register_core.test.cjs tests_js/register_ui.test.cjs
+
       - name: pytestを実行
         run: |
           pytest -v

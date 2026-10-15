@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>レジ会計（開発プレビュー） | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='register.css') }}">
+    <script src="{{ url_for('static', filename='register_core.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='register.js') }}" defer></script>
+</head>
+<body>
+    <main class="register-shell" id="register-root">
+        <header class="register-header">
+            <a id="register-back" href="{{ url_for('home') }}" class="back-link">← 戻る</a>
+            <div><p class="eyebrow">BAKERY HUB / REGISTER</p><h1>レジ会計</h1></div>
+            <p id="sync-state" class="sync-state" role="status" aria-live="polite">ローカル保存を確認中</p>
+        </header>
+        <p class="preview-note" role="note">開発中のレジです。本番の売上記録には使用できません。{% if not save_enabled %}会計保存は無効です。{% endif %}</p>
+        <p id="register-message" class="register-message" role="alert" hidden></p>
+        <div class="register-layout">
+            <section class="catalog" aria-labelledby="catalog-title">
+                <div class="section-heading"><h2 id="catalog-title">商品を選ぶ</h2><p>写真を押すと1個追加します</p></div>
+                <div class="product-grid" id="product-grid">
+                    {% for product in products %}
+                    <article class="product-tile" data-product-id="{{ product.id }}">
+                        <button type="button" class="remove-one" data-action="minus" aria-label="{{ product.name }}を1個減らす">−</button>
+                        <button type="button" class="add-one" data-action="plus" aria-label="{{ product.name }}を1個追加">
+                            {% if product.image %}<img src="{{ product.image }}" alt="" width="160" height="160" loading="lazy" decoding="async">
+                            <span class="no-image" hidden>{{ product.name }}</span>
+                            {% else %}<span class="no-image">{{ product.name }}</span>{% endif %}
+                            <span class="product-label">{{ product.name }}</span>
+                            <strong class="product-price">{{ product.price }}円</strong>
+                        </button>
+                        <label class="quantity-label">個数
+                            <input class="quantity-input" inputmode="numeric" type="number" min="-50" max="50" step="1" value="0" data-action="quantity" aria-label="{{ product.name }}の個数">
+                        </label>
+                    </article>
+                    {% endfor %}
+                </div>
+            </section>
+            <section class="checkout" aria-labelledby="checkout-title">
+                <div class="section-heading"><h2 id="checkout-title">今回の会計</h2><p id="checkout-kind">商品を選択してください</p></div>
+                <ul id="cart-lines" class="cart-lines" aria-live="polite"></ul>
+                <div class="total-row"><span id="total-label">合計</span><strong id="total-yen">0円</strong></div>
+                <div id="cash-area" class="cash-area">
+                    <label for="received-yen">お預かり</label>
+                    <div class="cash-input"><input id="received-yen" type="text" inputmode="numeric" autocomplete="off" placeholder="金額を入力" aria-describedby="cash-hint"><span>円</span></div>
+                    <p id="cash-hint">お預かり金額を入力してください</p>
+                    <div class="change-row"><span>お釣り</span><strong id="change-yen">—</strong></div>
+                </div>
+                <button type="button" id="complete-checkout" class="complete-button" {% if not save_enabled %}disabled{% endif %}>会計完了</button>
+                <p class="checkout-help">端末内への保存後、すぐ次の会計に進めます。同期状況は右上に表示します。</p>
+            </section>
+        </div>
+        <button id="jump-checkout" type="button" class="mobile-checkout-link" aria-label="今回の会計を確認する">合計 0円 · 会計を確認</button>
+        <p class="register-footnote">※ 実店舗でレジ専用運用する際は、「戻る」ボタンは表示されません。</p>
+    </main>
+    <dialog id="refund-dialog" aria-labelledby="refund-dialog-title">
+        <h2 id="refund-dialog-title">返金として入力しますか？</h2>
+        <p id="refund-dialog-detail">数量がマイナスになると返金会計になります。</p>
+        <div class="dialog-actions"><button type="button" id="refund-cancel">会計を続ける</button><button type="button" id="refund-confirm" class="confirm-refund">返金として入力</button></div>
+    </dialog>
+    <dialog id="discard-dialog" aria-labelledby="discard-dialog-title">
+        <h2 id="discard-dialog-title">入力中の会計があります。保存せずに戻りますか？</h2>
+        <div class="dialog-actions"><button type="button" id="discard-cancel">会計を続ける</button><button type="button" id="discard-confirm">破棄して戻る</button></div>
+    </dialog>
+    <script id="register-config" type="application/json">{{ {"products": products, "scope": local_scope, "saveEnabled": save_enabled, "postUrl": url_for('register.create_transaction')} | tojson }}</script>
+</body>
+</html>

@@ -65,6 +65,7 @@ from current_weather import current_weather
 from bakery_news import get_news
 from forecast_history import save_forecast, stored_forecasts
 from product_images import available_product_images, available_product_image_assets
+from register_routes import LOCAL_SCOPE_SESSION_KEY, REGISTER_BODY_LIMIT, create_register_blueprint
 from catalog_repository import (
     CatalogPublishError,
     InvalidCatalogImage,
@@ -111,6 +112,8 @@ app.config["WEATHER_API_MODE"] = config.WEATHER_API_MODE
 app.config["WEATHER_API_KEY"] = config.WEATHER_API_KEY
 app.config["WEATHER_LOCATION_NAME"] = config.WEATHER_LOCATION_NAME
 app.config["PUOPPO_INTEGRATION_ENABLED"] = config.PUOPPO_INTEGRATION_ENABLED
+app.config["REGISTER_V3_PREVIEW_ENABLED"] = config.REGISTER_V3_PREVIEW_ENABLED
+app.config["REGISTER_V3_SAVE_ENABLED"] = config.REGISTER_V3_SAVE_ENABLED
 
 app.config["SESSION_COOKIE_SECURE"] = config.SESSION_COOKIE_SECURE
 app.config["SESSION_COOKIE_HTTPONLY"] = config.SESSION_COOKIE_HTTPONLY
@@ -138,6 +141,8 @@ def allow_catalog_image_request_size():
     """CSRFがmultipartを読む前に、このPOSTだけ画像とformの容量を確保する。"""
     if request.endpoint == "submit_product_catalog" and request.method == "POST":
         request.max_content_length = MAX_UPLOAD_IMAGE_BYTES + 16 * 1024
+    elif request.endpoint == "register.create_transaction":
+        request.max_content_length = REGISTER_BODY_LIMIT
 
 
 csrf = CSRFProtect(app)
@@ -570,6 +575,10 @@ app.register_blueprint(
         business_today=business_today,
     )
 )
+app.register_blueprint(create_register_blueprint(
+    access_required=admin_or_guest_required,
+    resolve_dataset=require_current_dataset,
+))
 
 
 def _reserve_guest_ai_usage(current_dataset):
@@ -1055,6 +1064,8 @@ def start_guest_session():
         logger.error("Failed to establish the Guest identity.")
         abort(500)
 
+    session.pop(LOCAL_SCOPE_SESSION_KEY, None)
+
     return guest_dataset
 
 
@@ -1314,6 +1325,7 @@ def login():
                 and password_matches
             ):
                 login_user(AdminUser())
+                session.pop(LOCAL_SCOPE_SESSION_KEY, None)
                 session[ADMIN_AUTH_FINGERPRINT_SESSION_KEY] = (
                     _get_admin_auth_fingerprint(configured_password_hash)
                 )
@@ -1340,6 +1352,7 @@ def login():
 def logout():
     """現在のAdminまたはGuestの認証Sessionだけを終了する。"""
     logout_user()
+    session.pop(LOCAL_SCOPE_SESSION_KEY, None)
     session.pop(ADMIN_AUTH_FINGERPRINT_SESSION_KEY, None)
     return redirect(url_for("login"))
 
