@@ -1,8 +1,88 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>製造予定と必要材料 | Bakery Hub</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='production_prep.css') }}"><script src="{{ url_for('static', filename='production_prep.js') }}" defer></script></head>
-<body class="app-shell-page prep-page">{% include '_app_navigation.html' %}<main class="prep-shell"><a href="{{ url_for('.index') }}">← 商品・レシピへ</a>{% include '_flash_notices.html' %}<header class="prep-header"><h1>製造予定と必要材料</h1><p>勤務や製造の実績ではありません。材料量は現在のレシピで再試算します。</p><form method="get" action="{{ url_for('.plans') }}" class="prep-day-picker"><label>対象日（日本時間）<input type="date" name="date" value="{{ day.isoformat() }}" required></label><button type="submit" class="prep-secondary">日付を開く</button></form></header>
-{% if error %}<p role="alert" class="prep-error">{{ error }}</p>{% endif %}
-<div class="prep-columns"><section class="prep-panel" aria-labelledby="plans-heading"><h2 id="plans-heading">{{ day.month }}月{{ day.day }}日の予定</h2>{% if recipes %}<p class="prep-hint">数量を変更するとすぐに試算します。「保存する」を押すとこの日付の予定数をDBに保存します。</p>
-<div id="prep-plan-cards">{% for recipe in recipes %}{% set plan = by_recipe.get(recipe.id) %}<article class="prep-plan-card" data-recipe-id="{{ recipe.id }}" data-base="{{ recipe.base_quantity }}" data-saved="{{ plan.quantity if plan else 0 }}"><h3><a href="{{ url_for('.recipe_detail', recipe_id=recipe.id) }}">{{ recipe.display_name }}</a></h3><p>基準 {{ recipe.base_quantity }}個</p><form method="post" action="{{ url_for('.save_plan') }}" class="prep-plan-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="business_date" value="{{ day.isoformat() }}"><input type="hidden" name="recipe_id" value="{{ recipe.id }}"><div class="prep-quantity"><button type="button" data-step="-1" aria-label="{{ recipe.display_name }}の予定数を1個減らす">−</button><label>製造予定数 <input type="number" name="quantity" min="0" max="{{ max_quantity }}" step="1" value="{{ plan.quantity if plan else 0 }}" required>個</label><button type="button" data-step="1" aria-label="{{ recipe.display_name }}の予定数を1個増やす">＋</button></div><input class="prep-range" type="range" min="0" max="{{ max_quantity }}" step="1" value="{{ plan.quantity if plan else 0 }}" aria-label="{{ recipe.display_name }}の製造予定数"><div class="prep-actions"><button type="submit" class="prep-primary">保存する</button>{% if plan %}<span>保存済み {{ plan.quantity }}個</span>{% endif %}</div></form>
-{% if plan %}<form method="post" action="{{ url_for('.remove_plan', plan_id=plan.id) }}" class="prep-remove-plan"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">この日の予定から外す</button></form>{% endif %}<ul class="prep-ingredients-data" hidden>{% for item in recipe.ingredients %}<li data-name="{{ item.name }}" data-unit="{{ item.unit }}" data-milli="{{ (item.amount * 1000)|int }}"></li>{% endfor %}</ul></article>{% endfor %}</div>
-{% else %}<p>レシピがありません。<a href="{{ url_for('.index') }}">商品を選んでレシピを登録</a>してください。</p>{% endif %}</section>
-<section class="prep-panel" aria-labelledby="materials-heading"><h2 id="materials-heading">必要材料と現在量</h2><p class="prep-hint">在庫の現在量はこの画面内だけの入力です。保存や自動減算はされません。未入力は「未確認」です。</p><p id="prep-unsaved" role="status" hidden>未保存の数量による試算です。予定を残すには各商品で保存してください。</p><p id="prep-input-error" class="prep-error" role="alert" hidden></p><div id="prep-materials">{% if totals %}{% for name, unit, amount, breakdown in totals %}<article class="prep-material" data-name="{{ name }}" data-unit="{{ unit }}"><div class="prep-material-head"><strong>{{ name }}</strong><span>必要 <output>{{ quantity_text(amount) }}</output>{{ unit }}</span></div><label>現在量（{{ unit }}）<input type="text" inputmode="decimal" class="prep-stock" placeholder="未入力"></label><p class="prep-stock-status">未確認</p><details><summary>商品の内訳</summary><ul>{% for product_name, used in breakdown %}<li>{{ product_name }}：{{ quantity_text(used) }}{{ unit }}</li>{% endfor %}</ul></details></article>{% endfor %}{% else %}<p class="prep-empty">予定数を設定すると、ここに必要材料が表示されます。</p>{% endif %}</div><a class="prep-secondary" href="{{ url_for('material_orders.list_items') }}">材料発注リストへ ›</a><p class="prep-hint">不足を見てから必要に応じて発注リストへ登録してください。発注は自動では行いません。</p></section></div></main></body></html>
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>仕込み管理 | Bakery Hub</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='production_prep.css') }}">
+<script src="{{ url_for('static', filename='production_prep.js') }}" defer></script></head>
+<body class="app-shell-page prep-page">{% include '_app_navigation.html' %}
+<main class="prep-shell prep-workspace">
+  {% include '_flash_notices.html' %}
+  <header class="prep-header prep-work-header">
+    <h1>仕込み管理</h1>
+    <form method="get" action="{{ url_for('.index') }}" class="prep-day-picker">
+      <label>作る日（日本時間）<input type="date" name="date" value="{{ day.isoformat() }}" required></label>
+      <button type="submit" class="prep-secondary">日付を変更</button>
+    </form>
+    <p class="prep-hint">{{ day.month }}月{{ day.day }}日の製造予定 · 必要量は現在のレシピによる試算です。</p>
+  </header>
+  {% if error %}<p role="alert" class="prep-error">{{ error }}</p>{% endif %}
+  <div class="prep-work-columns">
+    <div>
+      <form id="prep-bulk-form" method="post" action="{{ url_for('.save_plans_bulk') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="business_date" value="{{ day.isoformat() }}">
+        <section class="prep-panel prep-step" aria-labelledby="choose-heading">
+          <h2 id="choose-heading">① 今日作るパンを選ぶ</h2>
+          {% if recipes %}<ul class="prep-choices">
+            {% for recipe in recipes %}{% set plan = by_recipe.get(recipe.id) %}
+            <li><label class="prep-choice"><input type="checkbox" name="recipe_id" value="{{ recipe.id }}" data-choose="{{ recipe.id }}" {% if (selected is not none and recipe.id in selected) or (selected is none and plan) %}checked{% endif %}>
+              <span>{{ recipe.display_name }}</span>{% if plan %}<small>保存済み {{ plan.quantity }}個</small>{% endif %}
+            </label></li>{% endfor %}
+          </ul><p class="prep-hint">選択を外しても保存済みの予定は消えません。削除は下の「予定から外す」を使います。</p>
+          {% else %}<p>レシピはまだ登録されていません。</p>{% endif %}
+          <a class="prep-inline-link" href="{{ url_for('.recipe_index') }}">＋ パンを追加・レシピを登録する</a>
+        </section>
+        <section class="prep-panel prep-step" aria-labelledby="quantity-heading">
+          <h2 id="quantity-heading">② 作る個数を決める</h2>
+          <div id="prep-plan-cards">
+            {% for recipe in recipes %}{% set plan = by_recipe.get(recipe.id) %}
+            <article class="prep-plan-card" data-recipe-id="{{ recipe.id }}" data-base="{{ recipe.base_quantity }}" data-saved="{{ plan.quantity if plan else 0 }}" data-has-plan="{{ 'true' if plan else 'false' }}">
+              <h3>{{ recipe.display_name }}</h3>
+              <div class="prep-quantity">
+                <button type="button" data-step="-1" aria-label="{{ recipe.display_name }}の予定数を1個減らす">−</button>
+                <label><span class="visually-hidden">{{ recipe.display_name }}の製造予定数</span><input type="number" name="quantity_{{ recipe.id }}" min="0" max="{{ max_quantity }}" step="1" value="{{ draft.get(recipe.id, plan.quantity if plan else 0) }}" required>個</label>
+                <button type="button" data-step="1" aria-label="{{ recipe.display_name }}の予定数を1個増やす">＋</button>
+              </div>
+              <details class="prep-slider"><summary>スライダーで調整</summary>
+                <input class="prep-range" type="range" min="0" max="100" step="1" value="{{ [draft.get(recipe.id, plan.quantity if plan else 0)|int, 100]|min }}" aria-label="{{ recipe.display_name }}の製造予定数（0～100個）">
+                <p class="prep-hint">100個を超える場合は数字を直接入力してください。</p>
+              </details>
+              {% if plan %}<span class="prep-saved">保存済み {{ plan.quantity }}個</span>{% endif %}
+              <ul class="prep-ingredients-data" hidden>{% for item in recipe.ingredients %}<li data-name="{{ item.name }}" data-unit="{{ item.unit }}" data-milli="{{ (item.amount * 1000)|int }}"></li>{% endfor %}</ul>
+            </article>{% endfor %}
+          </div>
+          {% if recipes %}<p id="prep-unsaved" role="status" hidden>未保存の変更があります。材料は今の入力による試算です。</p>
+          <p id="prep-input-error" class="prep-error" role="alert" hidden></p>
+          <button type="submit" class="prep-primary prep-save-all">まとめて保存</button>{% endif %}
+        </section>
+      </form>
+      {% if by_recipe %}<details class="prep-removal"><summary>保存済みのパンを予定から外す</summary>
+        <p class="prep-hint">0個として保存する場合は上の個数欄を使ってください。</p>
+        {% for recipe in recipes %}{% set plan = by_recipe.get(recipe.id) %}{% if plan %}
+        <form method="post" action="{{ url_for('.remove_plan', plan_id=plan.id) }}" class="prep-remove-plan">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><span>{{ recipe.display_name }}（{{ plan.quantity }}個）</span>
+          <button type="submit" onclick="return confirm('この日の予定から外しますか？')">予定から外す</button>
+        </form>{% endif %}{% endfor %}
+      </details>{% endif %}
+    </div>
+    <section class="prep-panel prep-step prep-results" aria-labelledby="materials-heading">
+      <h2 id="materials-heading">③ 必要な材料を見る</h2>
+      <div id="prep-materials">
+        {% for name, unit, amount, breakdown in totals %}<div class="prep-material" data-name="{{ name }}" data-unit="{{ unit }}"><strong>{{ name }}</strong><span>必要 <output>{{ quantity_text(amount) }}</output>{{ unit }}</span></div>{% endfor %}
+        <p class="prep-empty" {% if totals %}hidden{% endif %}>パンと個数を選ぶと必要材料を表示します。</p>
+      </div>
+      <details id="prep-breakdown" class="prep-optional"><summary>商品ごとの内訳</summary><div id="prep-breakdown-content">
+        {% for name, unit, amount, breakdown in totals %}<div class="prep-breakdown-item"><strong>{{ name }}（{{ unit }}）</strong><ul>{% for product_name, used in breakdown %}<li>{{ product_name }}：{{ quantity_text(used) }}{{ unit }}</li>{% endfor %}</ul></div>{% endfor %}
+      </div></details>
+      <details id="prep-stock-details" class="prep-optional"><summary>在庫と比較する</summary>
+        <p class="prep-hint">現在量はこの画面だけの入力です。保存・自動減算はしません。</p>
+        <div id="prep-stock-list">{% for name, unit, amount, breakdown in totals %}
+          <div class="prep-stock-item" data-name="{{ name }}" data-unit="{{ unit }}"><strong>{{ name }}</strong>
+            <span>必要量：<output>{{ quantity_text(amount) }}</output>{{ unit }}</span>
+            <label>現在量：<input type="text" inputmode="decimal" class="prep-stock" placeholder="未入力">{{ unit }}</label>
+            <p class="prep-stock-status">未確認</p>
+          </div>{% endfor %}</div>
+      </details>
+      <a class="prep-secondary prep-orders-link" href="{{ url_for('material_orders.list_items') }}">材料発注リストへ ›</a>
+      <p class="prep-hint">不足があっても発注は自動では行いません。</p>
+    </section>
+  </div>
+  <p class="prep-footer-link"><a href="{{ url_for('.recipe_index') }}">レシピを登録・編集する</a></p>
+</main></body></html>

@@ -8,7 +8,7 @@ from decimal import Decimal, ROUND_UP
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from models import PrepIngredient, PrepPlan, PrepRecipe, Product, db
+from models import Dataset, PrepIngredient, PrepPlan, PrepRecipe, Product, db
 from product_images import available_product_images, available_product_image_assets
 
 
@@ -152,9 +152,9 @@ def create_production_prep_blueprint(*, access_required, resolve_dataset, busine
             return product.name, product.image_key if product.image_key in assets else None
         abort(404)
 
-    @blueprint.get("/prep")
+    @blueprint.get("/prep/recipes")
     @access_required
-    def index():
+    def recipe_index():
         current = dataset()
         try:
             recipes = PrepRecipe.query.filter_by(dataset_id=current.id).order_by(PrepRecipe.id).all()
@@ -258,7 +258,7 @@ def create_production_prep_blueprint(*, access_required, resolve_dataset, busine
         flash("レシピを更新しました。", "success")
         return redirect(url_for(".recipe_detail", recipe_id=recipe_id), code=303)
 
-    def show_plan(current, day, *, error=None, status=200):
+    def show_plan(current, day, *, error=None, status=200, draft=None, selected=None):
         try:
             recipes = PrepRecipe.query.filter_by(dataset_id=current.id).order_by(PrepRecipe.id).all()
             plans = PrepPlan.query.filter_by(dataset_id=current.id, business_date=day).all()
@@ -271,17 +271,88 @@ def create_production_prep_blueprint(*, access_required, resolve_dataset, busine
             return "製造予定を表示できませんでした。", 500
         return render_template("prep_plans.html", recipes=recipes, by_recipe=by_recipe,
                                totals=totals, day=day, error=error, max_quantity=MAX_QUANTITY,
-                               quantity_text=quantity_text), status
+                               quantity_text=quantity_text, draft=draft or {}, selected=selected), status
 
-    @blueprint.get("/prep/plans")
-    @access_required
-    def plans():
+    def render_requested_day():
         current = dataset()
         try:
             day = parse_business_date(request.args["date"]) if "date" in request.args else business_today()
         except ValueError as error:
             return str(error), 400
         return show_plan(current, day)
+
+    @blueprint.get("/prep/plans")
+    @access_required
+    def plans():
+        return render_requested_day()
+
+    @blueprint.get("/prep")
+    @access_required
+    def index():
+        return render_requested_day()
+
+    @blueprint.post("/prep/plans/bulk")
+    @access_required
+    def save_plans_bulk():
+        current = dataset()
+        raw_ids = request.form.getlist("recipe_id")
+        try:
+            day = parse_business_date(request.form.get("business_date", ""))
+        except ValueError as error:
+            return str(error), 400
+        try:
+            if not 1 <= len(raw_ids) <= 100:
+                raise ValueError("保存するパンを1～100種類選んでください。")
+            ids = [whole_number(value, minimum=1, maximum=999999999) for value in raw_ids]
+            if len(set(ids)) != len(ids):
+                raise ValueError("同じパンを重複して保存できません。")
+            quantities = {}
+            for recipe_id in ids:
+                values = request.form.getlist(f"quantity_{recipe_id}")
+                if len(values) != 1:
+                    raise ValueError("パンごとの個数は1件ずつ入力してください。")
+                quantities[recipe_id] = whole_number(values[0])
+        except ValueError as error:
+            # 直せる入力はその日付の画面で残す。表示対象はAdminのレシピに限定する。
+            selected = set()
+            draft = {}
+            for raw_id in raw_ids[:100]:
+                try:
+                    recipe_id = whole_number(raw_id, minimum=1, maximum=999999999)
+                except ValueError:
+                    continue
+                selected.add(recipe_id)
+                draft[recipe_id] = request.form.get(f"quantity_{recipe_id}", "")
+            return show_plan(current, day, error=str(error), status=400,
+                             draft=draft, selected=selected)
+        try:
+            # PostgreSQLではDataset行をロックし、同じ店舗の日別一括保存を直列化する。
+            # SQLiteでも既存の一意制約とIntegrityErrorで二重作成を拒否する。
+            db.session.query(Dataset).filter_by(id=current.id, kind="admin").with_for_update().one()
+            recipes = PrepRecipe.query.filter(PrepRecipe.dataset_id == current.id,
+                                               PrepRecipe.id.in_(ids)).all()
+            if len(recipes) != len(ids):
+                db.session.rollback()
+                abort(404)
+            existing = {plan.recipe_id: plan for plan in PrepPlan.query.filter(
+                PrepPlan.dataset_id == current.id, PrepPlan.business_date == day,
+                PrepPlan.recipe_id.in_(ids)).with_for_update().all()}
+            for recipe_id, quantity in quantities.items():
+                if recipe_id in existing:
+                    existing[recipe_id].quantity = quantity
+                else:
+                    db.session.add(PrepPlan(dataset_id=current.id, recipe_id=recipe_id,
+                                            business_date=day, quantity=quantity))
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return "同じ日の製造予定が同時に保存されました。日付を開き直してください。", 409
+        except SQLAlchemyError:
+            db.session.rollback()
+            logger.exception("Failed to save prep plans together")
+            return "製造予定を保存できませんでした。", 500
+        flash(f"{day.month}月{day.day}日の製造予定を保存しました。", "success")
+        return redirect(url_for(".index", date=day.isoformat()), code=303)
 
     @blueprint.post("/prep/plans")
     @access_required
