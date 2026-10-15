@@ -108,6 +108,9 @@ def test_postgresql_register_constraints_and_populated_downgrade(migrated_postgr
 def test_postgresql_empty_register_tables_downgrade_safely(migrated_postgresql):
     assert all(db.session.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one() == 0
                for table in TABLES)
+    # PostgreSQL holds ACCESS SHARE locks until this read transaction ends;
+    # leave no reader open while Alembic drops the tables on another connection.
+    db.session.rollback()
     downgrade(directory=str(MIGRATIONS_DIR), revision=OLD_HEAD)
     assert TABLES.isdisjoint(set(inspect(db.engine).get_table_names()))
     assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == OLD_HEAD
