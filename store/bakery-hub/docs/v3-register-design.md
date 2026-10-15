@@ -92,7 +92,9 @@ UIの「0から負へ」の確認を飛ばす直接POSTにも備え、負数の�
 
 **最大の危険は旧日次行と新会計を同じ営業日について両方計上すること。** Datasetごとに`first_register_date`を一度記録し、`DailySales.date < first_register_date`と`register_transactions.business_date >= first_register_date`を排他的なデータ源にする。切替日は原則として翌営業日など**旧行が一件もない日**を選ぶ。既に当日の旧行があれば翌日へ延期する。既存の有効Guestが旧売上を持つ場合も同じ規則を適用するか、期限満了後の新規Guestだけを先に切り替える。過去にさかのぼる会計POSTや、切替日以降の旧`/input`へのPOSTをサーバーで遮断する。旧画面の表示停止だけでは不十分。デプロイ中の旧プロセスからの書込も想定し、切替前に実行中ワーカー・ルート・日付条件を運用確認する。段階的リリース時の二重書込を許さない。
 
-既存`Product`と`DailySales`は移動・上書き・削除せず、旧日付の参照を続ける。独自品は同じDataset内の旧月次行から候補を提示し、店長が採用する行と現行価格を確認して新マスタへ**コピー**する。名前だけを使った自動統合や、旧Product IDの再利用はしない。標準18品はテンプレートの安定キーで一度だけ生成し、同名の旧行がある場合は候補・差額を表示して確認する。Guestは新しいDatasetで18品を利用できるようにし、標準品で既存の「生涯30商品」枠を消費しない専用の独自品枠を検討する。旧登録とレジ登録が並行する間の枠の定義は実装前に固定する。
+既存`Product`と`DailySales`は移動・上書き・削除せず、旧日付の参照を続ける。独自品は同じDataset内の旧月次行から候補を提示し、店長が採用する行と現行価格を確認して新マスタへ**コピー**する。名前だけを使った自動統合や、旧Product IDの再利用はしない。標準18品はテンプレートの安定キーで一度だけ生成し、同名の旧行がある場合は候補・差額を表示して確認する。Phase 1BではGuestの新レジ独自品を**Dataset生涯30件**とし、`template_key IS NULL`の行だけを数える。標準18品と旧月次Productはこの新枠を消費せず、旧月次側の30件枠とも合算しない。
+
+Phase 1Bの`register_products.py`は認可済みDatasetオブジェクトを受けるサービスで、HTTP routeは追加しない。`ensure_standard_products()`は`PRODUCT_IMAGE_OPTIONS`だけを読み、安定キーに対する`ON CONFLICT DO NOTHING`で不足品のみ挿入する。画像ファイルが欠けても商品は残し、画像キーをNULLにして後続UIで文字タイルへ代替する。既存行の名称・価格・画像・表示順・有効状態は更新しない。独自品の名前・価格の検証、Guest枠の判定、旧月次品の明示確認後コピーはサービス内で完結し、それぞれ成功時にcommit、例外時にrollbackする。PostgreSQLはDataset行のロック、SQLiteは同じ行への値を変えないUPDATEで書込を直列化する。将来のHTTPルートはフォームのDataset IDを受けず、認可済みDatasetを渡す。旧商品の無効行と500円超は暗黙にコピーせず拒否する。コピー確認UIと画像編集UIは後続Phaseで実装する。
 
 移行前に、Dataset別・日付別の旧行数／数量／算出金額、ProductのNULL・同名異価格・画像キー・無効商品・当日旧行、既存の仕込み`product:<id>`を読み取り専用で棚卸しする。旧データには販売当時の単価がなく、現在の`Product.price`で計算した**旧仕様上の推計金額**しか復元できない。過去売上の価格不変性を遡及して保証したと表現しない。月次行の更新経路を止めた後は過去行の価格変更を禁止し、必要なら別の修正履歴を設計する。migrationでは導入前後の件数・識別子・合計とFK整合性を検証し、破壊的なdowngradeを許さない設計とする。
 
@@ -137,7 +139,7 @@ UIの「0から負へ」の確認を飛ばす直接POSTにも備え、負数の�
 | --- | --- | --- |
 | **0〜0.1 本PR** | `docs/v3-register-design.md`のみ | 現行コード・migration・既存テストとの照合、4表の作成順とPhase 1Bとの依存解消、`git diff --check`。Python変更なしのためpytestは実行しない。 |
 | **1A 4表のDBスキーマ・制約** | `models.py`、4表を正しい順で作る単一の新migration、`tests/test_migrations.py`・PostgreSQL版と新しいDB制約テスト | `register_products`→`register_cutovers`→`register_transactions`→`register_transaction_lines`。既存表・既存行無改変、複合FK・Dataset境界・NOT NULL・CHECK・UNIQUE、空表のupgrade/downgrade、行があるdowngrade拒否をSQLite/PostgreSQLで確認。標準18品・切替行は投入しない。 |
-| **1B 商品マスタ運用** | `product_images.py`、Phase 1Aの`register_products`を使うサービス、商品移行・Dataset分離テスト。**追加migrationは原則不要**（新たな列・制約が必要と判明した場合だけ別途根拠を示す） | Datasetごとに標準18品を冪等に用意。名前・価格・画像キーを取得し、Admin/Guestを分離。独自品は画像なし・名前／価格だけで登録可能。旧月次行は同名だけで統合せず確認後コピー。月替わり後も登録を維持。Guest枠、旧Product/仕込みキー不変を確認。旧商品登録UIはこの段階では維持。 |
+| **1B 商品マスタ運用** | `product_images.py`の既存18品定義を参照する`register_products.py`、商品移行・Dataset分離・並行登録テスト。追加migrationなし | Datasetごとに標準18品を冪等に用意。名前・価格・画像キーを取得し、Admin/Guestを分離。独自品は画像なし・名前／価格だけで登録可能。旧月次行は同名だけで統合せず確認後コピー。月替わり後も登録を維持。Guestのレジ独自品30件は旧月次30件と別枠。旧Product/仕込みキー不変を確認。旧商品登録UIはこの段階では維持。 |
 | **2A 会計保存サービス** | 新`register_service.py`、保存・再送・返金・Guestのテスト | サーバー再計算、±50、二重キー競合、別Dataset商品、価格改定のスナップショット、rollback、期限切れ、件数上限、同時POSTをSQLiteとPostgreSQLで確認。ルート公開前に保存処理を固める。 |
 | **2B レジ画面・接続** | 新レジ用template/JS/CSS、`app.py`のGET/POST、`_app_navigation.html` | 18品と独自品、画像なし、＋／−、確認、直接入力、預かり／お釣り、二重タップ・失敗時保持・成功時次会計、戻る確認、Admin/GuestのCSRFと認可。タブレット横向き・スマホ実機確認。旧`/input`はまだ互換保持。 |
 | **3A 排他的な集計層** | 新売上集計サービス、`sales_period_summary.py`、集計・境界テスト | Datasetと営業日の排他条件、旧新・返金・0円と未記録の区別、前日／先週同曜日、月年境界、件数・平均の適用範囲、旧Product価格の既知の限界を確認。既存ダッシュボードを変更する前に契約テストを揃える。 |
