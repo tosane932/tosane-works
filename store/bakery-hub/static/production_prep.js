@@ -1,5 +1,17 @@
 "use strict";
 (() => {
+  const MAX = 1000;
+  const stepQuantity = (raw, step) => {
+    if (!/^(?:0|[1-9]\d{0,3})$/.test(raw) || Number(raw) > MAX || ![-10, 10].includes(step)) {
+      return null;
+    }
+    return Math.max(0, Math.min(MAX, Number(raw) + step));
+  };
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { stepQuantity };
+    return;
+  }
+
   const recipeRows = document.querySelector("#prep-ingredient-rows");
   const add = document.querySelector("#prep-add-ingredient");
   if (recipeRows && add) {
@@ -28,7 +40,6 @@
   const error = document.querySelector("#prep-input-error");
   const unsaved = document.querySelector("#prep-unsaved");
   const save = form.querySelector(".prep-save-all");
-  const MAX = 1000;
   const keyFor = (name, unit) => JSON.stringify([name.trim(), unit]);
   const format = micro => {
     const whole = micro / 1000000n;
@@ -165,22 +176,13 @@
   form.querySelectorAll("[data-choose]").forEach(choice => choice.addEventListener("change", recalculate));
   cards.forEach(card => {
     const number = card.querySelector('input[type="number"]');
-    const range = card.querySelector('input[type="range"]');
-    const syncRange = () => {
-      if (!/^(?:0|[1-9]\d{0,3})$/.test(number.value) || Number(number.value) > MAX) return;
-      const value = Number(number.value);
-      range.max = String(Math.min(MAX, Math.max(100, Math.ceil(value / 100) * 100)));
-      range.value = String(value);
-      range.setAttribute("aria-label", `${card.querySelector("h3").textContent}の製造予定数（0～${range.max}個）`);
-    };
-    number.addEventListener("input", () => { syncRange(); recalculate(); });
-    range.addEventListener("input", () => { number.value = range.value; recalculate(); });
+    number.addEventListener("input", recalculate);
     card.querySelectorAll("[data-step]").forEach(button => button.addEventListener("click", () => {
-      const current = Number(number.value);
-      number.value = String(Math.max(0, Math.min(MAX, (Number.isInteger(current) && current >= 0 && current <= MAX ? current : 0) + Number(button.dataset.step))));
-      syncRange(); recalculate();
+      const next = stepQuantity(number.value, Number(button.dataset.step));
+      if (next !== null) number.value = String(next);
+      recalculate();
+      if (next === null) number.focus();
     }));
-    syncRange();
   });
   recalculate();
 })();

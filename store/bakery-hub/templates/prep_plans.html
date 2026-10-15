@@ -36,14 +36,10 @@
             <article class="prep-plan-card" data-recipe-id="{{ recipe.id }}" data-base="{{ recipe.base_quantity }}" data-saved="{{ plan.quantity if plan else 0 }}" data-has-plan="{{ 'true' if plan else 'false' }}">
               <h3>{{ recipe.display_name }}</h3>
               <div class="prep-quantity">
-                <button type="button" data-step="-1" aria-label="{{ recipe.display_name }}の予定数を1個減らす">−</button>
-                <label><span class="visually-hidden">{{ recipe.display_name }}の製造予定数</span><input type="number" name="quantity_{{ recipe.id }}" min="0" max="{{ max_quantity }}" step="1" value="{{ draft.get(recipe.id, plan.quantity if plan else 0) }}" required>個</label>
-                <button type="button" data-step="1" aria-label="{{ recipe.display_name }}の予定数を1個増やす">＋</button>
+                <button type="button" data-step="-10" aria-label="{{ recipe.display_name }}の予定数を10個減らす">−10</button>
+                <label><span class="visually-hidden">{{ recipe.display_name }}の製造予定数</span><input type="number" inputmode="numeric" name="quantity_{{ recipe.id }}" min="0" max="{{ max_quantity }}" step="1" value="{{ draft.get(recipe.id, plan.quantity if plan else 0) }}" required>個</label>
+                <button type="button" data-step="10" aria-label="{{ recipe.display_name }}の予定数を10個増やす">＋10</button>
               </div>
-              <details class="prep-slider"><summary>スライダーで調整</summary>
-                <input class="prep-range" type="range" min="0" max="100" step="1" value="{{ [draft.get(recipe.id, plan.quantity if plan else 0)|int, 100]|min }}" aria-label="{{ recipe.display_name }}の製造予定数（0～100個）">
-                <p class="prep-hint">100個を超える場合は数字を直接入力してください。</p>
-              </details>
               {% if plan %}<span class="prep-saved">保存済み {{ plan.quantity }}個</span>{% endif %}
               <ul class="prep-ingredients-data" hidden>{% for item in recipe.ingredients %}<li data-name="{{ item.name }}" data-unit="{{ item.unit }}" data-milli="{{ (item.amount * 1000)|int }}"></li>{% endfor %}</ul>
             </article>{% endfor %}
