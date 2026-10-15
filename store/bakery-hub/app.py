@@ -45,6 +45,10 @@ from models import (
     DailyForecast,
     Product,
     DailySales,
+    RegisterProduct,
+    RegisterCutover,
+    RegisterTransaction,
+    RegisterTransactionLine,
 )
 from google import genai
 from material_orders import create_material_orders_blueprint
@@ -349,6 +353,21 @@ def _cleanup_expired_guest_datasets(*, now=None):
     ).delete(synchronize_session=False)
     DailyForecast.query.filter(
         DailyForecast.dataset_id.in_(expired_dataset_ids)
+    ).delete(synchronize_session=False)
+
+    # The register FKs intentionally restrict deletion. Remove only the
+    # rechecked, locked Guest Datasets' children, before their parent rows.
+    RegisterTransactionLine.query.filter(
+        RegisterTransactionLine.dataset_id.in_(expired_dataset_ids)
+    ).delete(synchronize_session=False)
+    RegisterTransaction.query.filter(
+        RegisterTransaction.dataset_id.in_(expired_dataset_ids)
+    ).delete(synchronize_session=False)
+    RegisterProduct.query.filter(
+        RegisterProduct.dataset_id.in_(expired_dataset_ids)
+    ).delete(synchronize_session=False)
+    RegisterCutover.query.filter(
+        RegisterCutover.dataset_id.in_(expired_dataset_ids)
     ).delete(synchronize_session=False)
 
     product_ids = [

@@ -75,7 +75,7 @@ jobs:
 
       - name: PostgreSQL migrationを検証
         run: |
-          pytest tests/test_migrations_postgresql.py -v
+          pytest tests/test_migrations_postgresql.py tests/test_register_postgresql.py -v
 
       - name: PostgreSQL実並行処理を検証
         run: |
