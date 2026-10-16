@@ -16,6 +16,8 @@ from register_cutover_audit import audit_cutover
 from register_cutover_service import CutoverBlocked, confirm_cutover
 from register_products import create_custom_product, ensure_standard_products, update_register_product
 from register_recovery_service import RecoveryConflict, preserve_case, review_case
+from register_recovery_service import confirm_recovery
+from register_catalog_proof import issue_catalog_proof
 from register_service import RecoveryReviewRequired, save_register_transaction
 from tests.test_register_routes import guest
 
@@ -228,3 +230,146 @@ def test_cutover_review_decisions_are_required_and_recorded(flask_app, admin_dat
                  for code in result["review_codes"]}
     confirm_cutover(admin_dataset, **params, review_decisions=decisions)
     assert json.loads(RegisterCutoverApproval.query.one().review_decisions) == decisions
+
+
+def test_past_day_recovery_requires_signed_price_and_independent_records(flask_app, admin_dataset, monkeypatch):
+    from register_service import utc_now
+    product = create_custom_product(admin_dataset, name="パン", price_yen=120)
+    day = datetime.datetime.now(ZoneInfo("Asia/Tokyo")).date() - datetime.timedelta(days=1)
+    db.session.add(RegisterCutover(dataset_id=admin_dataset.id, first_register_date=day))
+    db.session.commit()
+    yesterday = datetime.datetime.combine(day, datetime.time(12), tzinfo=ZoneInfo("Asia/Tokyo")).astimezone(datetime.timezone.utc)
+    monkeypatch.setattr("register_catalog_proof.utc_now", lambda: yesterday)
+    proof = issue_catalog_proof(admin_dataset, [product])
+    monkeypatch.setattr("register_catalog_proof.utc_now", utc_now)
+    original = receipt(product, day=day)
+    original["catalog_proof"] = proof
+    case, _ = preserve_case(admin_dataset, original, actor="test-admin")
+    with pytest.raises(RecoveryConflict, match="調査中"):
+        confirm_recovery(admin_dataset, case.id, actor="test-admin", reason="会計控えと現金日報を確認した",
+            receipt_reference="伝票No.123", cash_reference="現金日報No.5",
+            evidence_date=day.isoformat(), confirmed=True)
+    review(admin_dataset, case, "held")
+    with pytest.raises(RecoveryConflict, match="営業日"):
+        confirm_recovery(admin_dataset, case.id, actor="test-admin", reason="会計控えと現金日報を確認した",
+            receipt_reference="伝票No.123", cash_reference="現金日報No.5",
+            evidence_date=(day + datetime.timedelta(days=1)).isoformat(), confirmed=True)
+    update_register_product(admin_dataset, product.id, name="パン", price_yen=150,
+                            expected_name="パン", expected_price_yen=120)
+    saved, created = confirm_recovery(admin_dataset, case.id, actor="test-admin",
+        reason="会計控えの日時・商品・預かりと当日の現金日報を照合し二重計上なし",
+        receipt_reference="伝票No.123", cash_reference="現金日報No.5",
+        evidence_date=day.isoformat(), confirmed=True)
+    assert created and saved.business_date == day and saved.total_yen == 240
+    assert saved.save_method == "recovery" and saved.recovery_case_id == case.id
+    assert saved.completed_at > saved.client_completed_at
+    assert RegisterRecoveryEvent.query.order_by(RegisterRecoveryEvent.id.desc()).first().transaction_id == saved.id
+    assert RegisterRecoveryCase.query.one().status == "saved"
+    assert RegisterTransaction.query.count() == 1
+    assert confirm_recovery(admin_dataset, case.id, actor="test-admin",
+        reason="会計控えと現金日報を再確認した", receipt_reference="伝票No.123",
+        cash_reference="現金日報No.5", evidence_date=day.isoformat(), confirmed=True)[1] is False
+    assert RegisterTransaction.query.count() == 1
+
+
+def test_recovery_rejects_missing_or_other_dataset_catalog(flask_app, admin_dataset):
+    product = create_custom_product(admin_dataset, name="パン", price_yen=120)
+    day = datetime.datetime.now(ZoneInfo("Asia/Tokyo")).date()
+    db.session.add(RegisterCutover(dataset_id=admin_dataset.id, first_register_date=day))
+    db.session.commit()
+    case, _ = preserve_case(admin_dataset, receipt(product, day=day), actor="admin")
+    review(admin_dataset, case, "held")
+    values = dict(actor="test-admin", reason="会計控えと現金日報を照合した",
+        receipt_reference="伝票No.123", cash_reference="日報No.123",
+        evidence_date=day.isoformat(), confirmed=True)
+    with pytest.raises(ValueError, match="商品情報"):
+        confirm_recovery(admin_dataset, case.id, **values)
+    assert RegisterTransaction.query.count() == 0
+    assert case.status == "held"
+
+
+def test_offline_catalog_is_admin_only_and_flagged(flask_app, authenticated_client, admin_dataset):
+    day = datetime.datetime.now(ZoneInfo("Asia/Tokyo")).date()
+    db.session.add(RegisterCutover(dataset_id=admin_dataset.id, first_register_date=day))
+    db.session.commit()
+    flask_app.config.update(REGISTER_V3_PRODUCTION_ENABLED=True,
+                            REGISTER_V3_PREVIEW_ENABLED=True, REGISTER_V3_SAVE_ENABLED=True)
+    response = authenticated_client.get("/register/preview")
+    assert response.status_code == 200 and response.headers["Cache-Control"] == "no-store"
+    from bs4 import BeautifulSoup
+    configuration = json.loads(BeautifulSoup(response.data, "html.parser").find(
+        id="register-config").text)
+    assert configuration["catalogProof"] is None
+    flask_app.config["REGISTER_V3_OFFLINE_MODE_ENABLED"] = True
+    response = authenticated_client.get("/register/preview")
+    configuration = json.loads(BeautifulSoup(response.data, "html.parser").find(
+        id="register-config").text)
+    assert isinstance(configuration["catalogProof"], str)
+    assert configuration["scope"] == f"{admin_dataset.id}:admin"
+    with pytest.raises(ValueError, match="Dataset"):
+        from register_catalog_proof import verify_catalog_proof
+        verify_catalog_proof(configuration["catalogProof"], uuid.uuid4(), day, [])
+
+
+def test_recovery_rejects_tampered_price_and_rolls_back_audit(flask_app, admin_dataset):
+    product = create_custom_product(admin_dataset, name="パン", price_yen=120)
+    day = datetime.datetime.now(ZoneInfo("Asia/Tokyo")).date()
+    db.session.add(RegisterCutover(dataset_id=admin_dataset.id, first_register_date=day))
+    db.session.commit()
+    original = receipt(product, day=day)
+    original["catalog_proof"] = issue_catalog_proof(admin_dataset, [product])
+    original["displayed_prices"] = [[product.id, 140]]
+    original["snapshots"][0]["unit_price_yen"] = 140
+    original["snapshots"][0]["line_total_yen"] = 280
+    original.update(total_yen=280, change_yen=220)
+    case, _ = preserve_case(admin_dataset, original, actor="admin")
+    review(admin_dataset, case, "held")
+    params = dict(actor="test-admin", reason="会計控えと現金日報を別々に照合した",
+                  receipt_reference="伝票No.123", cash_reference="日報No.123",
+                  evidence_date=day.isoformat(), confirmed=True)
+    with pytest.raises(ValueError, match="価格"):
+        confirm_recovery(admin_dataset, case.id, **params)
+    assert RegisterTransaction.query.count() == 0
+    assert RegisterRecoveryEvent.query.count() == 2
+    original = receipt(product, day=day)
+    original["catalog_proof"] = issue_catalog_proof(admin_dataset, [product])
+    other, _ = preserve_case(admin_dataset, original, actor="admin")
+    review(admin_dataset, other, "held")
+    def fail(_mapper, _connection, target):
+        if target.transaction_id:
+            raise RuntimeError("audit storage failed")
+    event.listen(RegisterRecoveryEvent, "before_insert", fail)
+    try:
+        with pytest.raises(RuntimeError, match="audit storage failed"):
+            confirm_recovery(admin_dataset, other.id, **params)
+    finally:
+        event.remove(RegisterRecoveryEvent, "before_insert", fail)
+    assert RegisterTransaction.query.count() == 0
+    assert RegisterRecoveryCase.query.filter_by(id=other.id).one().status == "held"
+
+
+def test_recovery_confirmation_http_requires_admin_flags_and_csrf(
+        flask_app, authenticated_client, admin_dataset, csrf_token):
+    product = create_custom_product(admin_dataset, name="パン", price_yen=120)
+    day = datetime.datetime.now(ZoneInfo("Asia/Tokyo")).date()
+    db.session.add(RegisterCutover(dataset_id=admin_dataset.id, first_register_date=day))
+    db.session.commit()
+    original = receipt(product, day=day)
+    original["catalog_proof"] = issue_catalog_proof(admin_dataset, [product])
+    case, _ = preserve_case(admin_dataset, original, actor="admin")
+    review(admin_dataset, case, "held")
+    flask_app.config["REGISTER_V3_RECOVERY_ENABLED"] = True
+    path = f"/register/recovery/{case.id}/confirm"
+    form = dict(reason="会計控えと現金日報の原本を照合した", receipt_reference="伝票No.123",
+                cash_reference="現金日報No.5", evidence_date=day.isoformat(), confirmed="yes")
+    assert authenticated_client.post(path, data=form).status_code == 400
+    token = csrf_token(authenticated_client, f"/register/recovery/{case.id}")
+    form["csrf_token"] = token
+    assert authenticated_client.post(path, data=form).status_code == 404
+    flask_app.config.update(REGISTER_V3_OFFLINE_MODE_ENABLED=True,
+                            REGISTER_V3_PRODUCTION_ENABLED=True,
+                            REGISTER_V3_PREVIEW_ENABLED=True, REGISTER_V3_SAVE_ENABLED=True)
+    assert authenticated_client.post(path, data=form).status_code == 303
+    assert RegisterTransaction.query.count() == 1
+    assert authenticated_client.post(path, data=form).status_code == 303
+    assert RegisterTransaction.query.count() == 1

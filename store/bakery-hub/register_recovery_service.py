@@ -1,11 +1,12 @@
-"""端末会計の永続保全と管理者の判断。売上会計の作成は行わない。"""
+"""端末会計の永続保全と、独立証拠が揃った例外的な復旧確定。"""
 import datetime
 import hashlib
 import json
 
-from models import (RegisterProduct, RegisterPriceHistory, RegisterRecoveryCase,
+from models import (DailySales, Product, RegisterCutover, RegisterProduct, RegisterPriceHistory, RegisterRecoveryCase,
                     RegisterRecoveryEvent, RegisterRecoveryLine, RegisterTransaction,
                     RegisterTransactionLine, db)
+from register_catalog_proof import verify_catalog_proof
 from register_products import _lock_dataset
 from register_service import (_checkout_day, _expected_prices, _normalize, TOKYO,
                               utc_now)
@@ -30,7 +31,8 @@ RECEIPT_KEYS = {"submission_key", "kind", "items", "displayed_prices", "snapshot
 
 
 def _receipt(value):
-    if not isinstance(value, dict) or set(value) != RECEIPT_KEYS:
+    if not isinstance(value, dict) or not (set(value) == RECEIPT_KEYS or
+            set(value) == RECEIPT_KEYS | {"catalog_proof"}):
         raise ValueError("元の会計記録の項目が不正です。")
     key, lines, received, digest = _normalize(
         value["submission_key"], value["kind"], value["items"],
@@ -106,7 +108,8 @@ def _server_result(owner_id, key, receipt, digest):
 
 
 def _event(case, prior, status, actor, reason, server_result, *, cash_result="unknown",
-           evidence_kind="none", evidence_reference=""):
+           evidence_kind="none", evidence_reference="", transaction_id=None,
+           adopted_business_date=None):
     receipt = json.loads(case.snapshot_json)
     prices = {item.id: item.price_yen for item in RegisterProduct.query.filter_by(
         dataset_id=case.dataset_id).all()}
@@ -118,7 +121,8 @@ def _event(case, prior, status, actor, reason, server_result, *, cash_result="un
         price_conflict=price_conflict,
         day_conflict=case.client_business_date != utc_now().astimezone(TOKYO).date(),
         cash_result=cash_result, evidence_kind=evidence_kind,
-        evidence_reference=evidence_reference))
+        evidence_reference=evidence_reference, transaction_id=transaction_id,
+        adopted_business_date=adopted_business_date))
 
 
 def preserve_case(dataset, receipt, *, actor, device_status="pending"):
@@ -224,3 +228,107 @@ def current_server_result(case):
     _, _, _, digest = _normalize(case.submission_key, receipt["kind"], receipt["items"],
                                  receipt["received_yen"], receipt["refund_confirmed"])
     return _server_result(case.dataset_id, case.submission_key, receipt, digest)
+
+
+def confirm_recovery(dataset, case_id, *, actor, reason, receipt_reference,
+                     cash_reference, evidence_date, confirmed=False):
+    """Exceptional Admin attestation. A signed catalog alone never proves a sale date.
+
+    The Admin must inspect the independent dated receipt and cash daybook outside
+    this application. Their references and explicit attestation are durable audit
+    evidence; a missing document is a hard stop, never inferred from the device.
+    """
+    if (confirmed is not True or any(type(v) is not str for v in
+            (actor, reason, receipt_reference, cash_reference, evidence_date))
+            or not 3 <= len(actor.strip()) <= 100 or not 10 <= len(reason.strip()) <= 500
+            or not 6 <= len(receipt_reference.strip()) <= 120
+            or not 6 <= len(cash_reference.strip()) <= 120
+            or receipt_reference.strip() == cash_reference.strip()):
+        raise ValueError("独立した会計控えと現金日報の参照、理由、明示承認が必要です。")
+    day = _checkout_day(evidence_date)
+    try:
+        owner = _lock_dataset(dataset)
+        if owner.kind != "admin":
+            raise PermissionError("Admin専用です。")
+        case = RegisterRecoveryCase.query.populate_existing().filter_by(
+            id=case_id, dataset_id=owner.id).one_or_none()
+        if case is None:
+            raise PermissionError("対象Datasetの案件ではありません。")
+        if case.status == "cancelled":
+            raise RecoveryConflict("取消確認済み案件は再調査が必要です。")
+        receipt = json.loads(case.snapshot_json)
+        key, original_day, lines, snapshots, digest, encoded, source_digest = _receipt(receipt)
+        if (day != original_day or case.source_digest != source_digest
+                or case.snapshot_json != encoded or case.submission_key != key):
+            raise RecoveryConflict("元記録と帳簿の営業日が一致しません。")
+        result = _server_result(owner.id, key, receipt, digest)
+        if result == "conflict":
+            raise RecoveryConflict("同じ送信キーの確定会計が一致しません。")
+        if result == "matching":
+            existing = RegisterTransaction.query.filter_by(dataset_id=owner.id,
+                                                             submission_key=key).one()
+            if case.status != "saved":
+                before = case.status
+                case.status = "saved"
+                _event(case, before, "saved", actor.strip(), reason.strip(), "matching",
+                       cash_result="matched", evidence_kind="会計控え・現金日報",
+                       evidence_reference=f"{receipt_reference.strip()} / {cash_reference.strip()}",
+                       transaction_id=existing.id, adopted_business_date=day)
+                db.session.commit()
+            else:
+                db.session.commit()
+            return existing, False
+        if case.status not in {"investigating", "held", "additional"}:
+            raise RecoveryConflict("調査中または保留の案件だけ復旧確定できます。")
+        now = utc_now()
+        if day > now.astimezone(TOKYO).date():
+            raise RecoveryConflict("未来の営業日は承認できません。")
+        cutover = db.session.get(RegisterCutover, owner.id)
+        if cutover is None or day < cutover.first_register_date:
+            raise RecoveryConflict("切替日前の会計を新レジ売上に登録できません。")
+        if (DailySales.query.join(Product, DailySales.product_id == Product.id)
+                .filter(Product.dataset_id == owner.id, DailySales.date == day).first()):
+            raise RecoveryConflict("同じ営業日に旧日次売上があります。")
+        verify_catalog_proof(receipt.get("catalog_proof"), owner.id, day,
+                             receipt["snapshots"])
+        products = RegisterProduct.query.filter(
+            RegisterProduct.dataset_id == owner.id,
+            RegisterProduct.id.in_([product_id for product_id, _ in lines]))
+        if db.engine.dialect.name == "postgresql":
+            products = products.order_by(RegisterProduct.id).with_for_update()
+        if len(products.all()) != len(lines):
+            raise RecoveryConflict("商品IDが対象Datasetに存在しません。")
+        # The receipt and daybook are independent references; the latter is a
+        # human attestation, not a machine assertion that cash actually moved.
+        references = json.dumps({"receipt": receipt_reference.strip(),
+                                 "cash_daybook": cash_reference.strip()}, ensure_ascii=False)
+        evidence_digest = hashlib.sha256(f"{owner.id}|{receipt_reference.strip()}".encode()).hexdigest()
+        if RegisterTransaction.query.filter_by(dataset_id=owner.id,
+                recovery_evidence_digest=evidence_digest).first():
+            raise RecoveryConflict("この会計控えは別の復旧会計に使用されています。")
+        client_time = datetime.datetime.fromisoformat(receipt["completed_at_local"].replace("Z", "+00:00"))
+        transaction = RegisterTransaction(dataset_id=owner.id, submission_key=key,
+            request_digest=digest, completed_at=now, business_date=day,
+            kind=receipt["kind"], total_yen=receipt["total_yen"],
+            received_yen=receipt["received_yen"], change_yen=receipt["change_yen"],
+            save_method="recovery", recovery_case_id=case.id,
+            recovery_evidence_digest=evidence_digest, client_completed_at=client_time)
+        db.session.add(transaction)
+        db.session.flush()
+        for product_id, quantity in lines:
+            item = snapshots[product_id]
+            db.session.add(RegisterTransactionLine(transaction_id=transaction.id,
+                dataset_id=owner.id, register_product_id=product_id,
+                product_name_snapshot=item["name"], unit_price_yen=item["unit_price_yen"],
+                quantity=quantity, line_total_yen=item["line_total_yen"]))
+        before = case.status
+        case.status = "saved"
+        _event(case, before, "saved", actor.strip(), reason.strip(), "matching",
+               cash_result="matched", evidence_kind="会計控え・現金日報",
+               evidence_reference=references, transaction_id=transaction.id,
+               adopted_business_date=day)
+        db.session.commit()
+        return transaction, True
+    except Exception:
+        db.session.rollback()
+        raise

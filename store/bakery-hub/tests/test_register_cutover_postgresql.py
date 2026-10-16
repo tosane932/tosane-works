@@ -20,6 +20,8 @@ from postgresql_test_utils import get_isolated_postgresql_test_url
 from register_cutover_service import CutoverBlocked, confirm_cutover
 from register_products import create_custom_product, ensure_standard_products, update_register_product
 from register_recovery_service import RecoveryConflict, preserve_case, review_case
+from register_recovery_service import confirm_recovery
+from register_catalog_proof import issue_catalog_proof
 from tests.test_register_recovery import receipt
 from sqlalchemy import event
 
@@ -40,7 +42,8 @@ def pg_app():
     finally:
         reset.dispose()
     app = Flask("cutover_postgresql")
-    app.config.update(SQLALCHEMY_DATABASE_URI=TEST_URL, SQLALCHEMY_TRACK_MODIFICATIONS=False)
+    app.config.update(SQLALCHEMY_DATABASE_URI=TEST_URL, SQLALCHEMY_TRACK_MODIFICATIONS=False,
+                      SECRET_KEY="isolated-recovery-test")
     db.init_app(app)
     Migrate(app, db, directory=str(MIGRATIONS_DIR))
     with app.app_context():
@@ -235,3 +238,47 @@ def test_concurrent_review_is_single_event_and_rollback_atomic(pg_app):
             event.remove(RegisterRecoveryEvent, "before_insert", fail)
         assert RegisterRecoveryCase.query.one().status == "investigating"
         assert RegisterRecoveryEvent.query.count() == 2
+
+
+def test_concurrent_past_day_confirmation_uses_one_key_and_atomic_audit(pg_app, monkeypatch):
+    app, owner_id = pg_app
+    day = DAY - datetime.timedelta(days=1)
+    with app.app_context():
+        owner = db.session.get(Dataset, owner_id)
+        item = create_custom_product(owner, name="復旧商品", price_yen=120)
+        db.session.add(RegisterCutover(dataset_id=owner_id, first_register_date=day))
+        db.session.commit()
+        observed = datetime.datetime.combine(day, datetime.time(12),
+            tzinfo=datetime.timezone(datetime.timedelta(hours=9))).astimezone(datetime.timezone.utc)
+        monkeypatch.setattr("register_catalog_proof.utc_now", lambda: observed)
+        proof = issue_catalog_proof(owner, [item])
+        monkeypatch.undo()
+        original = receipt(item, day=day)
+        original["catalog_proof"] = proof
+        case, _ = preserve_case(owner, original, actor="admin")
+        review_case(owner, case.id, actor="admin", target="held",
+                    reason="会計控えと現金日報を調査する", confirmed=True)
+        case_id = case.id
+    barrier = threading.Barrier(2)
+
+    def worker():
+        with app.app_context():
+            barrier.wait(timeout=15)
+            try:
+                _, created = confirm_recovery(db.session.get(Dataset, owner_id), case_id,
+                    actor="admin", reason="会計控えと現金日報の原本を照合した",
+                    receipt_reference="伝票No.123", cash_reference="現金日報No.5",
+                    evidence_date=day.isoformat(), confirmed=True)
+                return created
+            finally:
+                db.session.remove()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted([future.result(timeout=30) for future in
+                       (pool.submit(worker), pool.submit(worker))]) == [False, True]
+    with app.app_context():
+        transaction = RegisterTransaction.query.one()
+        assert transaction.submission_key == case.submission_key
+        assert transaction.business_date == day and transaction.save_method == "recovery"
+        assert RegisterRecoveryEvent.query.count() == 3
+        assert RegisterRecoveryEvent.query.order_by(RegisterRecoveryEvent.id.desc()).first().transaction_id == transaction.id

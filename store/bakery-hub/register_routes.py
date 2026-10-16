@@ -1,5 +1,6 @@
 """公開前のレジ画面と会計同期API。Datasetは常に認証主体から解決。"""
 
+import datetime
 import uuid
 
 from flask import Blueprint, abort, current_app, jsonify, render_template, request, session
@@ -7,6 +8,7 @@ from flask_login import current_user
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import RegisterCutover, RegisterProduct, RegisterTransaction, RegisterTransactionLine, db
+from register_catalog_proof import issue_catalog_proof
 from register_images import register_image_choices
 from register_products import _standard_rows, ensure_standard_products
 from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
@@ -71,14 +73,21 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
                 for product in products]
         rows.sort(key=lambda row: not row["standard"])
         save_enabled = bool(current_app.config["REGISTER_V3_SAVE_ENABLED"])
-        return render_template(
+        offline_enabled = bool(owner.kind == "admin" and save_enabled and
+                               current_app.config.get("REGISTER_V3_OFFLINE_MODE_ENABLED"))
+        response = current_app.make_response(render_template(
             "register.html", products=rows, save_enabled=save_enabled,
             local_scope=(f"{owner.id}:admin" if owner.kind == "admin" else
                          f"{owner.id}:{session[LOCAL_SCOPE_SESSION_KEY]}"),
             production=bool(current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED")),
             recovery_enabled=owner.kind == "admin" and bool(
                 current_app.config.get("REGISTER_V3_RECOVERY_ENABLED")),
-        )
+            offline_enabled=offline_enabled,
+            catalog_proof=issue_catalog_proof(owner, products) if offline_enabled else None,
+            catalog_fetched_at=datetime.datetime.now(datetime.timezone.utc).isoformat() if offline_enabled else None,
+        ))
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @blueprint.get("/register/demo")
     @admin_required

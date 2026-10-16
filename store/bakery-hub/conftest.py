@@ -67,6 +67,7 @@ def flask_app():
         REGISTER_V3_PRODUCTION_ENABLED=False,
         REGISTER_V3_CUTOVER_ENABLED=False,
         REGISTER_V3_RECOVERY_ENABLED=False,
+        REGISTER_V3_OFFLINE_MODE_ENABLED=False,
     )
 
     assert app_module.app.config["SQLALCHEMY_DATABASE_URI"] == TEST_DATABASE_URI

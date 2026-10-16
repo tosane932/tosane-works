@@ -87,7 +87,8 @@ function element(id) {
 }
 
 function harness({ database = new MemoryDB(), scope = 'dataset:login', online = false,
-                   fetcher, sessionValues = new Map(), recoveryUrl = null } = {}) {
+                   fetcher, sessionValues = new Map(), recoveryUrl = null,
+                   catalogProof = null } = {}) {
     const ids = ['register-root', 'register-config', 'register-message',
         'complete-checkout', 'received-yen', 'sync-state', 'recovery-list', 'product-grid',
         'cart-lines', 'checkout-kind', 'total-label', 'total-yen', 'cash-area',
@@ -99,7 +100,7 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
     elements['register-config'].textContent = JSON.stringify({
         products, scope, saveEnabled: true, postUrl: '/api/register/transactions',
         statusBase: '/api/register/transactions',
-        recoveryUrl,
+        recoveryUrl, catalogProof,
     });
     elements['register-back'].href = '/home';
     elements['checkout-title'].scrollIntoView = () => {};
@@ -176,10 +177,30 @@ test('未同期の元記録をサーバーへ保全しても端末記録と未�
     await until(() => [...ui.database.stores.get('queue').values()][0].backedUp);
     const remaining = [...ui.database.stores.get('queue').values()][0];
     assert.deepEqual(remaining.receipt, original);
-    assert.equal(remaining.status, 'pending');
+    assert.equal(remaining.status, 'needs_review'); // 保全後は通常の自動再送を止める。
     assert.equal(remaining.backedUp, 'recovery-case-id');
     assert.equal(ui.calls.length, 1);
     assert.equal(ui.calls[0].receipt.submission_key, original.submission_key);
+});
+
+test('サーバー発行の商品証跡を元会計に固定し、再送キーと価格を変えない', async () => {
+    const ui = harness({ catalogProof: 'server-signed-catalog' });
+    await until(() => ui.database.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => ui.database.stores.get('queue').size === 1);
+    const original = [...ui.database.stores.get('queue').values()][0].receipt;
+    assert.equal(original.catalog_proof, 'server-signed-catalog');
+    assert.deepEqual(original.displayed_prices, [[1, 120]]);
+    ui.navigator.onLine = true;
+    ui.events.online();
+    await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
+    assert.equal(ui.calls[0].submission_key, original.submission_key);
+    assert.equal(ui.calls[0].catalog_proof, undefined); // 通常POSTの契約は維持。
+    assert.equal([...ui.database.stores.get('queue').values()][0].receipt.catalog_proof,
+                 'server-signed-catalog');
 });
 
 async function until(condition, timeout = 1200) {
@@ -192,7 +213,7 @@ async function until(condition, timeout = 1200) {
 
 test('オフライン会計はIndexedDBへ保存して次へ進み、復旧後に1回同期する', async () => {
     const ui = harness();
-    await until(() => ui.elements['sync-state'].textContent === '同期済み');
+    await until(() => ui.elements['sync-state'].textContent === '✓ サーバー保存済み 0件 / 未同期 0件');
     ui.touch();
     ui.elements['received-yen'].value = '500';
     ui.elements['received-yen'].fire('input');
@@ -200,7 +221,7 @@ test('オフライン会計はIndexedDBへ保存して次へ進み、復旧後�
     assert.equal(ui.calls.length, 0); // タッチ／金額入力時にHTTPなし。
     ui.elements['complete-checkout'].fire('click');
     await until(() => ui.database.stores.get('queue').size === 1);
-    await until(() => ui.elements['sync-state'].textContent === '端末に保存済み・サーバー反映未確認 1件（通信後に再送）');
+    await until(() => ui.elements['sync-state'].textContent === '◷ 端末に記録済み・サーバー反映未確認 1件（通信後に再送）');
     assert.equal(ui.elements['product-grid'].children[0].querySelector().value, 0);
     assert.equal(ui.calls.length, 0);
     ui.navigator.onLine = true;
@@ -208,7 +229,7 @@ test('オフライン会計はIndexedDBへ保存して次へ進み、復旧後�
     await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
     assert.equal(ui.calls.filter(call => call.method !== 'GET').length, 1);
     assert.equal(ui.calls.filter(call => call.method === 'GET').length, 1);
-    assert.equal(ui.elements['sync-state'].textContent, '同期済み');
+    assert.equal(ui.elements['sync-state'].textContent, '✓ サーバー保存済み 1件 / 未同期 0件');
     assert.equal(ui.calls[0].submission_key,
         [...ui.database.stores.get('queue').values()][0].receipt.submission_key);
 });
@@ -222,7 +243,7 @@ test('IndexedDB保存失敗で未保存と表示し、カートを消去しな�
     ui.elements['received-yen'].value = '500';
     ui.elements['received-yen'].fire('input');
     ui.elements['complete-checkout'].fire('click');
-    await until(() => ui.elements['register-message'].textContent.includes('会計記録を保存できませんでした'));
+    await until(() => ui.elements['register-message'].textContent.includes('会計を記録できませんでした。入力内容を保持しています'));
     assert.equal(ui.elements['product-grid'].children[0].querySelector().value, 1);
     assert.equal(db.stores.get('queue').size, 0);
     assert.equal(ui.calls.length, 0);
@@ -241,10 +262,10 @@ test('価格差や不正応答は要確認として残し、別Datasetには表�
     ui.elements['complete-checkout'].fire('click');
     await until(() => [...db.stores.get('queue').values()][0]?.status === 'needs_review');
     await until(() => ui.elements['sync-state'].textContent ===
-        '確認が必要な会計があります 1件 / 未同期 0件');
-    assert.equal(ui.elements['sync-state'].textContent, '確認が必要な会計があります 1件 / 未同期 0件');
+        '⚠ この会計は確認が必要です。記録は保持されています。1件 / 未同期 1件');
+    assert.equal(ui.elements['sync-state'].textContent, '⚠ この会計は確認が必要です。記録は保持されています。1件 / 未同期 1件');
     const other = harness({ database: db, scope: 'other-dataset:other-session', online: true });
-    await until(() => other.elements['sync-state'].textContent === '同期済み');
+    await until(() => other.elements['sync-state'].textContent === '✓ サーバー保存済み 0件 / 未同期 0件');
     assert.equal(other.calls.length, 0);
     assert.equal(db.stores.get('queue').size, 1);
 });
@@ -262,7 +283,7 @@ test('直接入力の負数は確認後だけ反映し、戻ると未同期キ�
     assert.equal(ui.elements['cash-area'].hidden, true);
     ui.elements['complete-checkout'].fire('click');
     await until(() => ui.database.stores.get('queue').size === 1);
-    await until(() => ui.elements['sync-state'].textContent === '端末に保存済み・サーバー反映未確認 1件（通信後に再送）');
+    await until(() => ui.elements['sync-state'].textContent === '◷ 端末に記録済み・サーバー反映未確認 1件（通信後に再送）');
     let prevented = false;
     ui.elements['register-back'].fire('click', { preventDefault: () => { prevented = true; } });
     assert.equal(prevented, false); // 確定済み未同期レコードは入力中カートではない。
@@ -411,7 +432,7 @@ test('Guest期限切れは通信障害と区別して再送停止し、別スコ
     await new Promise(resolve => setTimeout(resolve, 15));
     assert.equal(ui.calls.length, 1);
     const other = harness({ database: db, scope: 'another:session', online: true });
-    await until(() => other.elements['sync-state'].textContent === '同期済み');
+    await until(() => other.elements['sync-state'].textContent === '✓ サーバー保存済み 0件 / 未同期 0件');
     assert.equal(other.calls.length, 0);
     assert.equal(db.stores.get('queue').size, 1);
 });
@@ -430,7 +451,7 @@ test('下書き書込が失敗しても次の書込と会計のキュー保存�
     ui.elements['complete-checkout'].fire('click');
     await until(() => db.stores.get('queue').size === 1);
     await until(() => ui.quantity.value === 0);
-    assert.equal(ui.elements['sync-state'].textContent, '端末に保存済み・サーバー反映未確認 1件（通信後に再送）');
+    assert.equal(ui.elements['sync-state'].textContent, '◷ 端末に記録済み・サーバー反映未確認 1件（通信後に再送）');
 });
 
 test('認証確認後の同一スコープ再読み込みは同じキーを再送し、Guest期限切れは再送しない', async () => {

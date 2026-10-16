@@ -649,6 +649,17 @@ class RegisterTransaction(db.Model):
     __table_args__ = (
         db.UniqueConstraint("id", "dataset_id", name="uq_register_transactions_id_dataset"),
         db.UniqueConstraint("dataset_id", "submission_key", name="uq_register_transactions_submission"),
+        db.UniqueConstraint("recovery_case_id", name="uq_register_transactions_recovery_case"),
+        db.UniqueConstraint("dataset_id", "recovery_evidence_digest", name="uq_register_transactions_recovery_evidence"),
+        db.ForeignKeyConstraint(["recovery_case_id", "dataset_id"],
+                                ["register_recovery_cases.id", "register_recovery_cases.dataset_id"],
+                                name="fk_register_transactions_recovery_dataset", ondelete="RESTRICT"),
+        db.CheckConstraint("save_method IN ('normal','recovery')", name="ck_register_transactions_save_method"),
+        db.CheckConstraint("(save_method = 'normal' AND recovery_case_id IS NULL AND client_completed_at IS NULL "
+                           "AND recovery_evidence_digest IS NULL) OR "
+                           "(save_method = 'recovery' AND recovery_case_id IS NOT NULL AND client_completed_at IS NOT NULL "
+                           "AND recovery_evidence_digest IS NOT NULL AND length(recovery_evidence_digest) = 64)",
+                           name="ck_register_transactions_recovery_fields"),
         db.CheckConstraint("length(request_digest) = 64", name="ck_register_transactions_digest"),
         db.CheckConstraint("kind IN ('sale', 'refund')", name="ck_register_transactions_kind"),
         db.CheckConstraint("total_yen BETWEEN -1000000000 AND 1000000000 AND total_yen = CAST(total_yen AS INTEGER)", name="ck_register_transactions_total"),
@@ -676,6 +687,10 @@ class RegisterTransaction(db.Model):
     total_yen = db.Column(db.BigInteger, nullable=False)
     received_yen = db.Column(db.BigInteger, nullable=True)
     change_yen = db.Column(db.BigInteger, nullable=True)
+    save_method = db.Column(db.String(16), nullable=False, default="normal", server_default="normal")
+    recovery_case_id = db.Column(db.Uuid(as_uuid=True), nullable=True)
+    recovery_evidence_digest = db.Column(db.String(64), nullable=True)
+    client_completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
 class RegisterTransactionLine(db.Model):
@@ -758,6 +773,9 @@ class RegisterRecoveryEvent(db.Model):
         db.ForeignKeyConstraint(["case_id", "dataset_id"],
                                 ["register_recovery_cases.id", "register_recovery_cases.dataset_id"],
                                 ondelete="RESTRICT"),
+        db.ForeignKeyConstraint(["transaction_id", "dataset_id"],
+                                ["register_transactions.id", "register_transactions.dataset_id"],
+                                name="fk_register_recovery_event_transaction_dataset", ondelete="RESTRICT"),
         db.CheckConstraint("to_status IN ('unreviewed','investigating','held','saved','cancelled','additional')",
                            name="ck_register_recovery_event_status"),
     )
@@ -776,6 +794,8 @@ class RegisterRecoveryEvent(db.Model):
     cash_result = db.Column(db.String(24), nullable=False)
     evidence_kind = db.Column(db.String(100), nullable=False, default="none")
     evidence_reference = db.Column(db.String(500), nullable=False, default="")
+    transaction_id = db.Column(db.Uuid(as_uuid=True), nullable=True)
+    adopted_business_date = db.Column(db.Date, nullable=True)
 
 
 class DailyWeather(db.Model):

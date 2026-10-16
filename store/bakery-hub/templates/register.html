@@ -22,8 +22,10 @@
         <p class="preview-note" role="note">{% if production|default(false) %}正式レジの会計です。端末内に保存した会計はサーバーへの反映状況を確認してください。{% else %}開発中のレジです。本番の売上記録には使用できません。{% endif %}{% if not save_enabled %}会計保存は停止中です。{% endif %}</p>
         {% endif %}
         <p id="recovery-list" class="recovery-list" role="status" aria-live="polite" hidden></p>
+        {% if offline_enabled|default(false) %}<p id="catalog-observation" role="status">商品情報のサーバー取得日時：{{ catalog_fetched_at }}。通信が切れた後は、この画面に表示された商品情報を使用します。</p>{% endif %}
         {% if not demo|default(false) %}<div class="register-status-check"><button id="check-register-status" type="button" disabled>端末内会計の保存状況を確認</button><p id="status-check-result" role="status" aria-live="polite">通信できない場合、端末の記録を残します。</p>{% if recovery_enabled %}<p><a href="{{ url_for('register_recovery.index') }}">管理者：保全済みの復旧案件</a></p>{% endif %}</div>{% endif %}
         <p id="register-message" class="register-message" role="alert" hidden></p>
+        {% if not demo|default(false) %}<p id="checkout-result" role="status" aria-live="polite"></p>{% endif %}
         <div class="register-layout">
             <section class="catalog" aria-labelledby="catalog-title">
                 <div class="section-heading"><h2 id="catalog-title">商品を選ぶ</h2><p>写真を押すと1個追加します</p></div>
@@ -75,7 +77,7 @@
     {% if demo|default(false) %}
     <script id="register-config" type="application/json">{{ {"products": products, "demo": true} | tojson }}</script>
     {% else %}
-    <script id="register-config" type="application/json">{{ {"products": products, "scope": local_scope, "saveEnabled": save_enabled, "postUrl": url_for('register.create_transaction'), "statusBase": url_for('register.create_transaction'), "recoveryUrl": url_for('register_recovery.preserve') if recovery_enabled else none} | tojson }}</script>
+    <script id="register-config" type="application/json">{{ {"products": products, "scope": local_scope, "saveEnabled": save_enabled, "postUrl": url_for('register.create_transaction'), "statusBase": url_for('register.create_transaction'), "recoveryUrl": url_for('register_recovery.preserve') if recovery_enabled else none, "catalogProof": catalog_proof|default(none), "catalogFetchedAt": catalog_fetched_at|default(none)} | tojson }}</script>
     {% endif %}
 </body>
 </html>

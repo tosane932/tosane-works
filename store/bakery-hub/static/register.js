@@ -112,18 +112,27 @@
         if (!database) { return; }
         const records = await scopeRecords();
         const pending = records.filter(item => item.status === "pending").length;
+        const unresolved = records.filter(item => item.status !== "synced").length;
+        const synced = records.filter(item => item.status === "synced").length;
         const review = records.filter(item => item.status === "needs_review").length;
         const expired = records.filter(item => item.status === "guest_expired").length;
         const auth = records.filter(item => item.status === "auth_required").length;
         const status = $("sync-state");
+        const observation = $("catalog-observation");
+        if (observation && !navigator.onLine) {
+            observation.textContent = `⚠ オフライン中：最後に取得した商品情報（${config.catalogFetchedAt || "日時不明"}）を使用しています。`;
+        } else if (observation) {
+            observation.textContent = `商品情報のサーバー取得日時：${config.catalogFetchedAt || "日時不明"}。この画面を開いた後の価格変更は反映されません。`;
+        }
         status.classList.toggle("attention", Boolean(pending || review || expired || auth));
-        status.textContent = expired ? `利用期限が終了しました ${expired}件 / 未同期 ${pending}件`
-            : review ? `確認が必要な会計があります ${review}件 / 未同期 ${pending}件`
-            : auth ? `認証の確認が必要です ${auth}件 / 未同期 ${pending}件`
-            : activeSyncId ? `同期しています 未同期 ${pending}件`
+        status.textContent = expired ? `⚠ 利用期限が終了しました ${expired}件 / 未同期 ${unresolved}件`
+            : review ? `⚠ この会計は確認が必要です。記録は保持されています。${review}件 / 未同期 ${unresolved}件`
+            : auth ? `認証の確認が必要です ${auth}件 / 未同期 ${unresolved}件`
+            : activeSyncId ? `↻ 会計をサーバーへ同期しています。未同期 ${unresolved}件`
             : pending && (!navigator.onLine || records.some(item => item.status === "pending" && item.attempts > 0))
-                ? `端末に保存済み・サーバー反映未確認 ${pending}件（通信後に再送）`
-            : pending ? `端末に保存済み・サーバー反映未確認 ${pending}件` : "同期済み";
+                ? `◷ 端末に記録済み・サーバー反映未確認 ${pending}件（通信後に再送）`
+            : pending ? `◷ 端末に記録済み・サーバー反映未確認 ${pending}件`
+            : `✓ サーバー保存済み ${synced}件 / 未同期 0件`;
         const check = $("check-register-status");
         if (check) { check.disabled = !database || syncing || !records.length; }
         const recovery = $("recovery-list");
@@ -277,6 +286,7 @@
         busy = true; render();
         try {
             const receipt = core.receipt(cart, receivedInput.value, key);
+            if (config.catalogProof) { receipt.catalog_proof = config.catalogProof; }
             clearTimeout(draftTimer);
             await draftWrite.catch(() => {}); // 下書きの失敗は原子的なqueue保存で再試行する。
             await checkoutToLocal({ id: `${config.scope}:${key}`, scope: config.scope,
@@ -285,10 +295,11 @@
             receivedInput.value = "";
             key = uuid();
             clearError();
+            if ($("checkout-result")) { $("checkout-result").textContent = "◷ 会計を端末に記録しました。サーバーへの反映はまだです。"; }
             await updateState();
             kickSync();
         } catch (error) {
-            showError(`会計記録を保存できませんでした。${error.message || "保存領域を確認してください。"}`);
+            showError(`⚠ 会計を記録できませんでした。入力内容を保持しています。${error.message || "保存領域を確認してください。"}`);
         } finally { busy = false; render(); }
     }
     checkoutButton.addEventListener("click", complete);
@@ -388,6 +399,8 @@
             if (!response.ok || !result.case_id) { throw new Error(result.error || "保全できませんでした。"); }
             // サーバー保全は売上確定でも端末キューの消去でもない。
             item.backedUp = result.case_id;
+            item.status = "needs_review"; // 照合GETが完全一致するまで同期済みにはしない。
+            item.reason = "recovery_review";
             await operation("queue", "readwrite", store => store.put(item));
             $("status-check-result").textContent = `元記録を保全しました。${result.status === "saved" ? "保存済み会計と内容を照合しました。" : "売上には計上していません。管理者の調査が必要です。"}`;
         } catch (error) {
@@ -512,6 +525,9 @@
             if (record.receipt.client_business_date !== currentDay()) {
                 record.status = "needs_review";
                 record.reason = "business_day_changed";
+            } else if (record.backedUp) {
+                record.status = "needs_review";
+                record.reason = "recovery_review";
             } else {
                 activeSyncId = record.id;
                 await updateState();
