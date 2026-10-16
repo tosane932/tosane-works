@@ -18,6 +18,7 @@
     let database;
     let busy = false;
     let syncing = false;
+    let activeSyncId;
     let retryTimer;
     let draftTimer;
     let draftWrite = Promise.resolve();
@@ -74,7 +75,8 @@
     function persistDraft() {
         const snapshot = { id: draftId, key, quantities: [...cart.quantities],
                            received: receivedInput.value };
-        draftWrite = draftWrite.then(() => operation("drafts", "readwrite", store => store.put(snapshot)));
+        draftWrite = draftWrite.catch(() => {}).then(
+            () => operation("drafts", "readwrite", store => store.put(snapshot)));
         draftWrite.catch(() => showError("入力中の会計を端末に保持できません。保存領域を確認してください。"));
     }
     function scheduleDraft() {
@@ -99,10 +101,47 @@
         const records = await scopeRecords();
         const pending = records.filter(item => item.status === "pending").length;
         const review = records.filter(item => item.status === "needs_review").length;
+        const expired = records.filter(item => item.status === "guest_expired").length;
+        const auth = records.filter(item => item.status === "auth_required").length;
         const status = $("sync-state");
-        status.classList.toggle("attention", Boolean(pending || review));
-        status.textContent = review ? `同期確認が必要です ${review}件 / 未同期 ${pending}件`
-            : pending ? `未同期 ${pending}件` : "同期済み";
+        status.classList.toggle("attention", Boolean(pending || review || expired || auth));
+        status.textContent = expired ? `利用期限が終了しました ${expired}件 / 未同期 ${pending}件`
+            : review ? `確認が必要な会計があります ${review}件 / 未同期 ${pending}件`
+            : auth ? `認証の確認が必要です ${auth}件 / 未同期 ${pending}件`
+            : activeSyncId ? `同期しています 未同期 ${pending}件`
+            : pending && (!navigator.onLine || records.some(item => item.status === "pending" && item.attempts > 0))
+                ? `通信できません。再送します 未同期 ${pending}件`
+                : pending ? `送信待ち 未同期 ${pending}件` : "同期済み";
+        const recovery = $("recovery-list");
+        const flagged = records.filter(item => ["needs_review", "guest_expired", "auth_required"].includes(item.status));
+        recovery.hidden = flagged.length === 0;
+        recovery.textContent = flagged.map(item => {
+            const local = item.receipt;
+            const at = new Date(local.completed_at_local);
+            const time = Number.isNaN(at.getTime()) ? "時刻不明" : new Intl.DateTimeFormat("ja-JP", {
+                timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit",
+            }).format(at);
+            const reference = `会計 ${local.client_business_date} ${time} / ${local.kind === "refund" ? "返金" : "販売"} ${yen(Math.abs(local.total_yen))}`;
+            if (item.status === "guest_expired") {
+                return `${reference}：利用期限が終了しました。端末の記録を保持しています。別のGuestへ移せません。`;
+            }
+            if (item.status === "auth_required") {
+                return `${reference}：認証を確認してください。端末の記録は未同期です。`;
+            }
+            if (item.reason === "business_day_changed") {
+                return `${reference}：営業日が変わったため自動同期できません。端末の記録を保持しています。`;
+            }
+            if (item.reason === "price_changed" && Array.isArray(item.differences)) {
+                const detail = item.differences.map(diff => {
+                    const snapshot = local.snapshots.find(line => line.id === diff.product_id);
+                    const name = snapshot ? snapshot.name : diff.name;
+                    const quantity = snapshot ? snapshot.quantity : 0;
+                    return `${name} ${yen(diff.displayed_yen)} → 現在 ${yen(diff.current_yen)}（単価差 ${yen(diff.current_yen - diff.displayed_yen)}、${quantity}個の会計差 ${yen((diff.current_yen - diff.displayed_yen) * quantity)}）`;
+                }).join("、");
+                return `${reference}：価格変更を確認してください。${detail}。自動確定していません。`;
+            }
+            return `${reference}：自動同期できません。端末の記録を保持しています。`;
+        }).join("\n");
     }
 
     function render() {
@@ -188,7 +227,7 @@
         try {
             const receipt = core.receipt(cart, receivedInput.value, key);
             clearTimeout(draftTimer);
-            await draftWrite;
+            await draftWrite.catch(() => {}); // 下書きの失敗は原子的なqueue保存で再試行する。
             await checkoutToLocal({ id: `${config.scope}:${key}`, scope: config.scope,
                                     status: "pending", receipt, attempts: 0, nextRetryAt: 0 });
             cart = core.createCart(products);
@@ -275,17 +314,33 @@
                 body: JSON.stringify(payload(record.receipt)),
             });
             const type = response.headers.get("Content-Type") || "";
-            if (!type.includes("application/json")) { return "needs_review"; }
+            if (!type.includes("application/json")) {
+                return { status: "auth_required", reason: "non_json_response" };
+            }
             const result = await response.json();
             if (response.ok && result.submission_key === record.receipt.submission_key
                 && result.total_yen === record.receipt.total_yen && result.transaction_id
                 && result.business_date === record.receipt.client_business_date) {
                 record.transactionId = result.transaction_id;
-                return "synced";
+                return { status: "synced" };
+            }
+            if (response.status === 403 && result.code === "guest_expired") {
+                return { status: "guest_expired", reason: "guest_expired" };
+            }
+            if (response.status === 401 || result.code === "auth_required") {
+                return { status: "auth_required", reason: "auth_required" };
+            }
+            if (response.status === 409 && result.code === "price_changed") {
+                return { status: "needs_review", reason: "price_changed",
+                         differences: Array.isArray(result.differences) ? result.differences : [] };
+            }
+            if (response.status === 409 && result.code === "business_day_changed") {
+                return { status: "needs_review", reason: "business_day_changed" };
             }
             return (response.status >= 400 && response.status < 500 && response.status !== 429)
-                || response.ok ? "needs_review" : "pending";
-        } catch (_) { return "pending"; }
+                || response.ok ? { status: "needs_review", reason: result.code || "unexpected_response" }
+                    : { status: "pending", reason: "communication" };
+        } catch (_) { return { status: "pending", reason: "communication" }; }
         finally { clearTimeout(timeout); }
     }
     async function flushQueue() {
@@ -295,8 +350,15 @@
             if (record.nextRetryAt > Date.now()) { continue; }
             if (record.receipt.client_business_date !== currentDay()) {
                 record.status = "needs_review";
+                record.reason = "business_day_changed";
             } else {
-                record.status = await send(record);
+                activeSyncId = record.id;
+                await updateState();
+                const outcome = await send(record);
+                activeSyncId = null;
+                record.status = outcome.status;
+                record.reason = outcome.reason || null;
+                record.differences = outcome.differences || null;
                 if (record.status === "pending") {
                     record.attempts += 1;
                     record.nextRetryAt = Date.now() + Math.min(60000, 1500 * (2 ** Math.min(record.attempts, 6)));
@@ -325,10 +387,12 @@
         } catch (_) { retrySoon(10000); }
         finally {
             syncing = false;
+            activeSyncId = null;
             try { await updateState(); } catch (_) { /* 次の起動時に再確認する */ }
         }
     }
     window.addEventListener("online", kickSync);
+    window.addEventListener("offline", () => updateState().catch(() => {}));
     window.addEventListener("focus", kickSync);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) { kickSync(); } });
 
@@ -342,6 +406,14 @@
                 cart = core.createCart(products, draft.quantities);
                 receivedInput.value = draft.received || "";
                 key = draft.key || key;
+            }
+            // 認証済みの同じスコープでページを再取得した場合だけ、
+            // 新しいCSRFを使って同一キーの再送を試みる。Guest期限切れは解除しない。
+            const records = await scopeRecords();
+            for (const record of records.filter(item => item.status === "auth_required")) {
+                record.status = "pending";
+                record.nextRetryAt = 0;
+                await operation("queue", "readwrite", store => store.put(record));
             }
             await updateState();
             render();

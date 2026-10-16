@@ -17,6 +17,7 @@
             <p id="sync-state" class="sync-state" role="status" aria-live="polite">ローカル保存を確認中</p>
         </header>
         <p class="preview-note" role="note">開発中のレジです。本番の売上記録には使用できません。{% if not save_enabled %}会計保存は無効です。{% endif %}</p>
+        <p id="recovery-list" class="recovery-list" role="status" aria-live="polite" hidden></p>
         <p id="register-message" class="register-message" role="alert" hidden></p>
         <div class="register-layout">
             <section class="catalog" aria-labelledby="catalog-title">

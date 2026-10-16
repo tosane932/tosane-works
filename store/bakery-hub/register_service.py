@@ -32,6 +32,10 @@ class GuestTransactionLimitReached(ValueError):
 class PriceChanged(ValueError):
     """端末で会計した単価とサーバーの商品単価が異なる。"""
 
+    def __init__(self, message, differences):
+        super().__init__(message)
+        self.differences = differences
+
 
 class BusinessDayChanged(ValueError):
     """端末で会計した営業日とサーバーの営業日が異なる。"""
@@ -216,11 +220,15 @@ def save_register_transaction(dataset, *, submission_key, kind, items,
         by_id = {product.id: product for product in products.all()}
         if len(by_id) != len(lines):
             raise PermissionError("現在のDatasetで販売可能な商品ではありません。")
-        if expected_prices is not None and any(
-            by_id[product_id].price_yen != expected_prices[product_id]
-            for product_id, _ in lines
-        ):
-            raise PriceChanged("会計時と現在の商品価格が異なります。確認が必要です。")
+        if expected_prices is not None:
+            differences = [dict(product_id=product_id, name=by_id[product_id].name,
+                                displayed_yen=expected_prices[product_id],
+                                current_yen=by_id[product_id].price_yen)
+                           for product_id, _ in lines
+                           if by_id[product_id].price_yen != expected_prices[product_id]]
+            if differences:
+                raise PriceChanged("会計時と現在の商品価格が異なります。確認が必要です。",
+                                   differences)
         snapshots = [(product, quantity, product.price_yen * quantity)
                      for product_id, quantity in lines
                      for product in [by_id[product_id]]]
