@@ -203,3 +203,44 @@ def test_preview_off_save_on_does_not_open_route(flask_app, authenticated_client
                           "html.parser").select_one('meta[name="csrf-token"]')["content"]
     assert authenticated_client.post("/api/register/transactions", json={},
                                      headers={"X-CSRFToken": token}).status_code == 403
+
+
+def test_read_only_status_lookup_matches_server_snapshot_and_dataset(
+        flask_app, authenticated_client, admin_dataset):
+    enabled(flask_app)
+    cutover(admin_dataset)
+    token, config, page = token_and_product(preview(authenticated_client))
+    assert page.select_one("#check-register-status") is not None
+    assert config["statusBase"] == "/api/register/transactions"
+    product = db.session.get(RegisterProduct, config["products"][0]["id"])
+    key = str(uuid.uuid4())
+    assert checkout(authenticated_client, product, token, submission_key=key).status_code == 200
+    product.name = "改名後"
+    product.price_yen += 1
+    product.is_active = False
+    db.session.commit()
+    path = f"/api/register/transactions/{key}/status"
+    before = (RegisterTransaction.query.count(), DailySales.query.count())
+    g.pop("_login_user", None)
+    found = authenticated_client.get(path)
+    assert found.status_code == 200 and found.headers["Cache-Control"] == "no-store"
+    assert found.json["status"] == "saved"
+    assert found.json["submission_key"] == key
+    assert found.json["items"] == [[product.id, 1]]
+    assert found.json["displayed_prices"] == [[product.id, product.price_yen - 1]]
+    assert found.json["total_yen"] == product.price_yen - 1
+    assert found.json["received_yen"] == 500
+    guest_owner, guest_client = guest(flask_app)
+    g.pop("_login_user", None)
+    assert guest_client.get(path).json == {"status": "not_found"}
+    g.pop("_login_user", None)
+    assert authenticated_client.get(f"/api/register/transactions/{uuid.uuid4()}/status"
+                                    ).json == {"status": "not_found"}
+    assert (RegisterTransaction.query.count(), DailySales.query.count()) == before
+    assert guest_owner.id != admin_dataset.id
+    flask_app.config["REGISTER_V3_SAVE_ENABLED"] = False
+    g.pop("_login_user", None)
+    assert authenticated_client.get(path).status_code == 403
+    flask_app.config["REGISTER_V3_SAVE_ENABLED"] = True
+    g.pop("_login_user", None)
+    assert flask_app.test_client().get(path).status_code == 401

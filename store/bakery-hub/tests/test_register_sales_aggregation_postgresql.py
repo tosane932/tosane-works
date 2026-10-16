@@ -10,7 +10,7 @@ from flask_migrate import Migrate, upgrade
 import pytest
 from sqlalchemy import create_engine, text
 
-from models import (DailySales, Dataset, Product, RegisterCutover, RegisterProduct,
+from models import (DailySales, Dataset, PrepRecipe, Product, RegisterCutover, RegisterPrepLink, RegisterProduct,
                     RegisterTransaction, RegisterTransactionLine, db)
 from postgresql_test_utils import get_isolated_postgresql_test_url
 from register_sales_aggregation import (SalesCutoverIntegrityError, aggregate_sales,
@@ -18,6 +18,8 @@ from register_sales_aggregation import (SalesCutoverIntegrityError, aggregate_sa
 from legacy_sales_cutover import LegacySalesClosed, assert_legacy_sales_writable
 from register_products import _lock_dataset
 from prep_sales_reference import prep_sales_reference
+from register_cutover_audit import audit_cutover
+from sqlalchemy.exc import IntegrityError
 from types import SimpleNamespace
 
 
@@ -212,3 +214,37 @@ def test_cutover_lock_serializes_legacy_writer(pg_app):
         timer.join(timeout=10)
     assert not thread.is_alive()
     assert not writer_errors
+
+
+def test_readonly_audit_snapshot_and_prep_link_composite_constraints(pg_app):
+    day = datetime.date(2026, 10, 16)
+    with pg_app.app_context():
+        owner = Dataset.query.filter_by(kind="admin", system_key="admin").one()
+        guest = Dataset(kind="guest", created_at=datetime.datetime.now(datetime.timezone.utc),
+                        last_activity_at=datetime.datetime.now(datetime.timezone.utc),
+                        absolute_expires_at=datetime.datetime.now(datetime.timezone.utc)
+                        + datetime.timedelta(hours=2))
+        product = RegisterProduct(dataset_id=owner.id, name="独自", price_yen=130)
+        db.session.add_all([guest, product])
+        db.session.flush()
+        local = PrepRecipe(dataset_id=owner.id, product_key="product:100",
+                           display_name="独自", base_quantity=10)
+        foreign = PrepRecipe(dataset_id=guest.id, product_key="product:100",
+                             display_name="独自", base_quantity=10)
+        db.session.add_all([local, foreign])
+        db.session.commit()
+        with sales_read_snapshot() as snapshot:
+            assert snapshot.execute(text("SHOW transaction_read_only")).scalar_one() == "on"
+            result = audit_cutover(owner, planned_date=day, read_session=snapshot, today=day)
+            assert result["status"] == "review"
+            assert result["counts"]["register_products"] == 1
+        db.session.add(RegisterPrepLink(dataset_id=owner.id, recipe_id=foreign.id,
+                                         register_product_id=product.id))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
+        db.session.add(RegisterPrepLink(dataset_id=owner.id, recipe_id=local.id,
+                                         register_product_id=product.id))
+        db.session.commit()
+        assert RegisterPrepLink.query.count() == 1
+        assert audit_cutover(owner, planned_date=day, today=day)["unmapped_custom"] == []

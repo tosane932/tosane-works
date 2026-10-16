@@ -17,6 +17,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .demo-result[hidden],#demo-next[hidden]{display:none}
 .recovery-list{background:#fff8e8;border-left:4px solid #ad7130;padding:12px 16px;margin:0 0 12px;white-space:pre-line;line-height:1.6;overflow-wrap:anywhere}
 .recovery-list[hidden]{display:none}
+.register-status-check{margin:0 0 12px}.register-status-check button{min-height:48px;padding:8px 14px;border:1px solid #69543c;border-radius:8px;background:#fff;color:#342b27;font-weight:700}.register-status-check p{margin:5px 0;font-size:.86rem}
 .register-layout{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(320px,1fr);gap:20px;align-items:start}
 .catalog,.checkout{background:#fff;border:1px solid #e2d9cc;border-radius:12px;padding:16px;box-shadow:0 2px 10px #4931200b}
 .section-heading{display:flex;align-items:baseline;gap:12px;margin-bottom:15px}

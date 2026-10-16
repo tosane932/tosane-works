@@ -63,6 +63,7 @@ def flask_app():
         REGISTER_V3_PRODUCTS_PREVIEW_ENABLED=False,
         REGISTER_V3_PRODUCTS_WRITE_ENABLED=False,
         REGISTER_V3_PUBLIC_DEMO_ENABLED=False,
+        REGISTER_V3_READINESS_ENABLED=False,
     )
 
     assert app_module.app.config["SQLALCHEMY_DATABASE_URI"] == TEST_DATABASE_URI

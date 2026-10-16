@@ -575,6 +575,25 @@ class RegisterProduct(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
 
 
+class RegisterPrepLink(db.Model):
+    """Adminが明示的に承認した独自レジ商品とレシピの一対一対応。"""
+    __tablename__ = "register_prep_links"
+    __table_args__ = (
+        db.ForeignKeyConstraint(["register_product_id", "dataset_id"],
+                                ["register_products.id", "register_products.dataset_id"],
+                                name="fk_register_prep_links_product_dataset", ondelete="RESTRICT"),
+        db.ForeignKeyConstraint(["recipe_id", "dataset_id"],
+                                ["prep_recipes.id", "prep_recipes.dataset_id"],
+                                name="fk_register_prep_links_recipe_dataset", ondelete="RESTRICT"),
+        db.UniqueConstraint("dataset_id", "register_product_id",
+                            name="uq_register_prep_links_dataset_product"),
+    )
+
+    dataset_id = db.Column(db.Uuid(as_uuid=True), primary_key=True)
+    recipe_id = db.Column(db.Integer, primary_key=True)
+    register_product_id = db.Column(db.Integer, nullable=False)
+
+
 class RegisterCutover(db.Model):
     """旧日次売上とレジ会計を営業日単位で切り替える境界。"""
     __tablename__ = "register_cutovers"

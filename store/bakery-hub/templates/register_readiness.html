@@ -1,0 +1,13 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>レジ切替前の監査 | Bakery Hub</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='production_prep.css') }}"></head>
+<body class="app-shell-page prep-page">{% include '_app_navigation.html' %}<main class="prep-shell">
+<header class="prep-header"><h1>レジ切替前の監査</h1><p>この画面は調査だけを行います。切替日は保存・確定されません。端末内の未同期会計はサーバーから数えられません。</p></header>
+<form method="get" action="{{ url_for('.audit') }}" class="prep-panel"><label>切替予定日（日本時間の営業日） <input type="date" name="date" value="{{ requested_date }}" required></label><button type="submit" class="prep-primary">予定日を検証</button></form>
+<section class="prep-panel"><h2>判定：{{ {'blocked':'切替不可','review':'確認が必要','ready':'DB上の切替条件を満たす'}[audit.status] }}</h2>
+{% for reason in audit.blockers %}<p role="alert">切替不可：{{ reason }}</p>{% endfor %}{% for reason in audit.reviews %}<p>要確認：{{ reason }}</p>{% endfor %}
+<p>端末の未同期件数は未確認です。DB上の判定が良好でも、全端末の会計キューを別途確認してください。</p>
+<ul><li>旧商品 {{ audit.counts.old_products }}件／旧日次売上 {{ audit.counts.old_sales }}行</li><li>旧売上の範囲 {{ audit.old_first_day or 'なし' }} ～ {{ audit.old_last_day or 'なし' }}（最終記録日 {{ audit.old_last_day or 'なし' }}）</li><li>レジ商品 {{ audit.counts.register_products }}件／確定会計 {{ audit.counts.transactions }}件／明細 {{ audit.counts.lines }}行</li><li>現在の切替日 {{ audit.cutover or '未設定' }}／検証予定日 {{ audit.planned_date or '未指定' }}</li><li>旧新の同日記録 {{ audit.overlap_days|length }}日／会計・明細の不整合 {{ audit.header_line_mismatch }}件</li></ul>
+{% if audit.expensive_old %}<h3>500円を超える旧商品</h3><ul>{% for item in audit.expensive_old %}<li>{{ item.name }}（旧商品ID {{ item.id }}）：{{ item.price }}円</li>{% endfor %}</ul>{% endif %}
+{% if audit.duplicate_names %}<h3>同名の別レジ商品</h3><ul>{% for item in audit.duplicate_names %}<li>{{ item.name }}（レジ商品ID {{ item.ids|join('、') }}）</li>{% endfor %}</ul>{% endif %}
+{% if audit.inactive_register %}<h3>無効なレジ商品</h3><ul>{% for item in audit.inactive_register %}<li>{{ item.name }}（レジ商品ID {{ item.id }}）</li>{% endfor %}</ul>{% endif %}
+{% if audit.unmapped_old or audit.unmapped_custom %}<h3>レシピ対応が未設定の商品</h3><ul>{% for item in audit.unmapped_old %}<li>旧商品：{{ item.name }}（ID {{ item.id }}）</li>{% endfor %}{% for item in audit.unmapped_custom %}<li>独自レジ商品：{{ item.name }}（ID {{ item.id }}）</li>{% endfor %}</ul>{% endif %}
+<p><a href="{{ url_for('.links') }}">独自レジ商品とレシピの対応を確認する</a></p></section></main></body></html>

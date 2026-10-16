@@ -6,7 +6,7 @@ from flask import Blueprint, abort, current_app, jsonify, render_template, reque
 from flask_login import current_user
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import RegisterProduct, db
+from models import RegisterProduct, RegisterTransaction, RegisterTransactionLine, db
 from register_images import register_image_choices
 from register_products import _standard_rows, ensure_standard_products
 from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
@@ -24,7 +24,7 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
     @blueprint.before_request
     def api_session_state():
         # 分類にだけsigned sessionを使う。Datasetの認可・保存には使わない。
-        if request.endpoint == "register.create_transaction" and not current_user.is_authenticated:
+        if request.endpoint in {"register.create_transaction", "register.transaction_status"} and not current_user.is_authenticated:
             if str(session.get("_user_id", "")).startswith("guest:"):
                 return jsonify(error="Guestの利用期限が終了しました。", code="guest_expired"), 403
             return jsonify(error="ログインの確認が必要です。", code="auth_required"), 401
@@ -125,5 +125,35 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
                        transaction_id=str(saved.id), total_yen=saved.total_yen,
                        business_date=saved.business_date.isoformat(),
                        kind=saved.kind), 200
+
+    @blueprint.get("/api/register/transactions/<uuid:submission_key>/status")
+    @access_required
+    def transaction_status(submission_key):
+        if not (current_app.config["REGISTER_V3_PREVIEW_ENABLED"]
+                and current_app.config["REGISTER_V3_SAVE_ENABLED"]):
+            return jsonify(error="保存状況の照会は現在利用できません。", code="disabled"), 403
+        owner = resolve_dataset()
+        try:
+            saved = RegisterTransaction.query.filter_by(
+                dataset_id=owner.id, submission_key=submission_key).one_or_none()
+            if saved is None:
+                response = jsonify(status="not_found")
+            else:
+                lines = (RegisterTransactionLine.query.filter_by(
+                    dataset_id=owner.id, transaction_id=saved.id)
+                    .order_by(RegisterTransactionLine.register_product_id).all())
+                response = jsonify(status="saved", submission_key=str(saved.submission_key),
+                                   transaction_id=str(saved.id), kind=saved.kind,
+                                   business_date=saved.business_date.isoformat(),
+                                   total_yen=saved.total_yen, received_yen=saved.received_yen,
+                                   items=[[line.register_product_id, line.quantity] for line in lines],
+                                   displayed_prices=[[line.register_product_id, line.unit_price_yen]
+                                                     for line in lines])
+        except SQLAlchemyError:
+            db.session.rollback()
+            current_app.logger.exception("Register status lookup failed")
+            return jsonify(error="保存状況を照会できません。", code="temporary"), 503
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     return blueprint
