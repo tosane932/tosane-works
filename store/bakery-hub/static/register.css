@@ -13,6 +13,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .sync-state.attention{background:#fff2d5;color:#6f3b11}
 .preview-note{background:#fff1db;border-left:4px solid #ad7130;padding:12px 16px;margin:0 0 12px;line-height:1.5}
 .register-message{background:#fff1df;border-left:4px solid #a44b25;padding:12px 16px;margin:0 0 12px}
+.demo-result{background:#e4f2e8;border-left:4px solid #365c46;padding:14px 16px;line-height:1.6;font-weight:700}
+.demo-result[hidden],#demo-next[hidden]{display:none}
 .recovery-list{background:#fff8e8;border-left:4px solid #ad7130;padding:12px 16px;margin:0 0 12px;white-space:pre-line;line-height:1.6;overflow-wrap:anywhere}
 .recovery-list[hidden]{display:none}
 .register-layout{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(320px,1fr);gap:20px;align-items:start}
@@ -80,3 +82,4 @@ dialog h2{font-size:1.2rem;margin:0 0 12px}
 }
 @media(max-width:410px){.product-tile{grid-template-columns:46px minmax(0,1fr)}
 }
+@media(max-height:480px) and (orientation:landscape){.mobile-checkout-link{position:static;margin-top:14px}}
