@@ -135,6 +135,18 @@ Phase 1Bの`register_products.py`は認可済みDatasetオブジェクトを受�
 - 前日比と先週同曜日比は、各営業日の差引売上を同じ排他規則で比較。比較対象に記録がない場合と0円を区別し、0円を分母にした変化率は表示しない。`sales_period_summary.py`の週の起点・進行期間の比較日数・うるう年処理は維持する。
 - Guestが会計後に`/dashboard`へ戻れば自分のDatasetのみが見える。AI分析も同じ正本の集計を使い、GuestのAI回数制限を維持する。返金を含む数量・負数をプロンプトへ渡す形式は別途テストする。
 
+### Phase 3Aの読み取り契約（実装済み、公開画面への接続は3B）
+
+`register_sales_aggregation.py`は認可済みの`Dataset`オブジェクトと営業日の両端を受ける。HTTPでは引き続き`require_current_dataset()`でDatasetを決め、外部からDataset IDを選ばせない。サービスもDatasetの存在とGuestの期限を確認する。`aggregate_sales(dataset, start, end)`は両端を含む範囲、`aggregate_period(dataset, period, offset, today)`は既存`period_bounds()`の暦と進行中期間の同じ経過日数を用いた前期間比較、`sales_year_months(dataset, start, end)`は記録のある年・年月を返す。参照のみで既存データ・切替日を変更しない。
+
+- 切替未設定では旧`DailySales`だけ、設定済みでは切替日前の旧行と切替日以降の確定済み`RegisterTransaction`だけを読む。ローカル未同期・要確認はDBに確定していないため数えない。対象範囲に切替日以降の旧行、切替日前の新会計、または切替未設定で新会計を検出したら`SalesCutoverIntegrityError`（違反行数付き）を送出し、正常な集計値として隠さない。検出対象は要求した営業日範囲であり、運用開始前には全期間の棚卸しが別途必要。
+- 日別と商品別の金額が一致しなければ`SalesAggregationConsistencyError`を送出する。DBのヘッダーと明細には合計一致の横断制約がなく、破損または複数クエリ間の同時更新があり得るため、食い違う結果を表示しない。PostgreSQLの通常の`READ COMMITTED`では複数SELECTの完全な同一スナップショットは保証されない。Phase 3Bの公開接続前に、読取トランザクションのスナップショット固定または一貫した再試行方法を検討する。切替違反の検査は対象範囲で集計の前後に行う。
+- 返却値は整数円の`total_yen`、`legacy_total_yen`、`register_total_yen`、`has_record`、記録がある日だけの`days`、系統付きキー（`legacy:<Product.id>`／`register:<RegisterProduct.id>`）の`products`、レジ会計の`transaction_count`、`sale_count`、`refund_count`、`average_yen`、`average_display_yen`など。`days`が空なら未記録、0円の行があれば`has_record=True`。会計ヘッダーの金額と件数は明細をJOINせず集計し、商品別数・金額は明細スナップショットを使う。レジ商品はIDで集約し、改名前後の名称別内訳を`snapshots`に残す。旧商品の金額は従来どおり現在の`Product.price`による推計値。
+- `transaction_count=None`は対象範囲が旧売上のみ、または切替未設定であり、会計件数を算出できないことを表す。切替日以降を含む期間では実際の新会計件数を整数で返す（未記録なら0件）。旧新混在期間も平均の分子は`register_total_yen`だけで、返金を含む新会計件数で割る。会計が0件なら平均は`None`、それ以外は整数の分子・分母から`Decimal`で除算して保持し、画面表示用だけ1円単位の四捨五入（`ROUND_HALF_UP`）を使う。循環小数は`Decimal`の演算精度に従う。商品別数量と金額は返金分を負数で集計する。
+- 前期間に記録がなければ`previous_yen=None`、記録があって差引0円なら`previous_yen=0`。`difference_yen`は比較対象に記録があるときだけ計算し、変化率は比較対象が正の金額のときだけ算出する。0円・負数は分母にせず`comparison_rate_percent=None`。変化率は`Decimal`で計算し小数第1位へ四捨五入する。日・週・月・年の比較対象範囲は既存APIの規則に合わせる。
+
+Phase 3Bでは`app.py`の`_get_today_sales_amount()`、`_has_today_sales_record()`、`_get_sales_from_db()`、`_get_dashboard_sales_months()`、`_get_dashboard_sales_years()`と、`dashboard()`、`api_dashboard_data()`、`api_sales_period_summary()`、`api_ai_advice()`、`home()`の呼び出し・表示契約を確認して段階的に切り替える。既存`/api/sales-period-summary`の返却形は3Aでは変更しない。日別推移・商品ランキング・比較対象の未記録表示・AI入力を新契約へ写すアダプターを3Bでテストする。切替後の旧`/input`書き込み停止と本番切替日は別工程で検証し、切替条件違反の運用表示または警報も公開接続前に決める。新集計を追加しただけでは本番公開は可能にならない。
+
 仕込みとの最小連携は、販売個数を**参考値**として仕込み画面へDataset・商品キー・営業日付きで渡す読み取り導線。`PrepRecipe`と`PrepPlan`を勝手に更新せず、必要なら店長が予定数に反映する。返品・廃棄・製造ロスを含まないため販売数を実際の材料消費量や在庫変化とは呼ばない。`template:<key>`は新マスタの標準キーへ対応付けられるが、`product:<旧ID>`は移行時に対応を確認し、レシピの参照先を自動で変更しない。材料発注メモへの既存導線は維持する。GuestにAdmin専用の仕込み画面を公開しない。
 
 ## 5. Dataset・権限・画像の境界
