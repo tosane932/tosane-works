@@ -230,6 +230,7 @@
         {% endcall %}
 
         {% call feature('prep', '仕込み管理', '管理者が商品別レシピと日別の製造予定を登録し、共通材料と手入力在庫を比較します。製造・在庫の実績は記録しません。', 'GET /prep・GET /prep/recipes・POST /prep/recipes/new・POST /prep/plans/bulk・POST /prep/plans') %}
+            <dt>試験環境の参考表示</dt><dd>統合集計を明示的に有効化したテスト・ローカル開発環境では、<code>prep_sales_reference.py</code>が対象営業日の確定済み販売数を読取専用で表示します。旧商品IDと標準テンプレートキーを区別し、返金を差し引き、未記録と0個も区別します。独自レジ商品は名前だけでレシピへ結び付けません。本番の既定設定では非表示で、予定数や材料に自動反映しません。</dd>
             <dt>Python / Flask</dt>
             <dd><code>production_prep.py</code>のBlueprintがGET /prepでJSTの今日の仕込み、GET /prep/recipesでレシピ管理を表示します。①パンを選ぶ、②個数を決める、③材料を見る順に操作し、CSRF付きPOST /prep/plans/bulkで選択した商品の予定をまとめて保存します。選択を外すだけでは削除せず、0個も予定として保持します。<code>admin_required</code>と<code>require_current_dataset()</code>でAdmin Datasetを確認し、ID指定時もDatasetで絞ります。日付・全ID・全個数を検証し、Dataset行のロックと一意制約で並行POSTを扱い、一度のSQLAlchemy transactionでcommitします。失敗時は全件rollbackします。</dd>
             <dt>Database</dt>
@@ -239,10 +240,11 @@
             <dt>pytest</dt>
             <dd><code>tests/test_production_prep.py</code>が3ステップ表示・一括保存のatomic性とrollback・配合・端数・材料の区別・日付別の更新・Admin認可・Dataset分離・CSRF・エスケープ・発注電話を確認し、<code>tests/test_prep_migration.py</code>が新テーブルのupgrade・downgradeと既存商品保全を確認します。</dd>
             <dt>確認するコード</dt>
-            <dd>{{ source_links(['production_prep.py', 'models.py', 'migrations/versions/e2a7c4d9b105_add_prep_recipes_plans.py', 'templates/prep_index.html', 'templates/prep_recipe_form.html', 'templates/prep_plans.html', 'static/production_prep.js', 'material_orders.py', 'tests/test_production_prep.py', 'tests/test_prep_postgresql.py', 'tests/test_prep_migration.py']) }}</dd>
+            <dd>{{ source_links(['production_prep.py', 'prep_sales_reference.py', 'register_sales_aggregation.py', 'models.py', 'migrations/versions/e2a7c4d9b105_add_prep_recipes_plans.py', 'templates/prep_index.html', 'templates/prep_recipe_form.html', 'templates/prep_plans.html', 'static/production_prep.js', 'material_orders.py', 'tests/test_production_prep.py', 'tests/test_register_image_prep_reference.py', 'tests/test_prep_postgresql.py', 'tests/test_prep_migration.py']) }}</dd>
         {% endcall %}
 
         {% call feature('products', '商品・メニュー登録', '18品の標準テンプレートとAdminが申請した商品カタログから選び、月ごとの商品と売価を登録します。自由入力もできます。', 'GET /・POST /・POST /admin/product-catalog') %}
+            <dt>試験環境のレジ商品画像</dt><dd>通常の月次商品登録とは別に、試験用の<code>/register/products</code>では承認済みカタログの画像をレジ商品へ選択できます。<code>register_images.py</code>がGuestへの公開設定と画像ファイルを確認し、標準18品は軽量WebPへ解決します。画像変更は商品ID・名前・価格・過去の会計明細を変えません。商品管理用の閲覧・書込フラグは本番既定で無効です。画像アップロード機能はありません。</dd>
             <dt>Python / Flask</dt>
             <dd><code>index()</code>が<code>request.args</code>から表示月、<code>request.form.getlist()</code>から複数行を取得。<code>if</code>で年月・文字数・売価（0〜9,990円、10円単位）・商品IDをサーバーでも検証し、<code>for</code>で更新内容を組み立てます。テンプレートの初期価格は入力開始値なので、登録前に売価を変更できます。テンプレート名は固定で、「新メニューを追加」なら自由入力できます。</dd>
             <dt>Database</dt>

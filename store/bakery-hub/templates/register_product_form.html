@@ -23,6 +23,7 @@
     <button type="submit">変更を保存</button>
   </form>
   {% else %}<p>この環境では編集できません。</p>{% endif %}
+  <p><a href="{{ url_for('register_products.choose_image', product_id=product.id) }}">画像を選ぶ・画像なしにする</a></p>
   {% else %}
   <h1>旧商品をレジへコピー</h1>
   <dl><dt>登録月</dt><dd>{{ product.year }}年{{ product.month }}月</dd>
@@ -40,7 +41,7 @@
   </form>
   {% endif %}
   {% endif %}
-  <p class="register-product-note">画像選択・画像追加は現在未対応です。</p>
+  <p class="register-product-note">新しい画像のアップロードはこの画面ではできません。</p>
 </main>
 </body>
 </html>

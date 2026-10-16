@@ -1,14 +1,13 @@
 """公開前のレジ画面と会計同期API。Datasetは常に認証主体から解決。"""
 
 import uuid
-from pathlib import Path
 
-from flask import Blueprint, abort, current_app, jsonify, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, jsonify, render_template, request, session
 from flask_login import current_user
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import RegisterProduct, db
-from product_images import PRODUCT_IMAGE_OPTIONS, _safe_image_path
+from register_images import register_image_choices
 from register_products import ensure_standard_products
 from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
                               PriceChanged, SubmissionConflict,
@@ -40,15 +39,12 @@ def create_register_blueprint(*, access_required, resolve_dataset):
             ensure_standard_products(owner)
             products = (RegisterProduct.query.filter_by(dataset_id=owner.id, is_active=True)
                         .order_by(RegisterProduct.display_order, RegisterProduct.id).all())
-        except (SQLAlchemyError, ValueError):
+            image_urls = {key: choice["url"] for key, choice in
+                          register_image_choices(current_app.static_folder,
+                                                 is_guest=owner.kind == "guest").items()}
+        except (SQLAlchemyError, ValueError, OSError):
             db.session.rollback()
             abort(503)
-        image_dir = (Path(current_app.static_folder) / "register_images").resolve()
-        image_urls = {
-            key: url_for("static", filename=f"register_images/{key}.webp")
-            for key in PRODUCT_IMAGE_OPTIONS
-            if _safe_image_path(image_dir, f"{key}.webp") is not None
-        }
         if LOCAL_SCOPE_SESSION_KEY not in session:
             session[LOCAL_SCOPE_SESSION_KEY] = uuid.uuid4().hex
         rows = [{"id": product.id, "name": product.name, "price": product.price_yen,

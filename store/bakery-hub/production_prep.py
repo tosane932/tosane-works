@@ -10,6 +10,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from models import Dataset, PrepIngredient, PrepPlan, PrepRecipe, Product, db
 from product_images import available_product_images, available_product_image_assets
+from prep_sales_reference import prep_sales_reference
+from register_sales_aggregation import sales_read_snapshot
 
 
 logger = logging.getLogger(__name__)
@@ -269,9 +271,19 @@ def create_production_prep_blueprint(*, access_required, resolve_dataset, busine
             db.session.rollback()
             logger.exception("Failed to load prep plan")
             return "製造予定を表示できませんでした。", 500
+        sales_reference = None
+        if (current_app.config.get("REGISTER_V3_AGGREGATION_ENABLED") and
+                (current_app.config.get("TESTING") or current_app.config.get("LOCAL_DEVELOPMENT"))):
+            # 集計の全SELECTと商品マスタ照合を同じ読取スナップショットで行う。
+            from app import _sales_scope
+            _sales_scope(current, day, day)
+            with sales_read_snapshot() as read_session:
+                sales_reference = prep_sales_reference(current, recipes, day,
+                                                       read_session=read_session)
         return render_template("prep_plans.html", recipes=recipes, by_recipe=by_recipe,
                                totals=totals, day=day, error=error, max_quantity=MAX_QUANTITY,
-                               quantity_text=quantity_text, draft=draft or {}, selected=selected), status
+                               quantity_text=quantity_text, draft=draft or {}, selected=selected,
+                               sales_reference=sales_reference), status
 
     def render_requested_day():
         current = dataset()

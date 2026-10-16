@@ -17,3 +17,15 @@
 .register-product-custom-list li { padding: .75rem 0; border-bottom: 1px solid #d7c9ba; overflow-wrap: anywhere; }
 .register-product-custom-list li span { margin-right: .5rem; }
 .register-product-note { padding: .8rem; background: #f5f0e9; }
+.register-custom-thumb { width: 48px; height: 48px; object-fit: contain; vertical-align: middle; margin-right: .5rem; }
+.register-image-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; max-height: 65vh; overflow: auto; padding: .3rem; margin: 1rem 0; }
+.register-image-choice { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .4rem; padding: .6rem; border: 1px solid #d7c9ba; background: #fff; cursor: pointer; min-width: 0; }
+.register-image-choice:has(input:checked) { outline: 2px solid #684b39; }
+.register-image-choice input { width: 24px; height: 24px; }
+.register-image-choice img, .register-image-placeholder { grid-column: 1 / -1; width: 100%; height: 105px; object-fit: contain; background: #f5f0e9; }
+.register-image-placeholder { display: grid; place-items: center; }
+.register-image-placeholder[hidden] { display: none; }
+.register-image-choice strong { overflow-wrap: anywhere; font-size: .9rem; }
+.register-image-choice small { grid-column: 1 / -1; }
+.register-image-save { min-height: 48px; padding: .7rem 1rem; background: #684b39; color: white; border: 0; font: inherit; }
+@media (min-width: 720px) { .register-image-gallery { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
