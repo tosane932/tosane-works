@@ -6,7 +6,9 @@
 
 import calendar
 import datetime
+from contextlib import contextmanager
 from decimal import Decimal, ROUND_HALF_UP
+from sqlalchemy.orm import Session
 
 from models import (DailySales, Dataset, Product, RegisterCutover,
                     RegisterTransaction, RegisterTransactionLine, db)
@@ -26,10 +28,28 @@ class SalesAggregationConsistencyError(RuntimeError):
     """会計ヘッダーと明細、または複数読取間の合計が一致しない。"""
 
 
-def _dataset_id(dataset):
+@contextmanager
+def sales_read_snapshot():
+    """PostgreSQLでは専用の読取専用REPEATABLE READ接続を確保する。
+
+    認証用のFlask scoped sessionは既にトランザクションを開始しているため、
+    その接続の分離レベルを途中変更しない。SQLiteでは既存のsessionを使い、
+    集計合計の照合を最終防壁とする。
+    """
+    if db.engine.dialect.name != "postgresql":
+        yield db.session
+        return
+    with db.engine.connect().execution_options(isolation_level="REPEATABLE READ") as connection:
+        with connection.begin():
+            connection.exec_driver_sql("SET TRANSACTION READ ONLY")
+            with Session(bind=connection) as read_session:
+                yield read_session
+
+
+def _dataset_id(dataset, session):
     if not isinstance(dataset, Dataset) or dataset.id is None:
         raise PermissionError("認可済みDatasetが必要です")
-    owner = db.session.get(Dataset, dataset.id)
+    owner = session.get(Dataset, dataset.id)
     if owner is None or owner.kind != dataset.kind:
         raise PermissionError("Datasetが利用できません")
     if owner.kind == "guest":
@@ -56,15 +76,15 @@ def _filters(dataset_id, start, end, cutover):
     return old, new
 
 
-def _check_cutover(dataset_id, start, end, cutover):
+def _check_cutover(dataset_id, start, end, cutover, session):
     old_bad = 0
     if cutover is not None:
-        old_bad = (db.session.query(db.func.count(DailySales.id))
+        old_bad = (session.query(db.func.count(DailySales.id))
                    .join(Product, Product.id == DailySales.product_id)
                    .filter(Product.dataset_id == dataset_id,
                            DailySales.date >= start, DailySales.date <= end,
                            DailySales.date >= cutover).scalar())
-    new_bad = (db.session.query(db.func.count(RegisterTransaction.id))
+    new_bad = (session.query(db.func.count(RegisterTransaction.id))
                .filter(RegisterTransaction.dataset_id == dataset_id,
                        RegisterTransaction.business_date >= start,
                        RegisterTransaction.business_date <= end,
@@ -74,24 +94,25 @@ def _check_cutover(dataset_id, start, end, cutover):
         raise SalesCutoverIntegrityError(int(old_bad), int(new_bad))
 
 
-def aggregate_sales(dataset, start, end):
+def aggregate_sales(dataset, start, end, *, read_session=None):
     """両端を含む営業日範囲を集計。未記録の日はdaysに含めない。
 
     productsは系統＋IDをキーにし、レジ改名前後の名称はsnapshotsに保持。
     transaction_count=Noneは旧データのみで件数を算出できないことを表す。
     """
     _valid_dates(start, end)
-    dataset_id = _dataset_id(dataset)
-    cutover_row = db.session.get(RegisterCutover, dataset_id)
+    session = read_session if read_session is not None else db.session
+    dataset_id = _dataset_id(dataset, session)
+    cutover_row = session.get(RegisterCutover, dataset_id)
     cutover = cutover_row.first_register_date if cutover_row else None
-    _check_cutover(dataset_id, start, end, cutover)
+    _check_cutover(dataset_id, start, end, cutover, session)
     old, new = _filters(dataset_id, start, end, cutover)
 
     days = {}
     products = {}
     old_amount = register_amount = old_records = transaction_count = sales = refunds = 0
     old_total = db.func.sum(db.cast(Product.price, db.BigInteger) * DailySales.quantity)
-    for day, amount, count in (db.session.query(DailySales.date, old_total,
+    for day, amount, count in (session.query(DailySales.date, old_total,
                                                 db.func.count(DailySales.id))
                                .join(Product, Product.id == DailySales.product_id)
                                .filter(*old).group_by(DailySales.date).all()):
@@ -104,7 +125,7 @@ def aggregate_sales(dataset, start, end):
     sale_count = db.func.sum(db.case((RegisterTransaction.kind == "sale", 1), else_=0))
     refund_count = db.func.sum(db.case((RegisterTransaction.kind == "refund", 1), else_=0))
     for day, amount, count, s_count, r_count in (
-        db.session.query(RegisterTransaction.business_date,
+        session.query(RegisterTransaction.business_date,
                          db.func.sum(RegisterTransaction.total_yen),
                          db.func.count(RegisterTransaction.id), sale_count, refund_count)
         .filter(*new).group_by(RegisterTransaction.business_date).all()
@@ -122,7 +143,7 @@ def aggregate_sales(dataset, start, end):
 
     old_product_total = db.func.sum(db.cast(Product.price, db.BigInteger) * DailySales.quantity)
     for product_id, name, quantity, amount in (
-        db.session.query(Product.id, Product.name, db.func.sum(DailySales.quantity),
+        session.query(Product.id, Product.name, db.func.sum(DailySales.quantity),
                          old_product_total)
         .join(DailySales, DailySales.product_id == Product.id)
         .filter(*old).group_by(Product.id, Product.name).all()
@@ -135,7 +156,7 @@ def aggregate_sales(dataset, start, end):
 
     # 商品マスタの現行価格・名称ではなく明細スナップショットで集計する。
     for product_id, name, quantity, amount in (
-        db.session.query(RegisterTransactionLine.register_product_id,
+        session.query(RegisterTransactionLine.register_product_id,
                          RegisterTransactionLine.product_name_snapshot,
                          db.func.sum(RegisterTransactionLine.quantity),
                          db.func.sum(RegisterTransactionLine.line_total_yen))
@@ -165,7 +186,7 @@ def aggregate_sales(dataset, start, end):
         or sum(row["revenue_yen"] for row in products.values() if row["source"] == "register") != register_amount):
         raise SalesAggregationConsistencyError("日別売上と商品別売上が一致しません")
     # 読み取り途中に切替違反行が確定した場合も、可能な範囲で検出する。
-    _check_cutover(dataset_id, start, end, cutover)
+    _check_cutover(dataset_id, start, end, cutover, session)
 
     average = (Decimal(register_amount) / Decimal(transaction_count)
                if transaction_count else None)
@@ -198,14 +219,14 @@ def _previous_bounds(period, offset, today, start, end):
     return prev_start, prev_end
 
 
-def aggregate_period(dataset, period, offset, today):
+def aggregate_period(dataset, period, offset, today, *, read_session=None):
     """既存period_boundsの暦・進行中期間規則を用いる比較契約。"""
     if type(today) is not datetime.date:
         raise ValueError("有効な営業日が必要です")
     start, end = period_bounds(period, offset, today)
-    current = aggregate_sales(dataset, start, min(today, end))
+    current = aggregate_sales(dataset, start, min(today, end), read_session=read_session)
     prev_start, prev_end = _previous_bounds(period, offset, today, start, end)
-    previous = (aggregate_sales(dataset, prev_start, prev_end)
+    previous = (aggregate_sales(dataset, prev_start, prev_end, read_session=read_session)
                 if prev_start is not None else None)
     previous_amount = (previous["total_yen"] if previous and previous["has_record"]
                        else None)
@@ -217,17 +238,18 @@ def aggregate_period(dataset, period, offset, today):
             "difference_yen": difference, "comparison_rate_percent": rate}
 
 
-def sales_year_months(dataset, start, end):
+def sales_year_months(dataset, start, end, *, read_session=None):
     """記録がある年・年月だけを返す。0円の日も候補に含める。"""
     _valid_dates(start, end)
-    dataset_id = _dataset_id(dataset)
-    cutover_row = db.session.get(RegisterCutover, dataset_id)
+    session = read_session if read_session is not None else db.session
+    dataset_id = _dataset_id(dataset, session)
+    cutover_row = session.get(RegisterCutover, dataset_id)
     cutover = cutover_row.first_register_date if cutover_row else None
-    _check_cutover(dataset_id, start, end, cutover)
+    _check_cutover(dataset_id, start, end, cutover, session)
     old, new = _filters(dataset_id, start, end, cutover)
-    old_dates = (db.session.query(DailySales.date).join(Product, Product.id == DailySales.product_id)
+    old_dates = (session.query(DailySales.date).join(Product, Product.id == DailySales.product_id)
                  .filter(*old).distinct().all())
-    new_dates = (db.session.query(RegisterTransaction.business_date)
+    new_dates = (session.query(RegisterTransaction.business_date)
                  .filter(*new).distinct().all())
     dates = [row[0] for row in old_dates + new_dates]
     return {"years": sorted({day.year for day in dates}, reverse=True),

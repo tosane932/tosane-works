@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>売上データを確認できませんでした</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="app-shell-page">
+{% include "_app_navigation.html" %}
+<main class="container" role="alert">
+    <h1>売上データを確認できませんでした</h1>
+    <p>{{ message }} 時間をおいても解消しない場合は管理者へご連絡ください。</p>
+    <p>確認番号：{{ incident_id }}</p>
+    <a href="{{ request.path }}">再読み込み</a>
+</main>
+</body>
+</html>

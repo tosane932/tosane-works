@@ -40,6 +40,7 @@
         <div><small>期間売上</small><strong id="periodSalesTotal">—</strong></div>
         <div><small id="periodSalesComparisonLabel">前期間比</small><strong id="periodSalesComparison">—</strong></div>
       </div>
+      {% if unified_sales %}<p id="periodRegisterMetrics" role="status" aria-live="polite">会計情報を読み込み中…</p>{% endif %}
       <div class="period-sales-graph" role="region" aria-label="期間内の売上金額グラフ" tabindex="0">
         <div class="period-sales-canvas"><canvas id="periodSalesChart"></canvas><div id="periodWeatherMarkers" class="period-weather-markers" aria-label="日付ごとの保存済み天気"></div></div>
       </div>
@@ -150,7 +151,16 @@
     <section class="dashboard-today" aria-label="本日の売上">
         <div><strong>本日の売上</strong><small><time id="businessDate">{{ business_date }}</time>（日本時間）・表示期間にかかわらず本日分</small></div>
         <strong id="todaySalesAmount" aria-live="polite">¥{{ "{:,}".format(today_sales) }}</strong>
+        {% if unified_sales %}<small id="todaySalesRecordStatus">{{ '売上記録あり' if has_today_sales else '売上記録なし' }}</small>{% endif %}
     </section>
+    {% if unified_sales and selected_summary.transaction_count is not none %}
+    <p class="sales-input-guidance">表示期間の全売上：¥{{ '{:,}'.format(selected_summary.total_yen) }}。
+        レジ導入後の会計：{{ selected_summary.transaction_count }}件
+        （販売{{ selected_summary.sale_count }}件・返金{{ selected_summary.refund_count }}件）、
+        平均：{% if selected_summary.average_display_yen is not none %}¥{{ '{:,}'.format(selected_summary.average_display_yen) }}{% else %}算出不可{% endif %}。
+        {% if selected_summary.legacy_record_count %}旧売上を含む期間です。平均には旧売上を含みません。{% endif %}
+    </p>
+    {% elif unified_sales %}<p class="sales-input-guidance">旧日次売上には会計件数がないため、平均会計金額は算出できません。</p>{% endif %}
 
     <p class="dashboard-period ui-icon-layout">
         <svg class="ui-icon ui-icon-status" data-icon="calendar-days" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
@@ -314,6 +324,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (current !== requestSerial) return;
             labels.textContent = data.label;
             document.getElementById('periodSalesTotal').textContent = money(data.total_sales);
+            const metrics = document.getElementById('periodRegisterMetrics');
+            if (metrics) {
+                metrics.textContent = data.transaction_count === null
+                    ? '旧日次売上の会計件数・平均は算出不可'
+                    : 'レジ導入後の会計 ' + data.transaction_count + '件（販売' + data.sale_count +
+                      '件・返金' + data.refund_count + '件） / 平均 ' +
+                      (data.average_display_yen === null ? '算出不可' : money(data.average_display_yen)) +
+                      (data.legacy_record_count > 0 ? '。旧売上は平均の対象外' : '');
+            }
             document.getElementById('periodSalesComparisonLabel').textContent = data.comparison_label;
             const comparison = document.getElementById('periodSalesComparison');
             comparison.textContent = data.previous_sales === null ? '—' :
@@ -358,7 +377,15 @@ document.addEventListener('DOMContentLoaded', () => {
             loadStoredWeather(data.chart_labels.length);
         } catch (error) {
             if (current !== requestSerial) return;
-            status.textContent = '集計を取得できませんでした。期間を選び直してください。';
+            status.textContent = '売上データを確認できませんでした。再読み込みしても解消しない場合は管理者へご連絡ください。';
+            document.getElementById('periodSalesTotal').textContent = '—';
+            document.getElementById('periodSalesComparison').textContent = '—';
+            const metrics = document.getElementById('periodRegisterMetrics');
+            if (metrics) metrics.textContent = '会計情報を確認できませんでした';
+            document.getElementById('periodSalesRanking').replaceChildren();
+            graph.data.labels = [];
+            graph.data.datasets[0].data = [];
+            graph.update();
             console.error('Sales period summary failed', error);
         }
     }
@@ -718,12 +745,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // バックエンドの非同期データ取得APIエンドポイントへリクエストを送信
         fetch(`/api/dashboard-data?year=${year}&month=${month}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) throw new Error('API response ' + response.status);
+                return response.json();
+            })
             .then(data => {
                 // 1. 表示期間タイトルの更新
                 periodTitle.innerText = data.period_text;
                 document.getElementById('todaySalesAmount').textContent =
                     `¥${data.today_sales.toLocaleString('ja-JP')}`;
+                const todayRecordStatus = document.getElementById('todaySalesRecordStatus');
+                if (todayRecordStatus) todayRecordStatus.textContent = data.has_today_sales ? '売上記録あり' : '売上記録なし';
                 document.getElementById('businessDate').textContent = data.business_date;
                 updateSalesMonthIndicators(data.sales_months);
                 activeYear = year || null;
@@ -816,7 +848,15 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(error => {
                 console.error("データ取得エラー:", error);
                 setAiAdviceStatus('error');
-                aiText.textContent = "データの取得に失敗しました。お手数ですが時間を置いて再度お試しいただくか、システムの稼働状態を確認してください。";
+                aiText.textContent = "売上データを確認できませんでした。時間をおいても解消しない場合は管理者へご連絡ください。";
+                periodTitle.textContent = '売上データを確認できませんでした';
+                document.getElementById('todaySalesAmount').textContent = '—';
+                const todayRecordStatus = document.getElementById('todaySalesRecordStatus');
+                if (todayRecordStatus) todayRecordStatus.textContent = '確認できませんでした';
+                rankContainer.replaceChildren();
+                salesChart.data.labels = [];
+                salesChart.data.datasets[0].data = [];
+                salesChart.update();
             });
     }
     function loadAiAdvice() {

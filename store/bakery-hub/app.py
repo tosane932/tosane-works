@@ -9,7 +9,7 @@ import uuid
 from contextlib import contextmanager
 from functools import wraps
 from zoneinfo import ZoneInfo
-from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, g, jsonify, redirect, render_template, request, session, url_for
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -55,6 +55,12 @@ from material_orders import create_material_orders_blueprint
 from production_prep import create_production_prep_blueprint
 from prompts import build_sales_prompt
 from sales_period_summary import PERIOD_OFFSETS, sales_period_summary, period_bounds
+from legacy_sales_cutover import LegacySalesClosed, assert_legacy_sales_writable, legacy_sales_closed
+from register_sales_aggregation import (
+    SalesAggregationConsistencyError, SalesCutoverIntegrityError,
+    aggregate_sales, sales_read_snapshot,
+)
+from register_sales_view import dashboard_payload, period_payload, ranked_products, selected_dates
 from weather_history import WeatherHistoryError, import_weather, stored_weather
 from shop_memos import create_shop_memos_blueprint
 from shop_tasks import create_shop_tasks_blueprint
@@ -114,6 +120,7 @@ app.config["WEATHER_LOCATION_NAME"] = config.WEATHER_LOCATION_NAME
 app.config["PUOPPO_INTEGRATION_ENABLED"] = config.PUOPPO_INTEGRATION_ENABLED
 app.config["REGISTER_V3_PREVIEW_ENABLED"] = config.REGISTER_V3_PREVIEW_ENABLED
 app.config["REGISTER_V3_SAVE_ENABLED"] = config.REGISTER_V3_SAVE_ENABLED
+app.config["REGISTER_V3_AGGREGATION_ENABLED"] = config.REGISTER_V3_AGGREGATION_ENABLED
 
 app.config["SESSION_COOKIE_SECURE"] = config.SESSION_COOKIE_SECURE
 app.config["SESSION_COOKIE_HTTPONLY"] = config.SESSION_COOKIE_HTTPONLY
@@ -1137,7 +1144,8 @@ def get_admin_dataset():
         return None
 
 
-def _generate_ai_advice(ranked_sales, current_dataset=None):
+def _generate_ai_advice(ranked_sales, current_dataset=None, *, register_rows=None,
+                        register_limited=False):
     if not ranked_sales:
         logger.warning("AI advice requested but ranked_sales is empty.")  # 💡 注意喚起
         return "売上データがまだないため、アドバイスを生成できません。"
@@ -1147,9 +1155,12 @@ def _generate_ai_advice(ranked_sales, current_dataset=None):
         # 完成したpromptを途中で切らず、商品名・数量を完全な形で保つ。
         if len(ranked_sales) > GUEST_PRODUCT_LIFETIME_LIMIT or any(
             not isinstance(name, str)
-            or not 1 <= len(name) <= PRODUCT_NAME_MAX_LENGTH
+            # 新画面は最大100文字の商品名に系統とUUIDを付けて同名を識別する。
+            or not 1 <= len(name) <= (160 if register_rows is not None else PRODUCT_NAME_MAX_LENGTH)
             or type(qty) is not int
-            or not 0 <= qty <= GUEST_AI_AGGREGATE_QUANTITY_MAX
+            or (abs(qty) > GUEST_AI_AGGREGATE_QUANTITY_MAX
+                if register_rows is not None else
+                not 0 <= qty <= GUEST_AI_AGGREGATE_QUANTITY_MAX)
             for name, qty in ranked_sales
         ):
             abort(400, description="AI分析対象データが上限を超えています。")
@@ -1167,7 +1178,15 @@ def _generate_ai_advice(ranked_sales, current_dataset=None):
             },
         )
         sales_summary = ", ".join([f"{name}: {qty}個" for name, qty in ranked_sales])
-        prompt = build_sales_prompt(sales_summary)
+        if register_rows is None:
+            prompt = build_sales_prompt(sales_summary)
+        else:
+            from prompts import build_register_sales_prompt
+            prompt = build_register_sales_prompt(
+                ", ".join(f"{row['name']}: 差引{row['quantity']}個、差引{row['revenue']}円"
+                          for row in register_rows),
+                limited=register_limited,
+            )
 
         if (
             current_dataset is not None
@@ -1363,8 +1382,16 @@ def home():
     dataset = require_current_dataset()
     today = business_today()
     schedules = schedule_snapshot(daily_schedules(dataset.id, today))
-    today_sales = _get_today_sales_amount(dataset, today)
-    has_today_sales = _has_today_sales_record(dataset, today)
+    if _unified_sales_enabled():
+        _sales_scope(dataset, today, today)
+        with sales_read_snapshot() as read_session:
+            day_summary = aggregate_sales(dataset, today, today,
+                                          read_session=read_session)
+        today_sales = day_summary["total_yen"]
+        has_today_sales = day_summary["has_record"]
+    else:
+        today_sales = _get_today_sales_amount(dataset, today)
+        has_today_sales = _has_today_sales_record(dataset, today)
     staff_state, staff_count, today_staff, remaining_staff = None, None, [], 0
     if current_user.is_admin:
         try:
@@ -1886,6 +1913,8 @@ def _get_dashboard_period():
     target_year = _get_optional_integer_query_parameter("year")
     target_month = _get_optional_integer_query_parameter("month")
 
+    if _unified_sales_enabled() and target_year is not None and not 1 <= target_year <= 9999:
+        abort(400)
     if target_month is not None and not 1 <= target_month <= 12:
         abort(400)
 
@@ -1903,12 +1932,63 @@ def _dashboard_period_label(target_year, target_month):
     return f"{target_year}年{target_month}月"
 
 
+def _unified_sales_enabled():
+    return bool(app.config.get("REGISTER_V3_AGGREGATION_ENABLED")) and bool(
+        app.config.get("TESTING") or app.config.get("LOCAL_DEVELOPMENT")
+    )
+
+
+def _sales_scope(dataset, start, end):
+    # UUIDをログへ直接出さず、調査時の照合に使う短い固定ハッシュにする。
+    g.sales_scope = (hashlib.sha256(str(dataset.id).encode()).hexdigest()[:12],
+                     start.isoformat(), end.isoformat())
+
+
+@app.errorhandler(SalesCutoverIntegrityError)
+@app.errorhandler(SalesAggregationConsistencyError)
+def unified_sales_error(exc):
+    incident = uuid.uuid4().hex[:12]
+    dataset_hash, start, end = getattr(g, "sales_scope", ("unknown", "unknown", "unknown"))
+    logger.error(
+        "Sales integrity incident=%s type=%s operation=%s dataset=%s start=%s end=%s old=%s register=%s",
+        incident, type(exc).__name__, request.endpoint, dataset_hash, start, end,
+        getattr(exc, "legacy_count", None), getattr(exc, "register_count", None),
+    )
+    message = "売上データを確認できませんでした。集計データの整合性を確認する必要があります。"
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "sales_integrity_error", "message": message,
+                        "incident_id": incident}), 503
+    return render_template("sales_unavailable.html", message=message,
+                           incident_id=incident), 503
+
+
 @app.route("/dashboard")
 @admin_or_guest_required
 def dashboard():
     target_year, target_month = _get_dashboard_period()
     current_dataset = require_current_dataset()
     today = business_today()
+    if _unified_sales_enabled():
+        start, end = selected_dates(target_year, target_month)
+        _sales_scope(current_dataset, start, end)
+        with sales_read_snapshot() as read_session:
+            view = dashboard_payload(current_dataset, today, target_year,
+                                     target_month, read_session)
+        ranked_sales = [(row["name"], row["quantity"]) for row in view["ranked"]]
+        return render_template(
+            "dashboard.html", today_sales=view["today"]["total_yen"],
+            has_today_sales=view["today"]["has_record"],
+            business_date=today.isoformat(),
+            sales=dict(ranked_sales), ranked_sales=ranked_sales,
+            chart_labels=[row["name"] for row in view["ranked"]],
+            chart_values=[row["quantity"] for row in view["ranked"]],
+            ai_advice=("売上ランキングとグラフを確認できます。"
+                       "詳しい改善案は「詳しいアドバイスを聞く」ボタンから確認できます。"),
+            year=target_year, month=target_month,
+            available_years=view["years"], sales_months=view["months"],
+            period_text=_dashboard_period_label(target_year, target_month),
+            unified_sales=True, selected_summary=view["selected"],
+        )
     available_years = _get_dashboard_sales_years(
         current_dataset,
         today.year,
@@ -2011,6 +2091,13 @@ def api_sales_period_summary():
     if not -PERIOD_OFFSETS[period] <= offset <= 0:
         abort(400)
     dataset = require_current_dataset()
+    if _unified_sales_enabled():
+        today = business_today()
+        start, end = period_bounds(period, offset, today)
+        _sales_scope(dataset, start, end)
+        with sales_read_snapshot() as read_session:
+            return jsonify(period_payload(dataset, period, offset, today,
+                                          read_session))
     return jsonify(sales_period_summary(dataset.id, period, offset, business_today()))
 
 
@@ -2019,6 +2106,29 @@ def api_sales_period_summary():
 def api_dashboard_data():
     target_year, target_month = _get_dashboard_period()
     current_dataset = require_current_dataset()
+    if _unified_sales_enabled():
+        today = business_today()
+        start, end = selected_dates(target_year, target_month)
+        _sales_scope(current_dataset, start, end)
+        with sales_read_snapshot() as read_session:
+            view = dashboard_payload(current_dataset, today, target_year,
+                                     target_month, read_session)
+        ranked = [[row["name"], row["quantity"]] for row in view["ranked"]]
+        return jsonify({
+            "today_sales": view["today"]["total_yen"],
+            "has_today_sales": view["today"]["has_record"],
+            "business_date": today.isoformat(), "ranked_sales": ranked,
+            "ranked_product_sales": view["ranked"],
+            "chart_labels": [row[0] for row in ranked],
+            "chart_values": [row[1] for row in ranked],
+            "sales_months": view["months"],
+            "ai_advice": ("売上ランキングとグラフを更新しました。"
+                          "詳しい改善案は「詳しいアドバイスを聞く」ボタンから確認できます。"),
+            "period_text": _dashboard_period_label(target_year, target_month),
+            "total_sales": view["selected"]["total_yen"],
+            "transaction_count": view["selected"]["transaction_count"],
+            "average_display_yen": view["selected"]["average_display_yen"],
+        })
     sales_months = _get_dashboard_sales_months(
         current_dataset,
         target_year,
@@ -2057,6 +2167,25 @@ def api_dashboard_data():
 def api_ai_advice():
     target_year, target_month = _get_dashboard_period()
     current_dataset = require_current_dataset()
+    if _unified_sales_enabled():
+        start, end = selected_dates(target_year, target_month)
+        _sales_scope(current_dataset, start, end)
+        with sales_read_snapshot() as read_session:
+            selected = aggregate_sales(current_dataset, start, end,
+                                       read_session=read_session)
+        ranked = ranked_products(selected)
+        register_limited = (current_dataset.kind == "guest" and
+                            len(ranked) > GUEST_PRODUCT_LIFETIME_LIMIT)
+        if current_dataset.kind == "guest":
+            ranked = ranked[:GUEST_PRODUCT_LIFETIME_LIMIT]
+        advice = _generate_ai_advice(
+            [(row["name"], row["quantity"]) for row in ranked],
+            current_dataset, register_rows=ranked,
+            register_limited=register_limited,
+        )
+        if advice is _GUEST_AI_LIMIT_REACHED:
+            return _guest_ai_limit_response()
+        return jsonify({"ai_advice": advice})
 
     logger.info(
         f"AI advice requested for period: "
@@ -2189,6 +2318,7 @@ def input_sales():
         )
 
         try:
+            assert_legacy_sales_writable(current_dataset, sale_date)
             for product, qty_int in validated_product_sales:
                 daily_sales_table = DailySales.__table__
                 sale_values = {
@@ -2230,6 +2360,9 @@ def input_sales():
                     db.session.add(DailySales(**sale_values))
 
             db.session.commit()
+        except LegacySalesClosed as exc:
+            db.session.rollback()
+            return str(exc), 409
         except SQLAlchemyError:
             db.session.rollback()
             logger.exception("Failed to save sales data.")
@@ -2251,7 +2384,8 @@ def input_sales():
         "input.html",
         products=_get_current_products(current_dataset, today),
         today=today,
-        today_sales=_get_today_sales_map(today, current_dataset)
+        today_sales=_get_today_sales_map(today, current_dataset),
+        legacy_input_closed=legacy_sales_closed(current_dataset, today),
     )
 
 @app.route("/api/greeting", methods=["POST"])
