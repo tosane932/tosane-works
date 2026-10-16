@@ -14,6 +14,7 @@ class MemoryDB {
         this.stores = new Map();
         this.objectStoreNames = { contains: name => this.stores.has(name) };
         this.failQueue = false;
+        this.failDraft = false;
     }
     createObjectStore(name) {
         this.stores.set(name, new Map());
@@ -49,6 +50,7 @@ class MemoryDB {
                 get: key => request(() => store.get(key)),
                 getAll: () => request(() => [...store.values()]),
                 put: value => request(() => {
+                    if (name === 'drafts' && db.failDraft) { throw Error('draft quota'); }
                     store.set(value.id || value.scope, structuredClone(value));
                     return value;
                 }),
@@ -87,7 +89,7 @@ function element(id) {
 function harness({ database = new MemoryDB(), scope = 'dataset:login', online = false,
                    fetcher, sessionValues = new Map() } = {}) {
     const ids = ['register-root', 'register-config', 'register-message',
-        'complete-checkout', 'received-yen', 'sync-state', 'product-grid',
+        'complete-checkout', 'received-yen', 'sync-state', 'recovery-list', 'product-grid',
         'cart-lines', 'checkout-kind', 'total-label', 'total-yen', 'cash-area',
         'jump-checkout', 'checkout-title',
         'change-yen', 'cash-hint', 'refund-dialog', 'refund-dialog-detail',
@@ -157,7 +159,7 @@ test('オフライン会計はIndexedDBへ保存して次へ進み、復旧後�
     assert.equal(ui.calls.length, 0); // タッチ／金額入力時にHTTPなし。
     ui.elements['complete-checkout'].fire('click');
     await until(() => ui.database.stores.get('queue').size === 1);
-    await until(() => ui.elements['sync-state'].textContent === '未同期 1件');
+    await until(() => ui.elements['sync-state'].textContent === '通信できません。再送します 未同期 1件');
     assert.equal(ui.elements['product-grid'].children[0].querySelector().value, 0);
     assert.equal(ui.calls.length, 0);
     ui.navigator.onLine = true;
@@ -196,7 +198,7 @@ test('価格差や不正応答は要確認として残し、別Datasetには表�
     ui.elements['received-yen'].fire('input');
     ui.elements['complete-checkout'].fire('click');
     await until(() => [...db.stores.get('queue').values()][0]?.status === 'needs_review');
-    assert.equal(ui.elements['sync-state'].textContent, '同期確認が必要です 1件 / 未同期 0件');
+    assert.equal(ui.elements['sync-state'].textContent, '確認が必要な会計があります 1件 / 未同期 0件');
     const other = harness({ database: db, scope: 'other-dataset:other-session', online: true });
     await until(() => other.elements['sync-state'].textContent === '同期済み');
     assert.equal(other.calls.length, 0);
@@ -216,7 +218,7 @@ test('直接入力の負数は確認後だけ反映し、戻ると未同期キ�
     assert.equal(ui.elements['cash-area'].hidden, true);
     ui.elements['complete-checkout'].fire('click');
     await until(() => ui.database.stores.get('queue').size === 1);
-    await until(() => ui.elements['sync-state'].textContent === '未同期 1件');
+    await until(() => ui.elements['sync-state'].textContent === '通信できません。再送します 未同期 1件');
     let prevented = false;
     ui.elements['register-back'].fire('click', { preventDefault: () => { prevented = true; } });
     assert.equal(prevented, false); // 確定済み未同期レコードは入力中カートではない。
@@ -271,6 +273,127 @@ test('HTML応答は保存成功と判断せず、端末の記録を残す', asyn
     ui.elements['received-yen'].value = '500';
     ui.elements['received-yen'].fire('input');
     ui.elements['complete-checkout'].fire('click');
-    await until(() => [...ui.database.stores.get('queue').values()][0]?.status === 'needs_review');
+    await until(() => [...ui.database.stores.get('queue').values()][0]?.status === 'auth_required');
     assert.equal(ui.database.stores.get('queue').size, 1);
+    assert.match(ui.elements['sync-state'].textContent, /認証の確認が必要/);
+});
+
+test('通信断の複数会計を順番に同じキーで再送し、応答確認後だけ同期済みにする', async () => {
+    const ui = harness({ online: false });
+    await until(() => ui.database.stores.has('queue'));
+    for (let i = 0; i < 3; i++) {
+        ui.touch();
+        ui.elements['received-yen'].value = '500';
+        ui.elements['received-yen'].fire('input');
+        ui.elements['complete-checkout'].fire('click');
+        await until(() => ui.database.stores.get('queue').size === i + 1);
+        await until(() => ui.elements['product-grid'].children[0].querySelector().value === 0);
+    }
+    const keys = [...ui.database.stores.get('queue').values()].map(row => row.receipt.submission_key);
+    assert.equal(new Set(keys).size, 3);
+    assert.equal(ui.calls.length, 0);
+    ui.navigator.onLine = true;
+    ui.events.online();
+    await until(() => [...ui.database.stores.get('queue').values()].every(row => row.status === 'synced'));
+    assert.deepEqual(ui.calls.map(row => row.submission_key), keys);
+    assert.equal(ui.database.stores.get('queue').size, 3);
+});
+
+test('営業日跨ぎは送信せず、理由と元記録を保持する', async () => {
+    const ui = harness({ online: false });
+    await until(() => ui.database.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => ui.database.stores.get('queue').size === 1);
+    const original = [...ui.database.stores.get('queue').values()][0];
+    original.receipt.client_business_date = '2020-01-01';
+    ui.database.stores.get('queue').set(original.id, structuredClone(original));
+    ui.navigator.onLine = true;
+    ui.events.online();
+    await until(() => [...ui.database.stores.get('queue').values()][0].status === 'needs_review');
+    const saved = [...ui.database.stores.get('queue').values()][0];
+    assert.equal(saved.reason, 'business_day_changed');
+    assert.equal(saved.receipt.submission_key, original.receipt.submission_key);
+    assert.equal(ui.calls.length, 0);
+    assert.match(ui.elements['recovery-list'].textContent, /営業日/);
+});
+
+test('価格競合は差額を表示し、送信キーとローカル会計を保持する', async () => {
+    const ui = harness({ online: true, fetcher: async () => ({ status: 409, ok: false,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ code: 'price_changed', differences: [
+            { product_id: 1, name: 'パン', displayed_yen: 120, current_yen: 150 } ] }) }) });
+    await until(() => ui.database.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => [...ui.database.stores.get('queue').values()][0]?.reason === 'price_changed');
+    const record = [...ui.database.stores.get('queue').values()][0];
+    assert.equal(record.status, 'needs_review');
+    assert.equal(record.receipt.displayed_prices[0][1], 120);
+    assert.match(ui.elements['recovery-list'].textContent, /150円/);
+    assert.match(ui.elements['recovery-list'].textContent, /会計差 30円/);
+    ui.events.online();
+    await new Promise(resolve => setTimeout(resolve, 15));
+    assert.equal(ui.calls.length, 1);
+});
+
+test('Guest期限切れは通信障害と区別して再送停止し、別スコープに移さない', async () => {
+    const db = new MemoryDB();
+    const ui = harness({ database: db, online: true, fetcher: async () => ({ status: 403, ok: false,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ code: 'guest_expired' }) }) });
+    await until(() => db.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => [...db.stores.get('queue').values()][0]?.status === 'guest_expired');
+    assert.match(ui.elements['sync-state'].textContent, /利用期限が終了/);
+    ui.events.online();
+    await new Promise(resolve => setTimeout(resolve, 15));
+    assert.equal(ui.calls.length, 1);
+    const other = harness({ database: db, scope: 'another:session', online: true });
+    await until(() => other.elements['sync-state'].textContent === '同期済み');
+    assert.equal(other.calls.length, 0);
+    assert.equal(db.stores.get('queue').size, 1);
+});
+
+test('下書き書込が失敗しても次の書込と会計のキュー保存を妨げない', async () => {
+    const db = new MemoryDB();
+    const ui = harness({ database: db, online: false });
+    await until(() => db.stores.has('drafts'));
+    db.failDraft = true;
+    ui.touch();
+    await until(() => ui.elements['register-message'].textContent.includes('入力中の会計を端末に保持できません'));
+    db.failDraft = false;
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    await until(() => db.stores.get('drafts').size === 1);
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => db.stores.get('queue').size === 1);
+    await until(() => ui.quantity.value === 0);
+    assert.equal(ui.elements['sync-state'].textContent, '通信できません。再送します 未同期 1件');
+});
+
+test('認証確認後の同一スコープ再読み込みは同じキーを再送し、Guest期限切れは再送しない', async () => {
+    const db = new MemoryDB();
+    const first = harness({ database: db, online: true, fetcher: async () => ({
+        status: 401, ok: false, headers: { get: () => 'application/json' },
+        json: async () => ({ code: 'auth_required' }),
+    }) });
+    await until(() => db.stores.has('queue'));
+    first.touch();
+    first.elements['received-yen'].value = '500';
+    first.elements['received-yen'].fire('input');
+    first.elements['complete-checkout'].fire('click');
+    await until(() => [...db.stores.get('queue').values()][0]?.status === 'auth_required');
+    const key = first.calls[0].submission_key;
+    const reload = harness({ database: db, online: true });
+    await until(() => [...db.stores.get('queue').values()][0]?.status === 'synced');
+    assert.equal(reload.calls.length, 1);
+    assert.equal(reload.calls[0].submission_key, key);
 });

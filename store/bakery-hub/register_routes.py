@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 
 from flask import Blueprint, abort, current_app, jsonify, render_template, request, session, url_for
+from flask_login import current_user
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import RegisterProduct, db
@@ -20,6 +21,14 @@ LOCAL_SCOPE_SESSION_KEY = "register_local_scope"
 
 def create_register_blueprint(*, access_required, resolve_dataset):
     blueprint = Blueprint("register", __name__)
+
+    @blueprint.before_request
+    def api_session_state():
+        # 分類にだけsigned sessionを使う。Datasetの認可・保存には使わない。
+        if request.endpoint == "register.create_transaction" and not current_user.is_authenticated:
+            if str(session.get("_user_id", "")).startswith("guest:"):
+                return jsonify(error="Guestの利用期限が終了しました。", code="guest_expired"), 403
+            return jsonify(error="ログインの確認が必要です。", code="auth_required"), 401
 
     @blueprint.get("/register/preview")
     @access_required
@@ -75,11 +84,18 @@ def create_register_blueprint(*, access_required, resolve_dataset):
                 displayed_prices=data["displayed_prices"],
                 checkout_business_date=data["client_business_date"],
             )
-        except (PriceChanged, BusinessDayChanged) as error:
-            return jsonify(error=str(error), code="needs_review"), 409
+        except PriceChanged as error:
+            return jsonify(error=str(error), code="price_changed",
+                           differences=error.differences), 409
+        except BusinessDayChanged as error:
+            return jsonify(error=str(error), code="business_day_changed"), 409
         except SubmissionConflict as error:
             return jsonify(error=str(error), code="key_conflict"), 409
-        except (PermissionError, GuestTransactionLimitReached) as error:
+        except PermissionError as error:
+            if owner.kind == "guest" and str(error) == "期限切れのGuestです。":
+                return jsonify(error=str(error), code="guest_expired"), 403
+            return jsonify(error=str(error), code="forbidden"), 403
+        except GuestTransactionLimitReached as error:
             return jsonify(error=str(error), code="forbidden"), 403
         except ValueError as error:
             return jsonify(error=str(error), code="invalid"), 400

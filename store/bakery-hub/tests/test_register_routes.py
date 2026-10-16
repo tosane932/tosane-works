@@ -129,9 +129,12 @@ def test_price_date_cutover_and_csrf_fail_closed(flask_app, authenticated_client
     cutover(admin_dataset)
     price = checkout(authenticated_client, product, token,
                      displayed_prices=[[product.id, product.price_yen - 1]])
-    assert (price.status_code, price.json["code"]) == (409, "needs_review")
+    assert (price.status_code, price.json["code"]) == (409, "price_changed")
+    assert price.json["differences"] == [{"product_id": product.id, "name": product.name,
+                                          "displayed_yen": product.price_yen - 1,
+                                          "current_yen": product.price_yen}]
     date = checkout(authenticated_client, product, token, client_business_date="2020-01-01")
-    assert (date.status_code, date.json["code"]) == (409, "needs_review")
+    assert (date.status_code, date.json["code"]) == (409, "business_day_changed")
     good = {"submission_key": str(uuid.uuid4()), "kind": "sale", "items": [[product.id, 1]],
             "displayed_prices": [[product.id, product.price_yen]], "received_yen": 500,
             "refund_confirmed": False,
@@ -188,6 +191,8 @@ def test_dataset_isolation_expiry_and_input_limits(flask_app, authenticated_clie
     guest_a.last_activity_at = utc_now() - datetime.timedelta(minutes=31)
     db.session.commit()
     assert preview(client_a).status_code in (302, 403)
+    expired = checkout(client_a, a_product, token_a)
+    assert expired.status_code == 403 and expired.json["code"] == "guest_expired"
     assert RegisterTransaction.query.count() == 0
 
 
