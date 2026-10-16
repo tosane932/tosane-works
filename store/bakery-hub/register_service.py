@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 
-from models import (DailySales, Product, RegisterCutover, RegisterProduct,
+from models import (DailySales, Product, RegisterCutover, RegisterProduct, RegisterRecoveryCase,
                     RegisterTransaction, RegisterTransactionLine, db)
 from register_products import _lock_dataset
 
@@ -39,6 +39,10 @@ class PriceChanged(ValueError):
 
 class BusinessDayChanged(ValueError):
     """端末で会計した営業日とサーバーの営業日が異なる。"""
+
+
+class RecoveryReviewRequired(ValueError):
+    """保全された未確定案件は通常の自動再送で売上にしない。"""
 
 
 def new_submission_key():
@@ -180,6 +184,8 @@ def save_register_transaction(dataset, *, submission_key, kind, items,
         if previous is not None:
             db.session.commit()
             return previous
+        if RegisterRecoveryCase.query.filter_by(dataset_id=owner.id, submission_key=key).first():
+            raise RecoveryReviewRequired("この会計は管理者の復旧案件です。自動保存を停止しました。")
 
         expected_prices = _expected_prices(displayed_prices, lines)
         expected_day = _checkout_day(checkout_business_date)

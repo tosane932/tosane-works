@@ -8,7 +8,7 @@ from sqlalchemy import func
 
 from models import (DailySales, PrepRecipe, Product, RegisterCutover,
                     RegisterProduct, RegisterTransaction, RegisterTransactionLine,
-                    RegisterPrepLink, db)
+                    RegisterPrepLink, RegisterRecoveryCase, db)
 from product_images import PRODUCT_IMAGE_OPTIONS
 from register_sales_aggregation import _dataset_id
 
@@ -90,8 +90,12 @@ def audit_cutover(dataset, *, planned_date=None, read_session=None, today=None):
                     if f"product:{item.id}" not in recipe_keys]
     expensive_old = [{"id": item.id, "name": item.name, "price": item.price}
                      for item in old_products if item.price > 500]
+    unresolved = session.query(func.count(RegisterRecoveryCase.id)).filter(
+        RegisterRecoveryCase.dataset_id == owner_id,
+        RegisterRecoveryCase.status.notin_(("saved", "cancelled"))).scalar()
     blockers = []
     reviews = []
+    review_codes = []
     if overlap:
         blockers.append(f"旧売上と新会計が同じ営業日に存在します（{len(overlap)}日）。")
     if mismatch:
@@ -109,22 +113,29 @@ def audit_cutover(dataset, *, planned_date=None, read_session=None, today=None):
     if planned_date and cutover is None and planned_date < today:
         blockers.append("過去の営業日は新しい切替予定日に指定できません。")
     if standards_missing or standards_inactive:
-        reviews.append(f"標準18商品の不足{len(standards_missing)}件・無効{len(standards_inactive)}件を確認してください。")
+        blockers.append(f"標準18商品の不足{len(standards_missing)}件・無効{len(standards_inactive)}件を解消してください。")
     if inactive_register:
         reviews.append(f"無効なレジ商品{len(inactive_register)}件を確認してください。")
+        review_codes.append("inactive_products")
     if duplicate_names:
         reviews.append(f"同名の異なるレジ商品{len(duplicate_names)}組をIDで確認してください。")
+        review_codes.append("duplicate_names")
     if not any(item.is_active and item.price_yen > 0 for item in products):
-        reviews.append("販売可能な0円超の商品がありません。")
+        blockers.append("販売可能な0円超の商品がありません。")
     if expensive_old:
         reviews.append(f"旧商品のうち{len(expensive_old)}件は新レジの500円上限を超えます。")
+        review_codes.append("expensive_old")
     if unmapped_old or unmapped_custom:
         reviews.append(f"レシピとの対応未設定：旧商品{len(unmapped_old)}件、独自商品{len(unmapped_custom)}件。")
+        review_codes.append("recipe_mapping")
+    if unresolved:
+        blockers.append(f"未解決の未同期会計復旧案件が{unresolved}件あります。")
     if planned_date is None and cutover is None:
         reviews.append("切替日が未設定です。予定日を入力して事前検証してください。")
     return {
         "status": "blocked" if blockers else "review" if reviews else "ready",
         "blockers": blockers, "reviews": reviews,
+        "review_codes": review_codes, "unresolved_recovery_cases": int(unresolved),
         "counts": {"old_products": len(old_products), "old_sales": int(old_count),
                    "register_products": len(products), "transactions": int(new_count),
                    "lines": int(lines_count)},

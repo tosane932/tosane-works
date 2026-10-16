@@ -41,7 +41,8 @@ def create_register_readiness_blueprint(*, admin_required, resolve_dataset):
     @blueprint.post("/register/readiness/confirm")
     @admin_required
     def confirm():
-        if not current_app.config.get("REGISTER_V3_CUTOVER_ENABLED"):
+        if not (current_app.config.get("REGISTER_V3_CUTOVER_ENABLED")
+                and current_app.config.get("REGISTER_V3_RECOVERY_ENABLED")):
             abort(404)
         owner = resolve_dataset()
         try:
@@ -52,6 +53,10 @@ def create_register_readiness_blueprint(*, admin_required, resolve_dataset):
                 device_inventory=request.form.get("device_inventory"),
                 devices_checked=request.form.get("devices_checked") == "yes",
                 backup_checked=request.form.get("backup_checked") == "yes",
+                review_decisions={code: request.form.get(f"review_{code}", "")
+                                  for code in ("inactive_products", "duplicate_names",
+                                               "expensive_old", "recipe_mapping")
+                                  if f"review_{code}" in request.form},
             )
         except CutoverBlocked as error:
             return str(error), 409

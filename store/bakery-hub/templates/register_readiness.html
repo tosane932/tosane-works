@@ -12,7 +12,7 @@
 {% if audit.unmapped_old or audit.unmapped_custom %}<h3>レシピ対応が未設定の商品</h3><ul>{% for item in audit.unmapped_old %}<li>旧商品：{{ item.name }}（ID {{ item.id }}）</li>{% endfor %}{% for item in audit.unmapped_custom %}<li>独自レジ商品：{{ item.name }}（ID {{ item.id }}）</li>{% endfor %}</ul>{% endif %}
 <p><a href="{{ url_for('.links') }}">独自レジ商品とレシピの対応を確認する</a></p></section>
 {% if request.args.get('saved') %}<p role="status">切替日 {{ audit.cutover }} は{{ '確定しました' if request.args.get('saved') == 'yes' else '既に確定しています' }}。</p>{% endif %}
-{% if config.REGISTER_V3_CUTOVER_ENABLED and audit.planned_date and not audit.cutover %}
+{% if config.REGISTER_V3_CUTOVER_ENABLED and config.REGISTER_V3_RECOVERY_ENABLED and audit.planned_date and not audit.cutover %}
 <section class="prep-panel"><h2>切替日の確定</h2>
 <p>全端末の未同期会計とバックアップを実際に確認した後に操作してください。送信時にDatasetをロックし、DBを再監査します。設定だけでは正式レジの保存フラグは有効になりません。</p>
 <form method="post" action="{{ url_for('.confirm') }}">
@@ -20,6 +20,7 @@
 <label>切替日 <input type="date" name="date" value="{{ audit.planned_date }}" required></label>
 <label>確認した端末と未同期件数 <textarea name="device_inventory" minlength="5" maxlength="1000" required></textarea></label>
 <label>承認理由・根拠 <textarea name="reason" minlength="5" maxlength="500" required></textarea></label>
+{% for code in audit.review_codes %}<label>{{ {'inactive_products':'無効なレジ商品','duplicate_names':'同名の別商品','expensive_old':'500円超の旧商品','recipe_mapping':'未設定のレシピ対応'}[code] }}を確認した結果と対応理由 <textarea name="review_{{ code }}" minlength="10" maxlength="500" required></textarea></label>{% endfor %}
 <label><input type="checkbox" name="devices_checked" value="yes" required> 全利用端末の未同期会計を照合した</label>
 <label><input type="checkbox" name="backup_checked" value="yes" required> 本番バックアップと復元手順を確認した</label>
 <button type="submit" class="prep-primary" {% if audit.blockers %}disabled{% endif %}>この営業日を確定する</button>

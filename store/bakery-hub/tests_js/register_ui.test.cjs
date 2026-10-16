@@ -87,7 +87,7 @@ function element(id) {
 }
 
 function harness({ database = new MemoryDB(), scope = 'dataset:login', online = false,
-                   fetcher, sessionValues = new Map() } = {}) {
+                   fetcher, sessionValues = new Map(), recoveryUrl = null } = {}) {
     const ids = ['register-root', 'register-config', 'register-message',
         'complete-checkout', 'received-yen', 'sync-state', 'recovery-list', 'product-grid',
         'cart-lines', 'checkout-kind', 'total-label', 'total-yen', 'cash-area',
@@ -99,6 +99,7 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
     elements['register-config'].textContent = JSON.stringify({
         products, scope, saveEnabled: true, postUrl: '/api/register/transactions',
         statusBase: '/api/register/transactions',
+        recoveryUrl,
     });
     elements['register-back'].href = '/home';
     elements['checkout-title'].scrollIntoView = () => {};
@@ -153,6 +154,33 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
     return { database, elements, events, navigator, calls, plus, quantity, sessionValues,
         touch: () => elements['product-grid'].fire('click', { target: plus }) };
 }
+
+test('未同期の元記録をサーバーへ保全しても端末記録と未確定状態を保持する', async () => {
+    const ui = harness({ recoveryUrl: '/api/register/recovery/cases',
+        fetcher: async call => ({ ok: true, status: 201,
+            headers: { get: () => 'application/json' },
+            json: async () => ({ case_id: 'recovery-case-id', status: 'unreviewed' }) }) });
+    await until(() => ui.database.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => ui.database.stores.get('queue').size === 1);
+    const original = [...ui.database.stores.get('queue').values()][0].receipt;
+    ui.navigator.onLine = true; // 自動送信イベントは起こさず、保全のみ明示操作。
+    await until(() => ui.elements['recovery-list'].children.some(details =>
+        details.children.some(child => child.type === 'button')));
+    const details = ui.elements['recovery-list'].children.find(row =>
+        row.children.some(child => child.type === 'button'));
+    await details.children.find(child => child.type === 'button').fire('click');
+    await until(() => [...ui.database.stores.get('queue').values()][0].backedUp);
+    const remaining = [...ui.database.stores.get('queue').values()][0];
+    assert.deepEqual(remaining.receipt, original);
+    assert.equal(remaining.status, 'pending');
+    assert.equal(remaining.backedUp, 'recovery-case-id');
+    assert.equal(ui.calls.length, 1);
+    assert.equal(ui.calls[0].receipt.submission_key, original.submission_key);
+});
 
 async function until(condition, timeout = 1200) {
     const started = Date.now();

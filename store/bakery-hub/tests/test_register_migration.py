@@ -16,10 +16,11 @@ from models import db
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 OLD_HEAD = "e2a7c4d9b105"
-NEW_HEAD = "da5c1e7f9042"
+NEW_HEAD = "eb6c2f8a4130"
 TABLES = {"register_products", "register_cutovers", "register_transactions",
           "register_transaction_lines", "register_prep_links",
-          "register_price_history", "register_cutover_approvals"}
+          "register_price_history", "register_cutover_approvals",
+          "register_recovery_cases", "register_recovery_lines", "register_recovery_events"}
 
 
 @pytest.fixture()
@@ -246,6 +247,31 @@ def test_price_history_migration_does_not_invent_old_prices_and_is_append_only(m
         downgrade(directory=str(MIGRATIONS_DIR), revision="c9d3e7a1b5f2")
     db.session.rollback()
     assert db.session.execute(text("SELECT COUNT(*) FROM register_price_history")).scalar_one() == 1
+
+
+def test_recovery_migration_preserves_legacy_and_refuses_populated_downgrade(migration_app):
+    migrate("da5c1e7f9042")
+    owner = db.session.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()
+    db.session.execute(text("INSERT INTO products (id,dataset_id,year,month,name,price,is_active) "
+                            "VALUES (901,:owner,2026,10,'旧商品',280,true)"), {"owner": owner})
+    db.session.execute(text("INSERT INTO daily_sales (id,product_id,date,quantity) "
+                            "VALUES (902,901,'2026-10-16',3)"))
+    db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) "
+                            "VALUES (11,:owner,'パン',120)"), {"owner": owner})
+    db.session.commit()
+    migrate("head")
+    assert db.session.execute(text("SELECT review_decisions FROM register_cutover_approvals")).all() == []
+    db.session.execute(text("INSERT INTO register_recovery_cases "
+        "(id,dataset_id,submission_key,source_digest,snapshot_json,status,kind,client_business_date,total_yen) "
+        "VALUES (:id,:owner,:key,:digest,'{}','held','sale','2026-10-16',240)"),
+        {"id": uuid.uuid4().hex, "owner": owner, "key": uuid.uuid4().hex, "digest": "a" * 64})
+    db.session.commit()
+    with pytest.raises(SystemExit):
+        downgrade(directory=str(MIGRATIONS_DIR), revision="da5c1e7f9042")
+    db.session.rollback()
+    assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
+    assert TABLES <= table_state()
+    assert_previous_rows()
 
 
 def test_link_migration_rejects_populated_downgrade_and_preserves_old_recipe(migration_app):

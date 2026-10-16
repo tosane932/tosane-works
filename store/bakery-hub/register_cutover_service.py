@@ -1,6 +1,7 @@
 """Adminが確認した切替日をDatasetの書込ロック下で確定する。"""
 
 import datetime
+import json
 from zoneinfo import ZoneInfo
 
 from models import RegisterCutover, RegisterCutoverApproval, db
@@ -13,7 +14,7 @@ class CutoverBlocked(ValueError):
 
 
 def confirm_cutover(dataset, *, date, approved_by, reason, device_inventory,
-                    devices_checked=False, backup_checked=False):
+                    devices_checked=False, backup_checked=False, review_decisions=None):
     """GETの結果に依存せず、全書込経路と同じDatasetロックを取得して再監査する。
 
     全端末の実態とバックアップはDBでは証明できない。管理者の確認記録を残す。
@@ -39,13 +40,20 @@ def confirm_cutover(dataset, *, date, approved_by, reason, device_inventory,
             ZoneInfo("Asia/Tokyo")).date())
         if result["blockers"]:
             raise CutoverBlocked("切替監査で重大な問題があります：" + "／".join(result["blockers"]))
+        decisions = review_decisions if review_decisions is not None else {}
+        if (type(decisions) is not dict or set(decisions) != set(result["review_codes"])
+                or any(type(value) is not str or not 10 <= len(value.strip()) <= 500
+                       for value in decisions.values())):
+            raise CutoverBlocked("要確認項目ごとの管理者判断と根拠を記録してください。")
         cutover = RegisterCutover(dataset_id=owner.id, first_register_date=day)
         db.session.add(cutover)
         db.session.flush()
         db.session.add(RegisterCutoverApproval(
             dataset_id=owner.id, first_register_date=day,
             approved_by=approved_by.strip(), reason=reason.strip(),
-            device_inventory=device_inventory.strip()))
+            device_inventory=device_inventory.strip(),
+            review_decisions=json.dumps({key: decisions[key].strip() for key in sorted(decisions)},
+                                        ensure_ascii=False, sort_keys=True)))
         db.session.commit()
         return cutover, True
     except Exception:

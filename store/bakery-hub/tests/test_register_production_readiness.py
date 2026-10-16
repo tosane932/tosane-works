@@ -63,12 +63,16 @@ def test_cutover_requires_admin_evidence_and_rechecks_locked_rows(flask_app, adm
         confirm_cutover(admin_dataset, **confirmation())
     assert RegisterCutover.query.count() == RegisterCutoverApproval.query.count() == 0
     target = today() + datetime.timedelta(days=1)
-    cutover, created = confirm_cutover(admin_dataset, **confirmation(date=target.isoformat()))
+    ensure_standard_products(admin_dataset)
+    review = {"recipe_mapping": "旧商品のレシピ未対応を確認し、仕込み側で別途照合する"}
+    cutover, created = confirm_cutover(admin_dataset, **confirmation(date=target.isoformat(),
+                                                                     review_decisions=review))
     assert created and cutover.first_register_date == target
     approval = db.session.get(RegisterCutoverApproval, admin_dataset.id)
     assert approval.approved_by == "admin" and approval.reason == "店長が営業日境界を確認"
     assert approval.device_inventory == "端末A 0件、端末B 0件"
-    same, created = confirm_cutover(admin_dataset, **confirmation(date=target.isoformat()))
+    same, created = confirm_cutover(admin_dataset, **confirmation(date=target.isoformat(),
+                                                                   review_decisions=review))
     assert same.dataset_id == cutover.dataset_id and not created
     with pytest.raises(CutoverBlocked, match="上書き"):
         confirm_cutover(admin_dataset, **confirmation(date=today().isoformat()))
@@ -76,6 +80,7 @@ def test_cutover_requires_admin_evidence_and_rechecks_locked_rows(flask_app, adm
 
 
 def test_cutover_rolls_back_header_if_approval_write_fails(flask_app, admin_dataset):
+    ensure_standard_products(admin_dataset)
     def reject(_mapper, _connection, _target):
         raise RuntimeError("approval storage failed")
     event.listen(RegisterCutoverApproval, "before_insert", reject)
@@ -97,7 +102,9 @@ def test_cutover_post_csrf_flag_and_guest_boundary(flask_app, authenticated_clie
     token = csrf_token(authenticated_client, "/login")
     assert authenticated_client.post(path, data=dict(payload, csrf_token=token)).status_code == 404
     flask_app.config.update(REGISTER_V3_READINESS_ENABLED=True,
-                            REGISTER_V3_CUTOVER_ENABLED=True)
+                            REGISTER_V3_CUTOVER_ENABLED=True,
+                            REGISTER_V3_RECOVERY_ENABLED=True)
+    ensure_standard_products(admin_dataset)
     assert authenticated_client.post(path, data=payload).status_code == 400
     owner, visitor = guest(flask_app)
     g.pop("_login_user", None)

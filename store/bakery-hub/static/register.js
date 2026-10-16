@@ -178,6 +178,18 @@
                     `商品ID ${line.id} ${line.name}・${line.quantity}個 × 表示単価 ${yen(line.unit_price_yen)} = ${yen(line.line_total_yen)}`),
             ].join("\n");
             details.append(summary, data);
+            if (config.recoveryUrl && item.status !== "synced") {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = item.backedUp ? "保全済み案件を再照合" : "この元記録をサーバーへ保全";
+                button.addEventListener("click", () => preserveForReview(item));
+                details.append(button);
+                if (item.backedUp) {
+                    const notice = document.createElement("p");
+                    notice.textContent = "サーバー保全済み（売上確定ではありません）。端末の元記録も保持中。";
+                    details.append(notice);
+                }
+            }
             recovery.append(details);
         }
         recovery.hidden = !records.length;
@@ -357,6 +369,30 @@
             && saved.received_yen === receipt.received_yen
             && samePairs(saved.items, receipt.items)
             && samePairs(saved.displayed_prices, receipt.displayed_prices);
+    }
+    async function preserveForReview(item) {
+        if (!config.recoveryUrl || syncing || !navigator.onLine) {
+            $("status-check-result").textContent = "通信できません。端末の元記録は保持しています。";
+            return;
+        }
+        syncing = true;
+        try {
+            const response = await fetch(config.recoveryUrl, {
+                method: "POST", credentials: "same-origin",
+                headers: { "Content-Type": "application/json",
+                           "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').content },
+                body: JSON.stringify({ receipt: item.receipt, device_status: item.status }),
+            });
+            const result = response.headers.get("Content-Type")?.includes("application/json")
+                ? await response.json() : {};
+            if (!response.ok || !result.case_id) { throw new Error(result.error || "保全できませんでした。"); }
+            // サーバー保全は売上確定でも端末キューの消去でもない。
+            item.backedUp = result.case_id;
+            await operation("queue", "readwrite", store => store.put(item));
+            $("status-check-result").textContent = `元記録を保全しました。${result.status === "saved" ? "保存済み会計と内容を照合しました。" : "売上には計上していません。管理者の調査が必要です。"}`;
+        } catch (error) {
+            $("status-check-result").textContent = `${error.message} 端末の元記録は保持しています。`;
+        } finally { syncing = false; await updateState().catch(() => {}); }
     }
     async function checkSavedRecords() {
         if (syncing || !database || !navigator.onLine) {

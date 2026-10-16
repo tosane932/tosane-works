@@ -15,6 +15,8 @@
     {% set active_app_page = 'register' %}
 {% elif current_endpoint.startswith('register_readiness.') %}
     {% set active_app_page = 'register-readiness' %}
+{% elif current_endpoint.startswith('register_recovery.') %}
+    {% set active_app_page = 'register-recovery' %}
 {% elif current_endpoint == 'input_sales' %}
     {% set active_app_page = 'sales' %}
 {% elif current_endpoint == 'dashboard' %}
@@ -199,6 +201,13 @@
            class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-readiness' %} app-sidebar-link-current{% endif %}"
            {% if active_app_page == 'register-readiness' %}aria-current="page"{% endif %}>
             <span class="app-sidebar-icon" aria-hidden="true">▣</span><span>レジ切替前の監査</span>
+        </a>
+        {% endif %}
+        {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_RECOVERY_ENABLED %}
+        <a href="{{ url_for('register_recovery.index') }}" data-page="register-recovery"
+           class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-recovery' %} app-sidebar-link-current{% endif %}"
+           {% if active_app_page == 'register-recovery' %}aria-current="page"{% endif %}>
+            <span class="app-sidebar-icon" aria-hidden="true">▣</span><span>未同期会計の復旧案件</span>
         </a>
         {% endif %}
         <a

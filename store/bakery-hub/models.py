@@ -640,6 +640,7 @@ class RegisterCutoverApproval(db.Model):
                             server_default=db.func.now())
     reason = db.Column(db.String(500), nullable=False)
     device_inventory = db.Column(db.String(1000), nullable=False)
+    review_decisions = db.Column(db.Text, nullable=False, default="{}", server_default="{}")
 
 
 class RegisterTransaction(db.Model):
@@ -699,6 +700,82 @@ class RegisterTransactionLine(db.Model):
     unit_price_yen = db.Column(db.Integer, nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     line_total_yen = db.Column(db.Integer, nullable=False)
+
+
+class RegisterRecoveryCase(db.Model):
+    """端末の元会計を売上とは別に保全する。snapshot_jsonは変更しない。"""
+    __tablename__ = "register_recovery_cases"
+    __table_args__ = (
+        db.UniqueConstraint("id", "dataset_id", name="uq_register_recovery_id_dataset"),
+        db.UniqueConstraint("dataset_id", "submission_key", name="uq_register_recovery_submission"),
+        db.CheckConstraint("length(source_digest) = 64", name="ck_register_recovery_digest"),
+        db.CheckConstraint("status IN ('unreviewed','investigating','held','saved','cancelled','additional')",
+                           name="ck_register_recovery_status"),
+        db.CheckConstraint("kind IN ('sale','refund')", name="ck_register_recovery_kind"),
+        db.CheckConstraint("total_yen BETWEEN -1000000000 AND 1000000000", name="ck_register_recovery_total"),
+    )
+    id = db.Column(db.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", ondelete="RESTRICT"), nullable=False)
+    submission_key = db.Column(db.Uuid(as_uuid=True), nullable=False)
+    source_digest = db.Column(db.String(64), nullable=False)
+    snapshot_json = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(16), nullable=False, default="unreviewed")
+    kind = db.Column(db.String(16), nullable=False)
+    client_business_date = db.Column(db.Date, nullable=False)
+    total_yen = db.Column(db.BigInteger, nullable=False)
+    received_at = db.Column(db.DateTime(timezone=True), nullable=False,
+                            default=utc_now, server_default=db.func.now())
+
+
+class RegisterRecoveryLine(db.Model):
+    """DB制約でも元の商品IDを同じDatasetに固定する。"""
+    __tablename__ = "register_recovery_lines"
+    __table_args__ = (
+        db.ForeignKeyConstraint(["case_id", "dataset_id"],
+                                ["register_recovery_cases.id", "register_recovery_cases.dataset_id"],
+                                ondelete="RESTRICT"),
+        db.ForeignKeyConstraint(["register_product_id", "dataset_id"],
+                                ["register_products.id", "register_products.dataset_id"], ondelete="RESTRICT"),
+        db.UniqueConstraint("case_id", "register_product_id", name="uq_register_recovery_line_product"),
+        db.CheckConstraint("quantity BETWEEN -50 AND 50 AND quantity <> 0", name="ck_register_recovery_line_qty"),
+        db.CheckConstraint("unit_price_yen BETWEEN 0 AND 500", name="ck_register_recovery_line_price"),
+        db.CheckConstraint("line_total_yen = quantity * unit_price_yen", name="ck_register_recovery_line_total"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Uuid(as_uuid=True), nullable=False)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), nullable=False)
+    register_product_id = db.Column(db.Integer, nullable=False)
+    product_name_snapshot = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    unit_price_yen = db.Column(db.Integer, nullable=False)
+    line_total_yen = db.Column(db.Integer, nullable=False)
+
+
+class RegisterRecoveryEvent(db.Model):
+    """状態遷移と確認した根拠の追記専用監査。"""
+    __tablename__ = "register_recovery_events"
+    __table_args__ = (
+        db.ForeignKeyConstraint(["case_id", "dataset_id"],
+                                ["register_recovery_cases.id", "register_recovery_cases.dataset_id"],
+                                ondelete="RESTRICT"),
+        db.CheckConstraint("to_status IN ('unreviewed','investigating','held','saved','cancelled','additional')",
+                           name="ck_register_recovery_event_status"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Uuid(as_uuid=True), nullable=False)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), nullable=False)
+    from_status = db.Column(db.String(16), nullable=True)
+    to_status = db.Column(db.String(16), nullable=False)
+    actor = db.Column(db.String(100), nullable=False)
+    occurred_at = db.Column(db.DateTime(timezone=True), nullable=False,
+                            default=utc_now, server_default=db.func.now())
+    reason = db.Column(db.String(500), nullable=False)
+    server_result = db.Column(db.String(24), nullable=False)
+    price_conflict = db.Column(db.Boolean, nullable=False)
+    day_conflict = db.Column(db.Boolean, nullable=False)
+    cash_result = db.Column(db.String(24), nullable=False)
+    evidence_kind = db.Column(db.String(100), nullable=False, default="none")
+    evidence_reference = db.Column(db.String(500), nullable=False, default="")
 
 
 class DailyWeather(db.Model):

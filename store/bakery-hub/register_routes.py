@@ -10,7 +10,7 @@ from models import RegisterCutover, RegisterProduct, RegisterTransaction, Regist
 from register_images import register_image_choices
 from register_products import _standard_rows, ensure_standard_products
 from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
-                              PriceChanged, SubmissionConflict,
+                              PriceChanged, SubmissionConflict, RecoveryReviewRequired,
                               save_register_transaction)
 
 
@@ -76,6 +76,8 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
             local_scope=(f"{owner.id}:admin" if owner.kind == "admin" else
                          f"{owner.id}:{session[LOCAL_SCOPE_SESSION_KEY]}"),
             production=bool(current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED")),
+            recovery_enabled=owner.kind == "admin" and bool(
+                current_app.config.get("REGISTER_V3_RECOVERY_ENABLED")),
         )
 
     @blueprint.get("/register/demo")
@@ -128,6 +130,8 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
                            differences=error.differences), 409
         except BusinessDayChanged as error:
             return jsonify(error=str(error), code="business_day_changed"), 409
+        except RecoveryReviewRequired as error:
+            return jsonify(error=str(error), code="recovery_review"), 409
         except SubmissionConflict as error:
             return jsonify(error=str(error), code="key_conflict"), 409
         except PermissionError as error:

@@ -13,10 +13,15 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from legacy_sales_cutover import assert_legacy_sales_writable
 from models import (DailySales, Dataset, Product, RegisterCutover,
-                    RegisterCutoverApproval, RegisterPriceHistory, RegisterProduct, db)
+                    RegisterCutoverApproval, RegisterPriceHistory, RegisterProduct,
+                    RegisterRecoveryCase, RegisterRecoveryEvent, RegisterRecoveryLine,
+                    RegisterTransaction, db)
 from postgresql_test_utils import get_isolated_postgresql_test_url
 from register_cutover_service import CutoverBlocked, confirm_cutover
-from register_products import create_custom_product, update_register_product
+from register_products import create_custom_product, ensure_standard_products, update_register_product
+from register_recovery_service import RecoveryConflict, preserve_case, review_case
+from tests.test_register_recovery import receipt
+from sqlalchemy import event
 
 
 TEST_URL = get_isolated_postgresql_test_url()
@@ -55,6 +60,8 @@ def args():
 
 def test_parallel_cutover_is_idempotent_and_approval_is_single(pg_app):
     app, owner_id = pg_app
+    with app.app_context():
+        ensure_standard_products(db.session.get(Dataset, owner_id))
     barrier = threading.Barrier(2)
 
     def worker():
@@ -77,6 +84,7 @@ def test_parallel_cutover_is_idempotent_and_approval_is_single(pg_app):
 def test_legacy_writer_commits_first_and_cutover_rechecks_under_lock(pg_app):
     app, owner_id = pg_app
     with app.app_context():
+        ensure_standard_products(db.session.get(Dataset, owner_id))
         item = Product(dataset_id=owner_id, year=DAY.year, month=DAY.month,
                        name="旧商品", price=200)
         db.session.add(item)
@@ -141,3 +149,88 @@ def test_price_history_composite_fk_and_append_only(pg_app):
             db.session.commit()
         db.session.rollback()
         assert RegisterPriceHistory.query.count() == 2
+
+
+def test_concurrent_preservation_same_key_fk_and_immutable_events(pg_app):
+    app, owner_id = pg_app
+    with app.app_context():
+        owner = db.session.get(Dataset, owner_id)
+        item = create_custom_product(owner, name="復旧商品", price_yen=120)
+        original = receipt(item, day=DAY)
+        product_id = item.id
+    barrier = threading.Barrier(2)
+
+    def worker():
+        with app.app_context():
+            barrier.wait(timeout=15)
+            try:
+                _, created = preserve_case(db.session.get(Dataset, owner_id), original,
+                                          actor="admin", device_status="needs_review")
+                return created
+            finally:
+                db.session.remove()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = [future.result(timeout=30) for future in [pool.submit(worker) for _ in range(2)]]
+    assert sorted(results) == [False, True]
+    with app.app_context():
+        case = RegisterRecoveryCase.query.one()
+        assert RegisterRecoveryEvent.query.count() == RegisterRecoveryLine.query.count() == 1
+        assert RegisterTransaction.query.count() == 0
+        with pytest.raises(SQLAlchemyError):
+            db.session.execute(text("UPDATE register_recovery_events SET reason='変更'"))
+        db.session.rollback()
+        with pytest.raises(SQLAlchemyError):
+            db.session.execute(text("UPDATE register_recovery_cases SET snapshot_json='{}'"))
+        db.session.rollback()
+        guest = Dataset(kind="guest", absolute_expires_at=datetime.datetime.now(
+            datetime.timezone.utc) + datetime.timedelta(hours=1))
+        db.session.add(guest)
+        db.session.commit()
+        with pytest.raises(IntegrityError):
+            db.session.add(RegisterRecoveryLine(case_id=case.id, dataset_id=guest.id,
+                register_product_id=product_id, product_name_snapshot="誤った商品", quantity=1,
+                unit_price_yen=120, line_total_yen=120))
+            db.session.commit()
+        db.session.rollback()
+        assert RegisterRecoveryLine.query.count() == 1
+
+
+def test_concurrent_review_is_single_event_and_rollback_atomic(pg_app):
+    app, owner_id = pg_app
+    with app.app_context():
+        owner = db.session.get(Dataset, owner_id)
+        item = create_custom_product(owner, name="復旧商品", price_yen=120)
+        case, _ = preserve_case(owner, receipt(item, day=DAY), actor="admin")
+        case_id = case.id
+    barrier = threading.Barrier(2)
+
+    def worker():
+        with app.app_context():
+            barrier.wait(timeout=15)
+            try:
+                review_case(db.session.get(Dataset, owner_id), case_id, actor="admin",
+                    target="investigating", reason="現金日報との照合を開始した", confirmed=True)
+                return "saved"
+            except RecoveryConflict:
+                return "conflict"
+            finally:
+                db.session.remove()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        results = [future.result(timeout=30) for future in [pool.submit(worker) for _ in range(2)]]
+    assert sorted(results) == ["conflict", "saved"]
+    with app.app_context():
+        assert RegisterRecoveryEvent.query.count() == 2
+        def fail(_mapper, _connection, _target):
+            if _target.to_status == "held":
+                raise RuntimeError("audit failed")
+        event.listen(RegisterRecoveryEvent, "before_insert", fail)
+        try:
+            with pytest.raises(RuntimeError, match="audit failed"):
+                review_case(db.session.get(Dataset, owner_id), case_id, actor="admin",
+                    target="held", reason="追加証拠の調査を継続する", confirmed=True)
+        finally:
+            event.remove(RegisterRecoveryEvent, "before_insert", fail)
+        assert RegisterRecoveryCase.query.one().status == "investigating"
+        assert RegisterRecoveryEvent.query.count() == 2

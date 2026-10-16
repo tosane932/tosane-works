@@ -73,6 +73,7 @@ from forecast_history import save_forecast, stored_forecasts
 from product_images import available_product_images, available_product_image_assets
 from register_routes import LOCAL_SCOPE_SESSION_KEY, REGISTER_BODY_LIMIT, create_register_blueprint
 from register_readiness_routes import create_register_readiness_blueprint
+from register_recovery_routes import create_register_recovery_blueprint
 from register_product_routes import create_register_product_blueprint
 from catalog_repository import (
     CatalogPublishError,
@@ -129,6 +130,7 @@ app.config["REGISTER_V3_PUBLIC_DEMO_ENABLED"] = config.REGISTER_V3_PUBLIC_DEMO_E
 app.config["REGISTER_V3_READINESS_ENABLED"] = config.REGISTER_V3_READINESS_ENABLED
 app.config["REGISTER_V3_PRODUCTION_ENABLED"] = config.REGISTER_V3_PRODUCTION_ENABLED
 app.config["REGISTER_V3_CUTOVER_ENABLED"] = config.REGISTER_V3_CUTOVER_ENABLED
+app.config["REGISTER_V3_RECOVERY_ENABLED"] = config.REGISTER_V3_RECOVERY_ENABLED
 
 app.config["SESSION_COOKIE_SECURE"] = config.SESSION_COOKIE_SECURE
 app.config["SESSION_COOKIE_HTTPONLY"] = config.SESSION_COOKIE_HTTPONLY
@@ -156,7 +158,7 @@ def allow_catalog_image_request_size():
     """CSRFがmultipartを読む前に、このPOSTだけ画像とformの容量を確保する。"""
     if request.endpoint == "submit_product_catalog" and request.method == "POST":
         request.max_content_length = MAX_UPLOAD_IMAGE_BYTES + 16 * 1024
-    elif request.endpoint == "register.create_transaction":
+    elif request.endpoint in ("register.create_transaction", "register_recovery.preserve"):
         request.max_content_length = REGISTER_BODY_LIMIT
 
 
@@ -600,6 +602,10 @@ app.register_blueprint(create_register_product_blueprint(
     resolve_dataset=require_current_dataset,
 ))
 app.register_blueprint(create_register_readiness_blueprint(
+    admin_required=admin_required,
+    resolve_dataset=require_current_dataset,
+))
+app.register_blueprint(create_register_recovery_blueprint(
     admin_required=admin_required,
     resolve_dataset=require_current_dataset,
 ))
