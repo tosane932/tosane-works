@@ -1,18 +1,17 @@
 """v3商品管理の試験画面。Dataset IDは認証主体からのみ取得する。"""
 
 import uuid
-from pathlib import Path
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 from itsdangerous import BadSignature, URLSafeSerializer
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import Product, RegisterProduct, db
-from product_images import PRODUCT_IMAGE_OPTIONS, _safe_image_path
+from register_images import register_image_choices
 from register_products import (
     CustomProductLimitReached, ProductSubmissionConflict,
     copy_legacy_product, create_custom_product, ensure_standard_products,
-    update_register_product,
+    update_register_product, update_register_product_image,
 )
 
 
@@ -28,7 +27,7 @@ def _write_enabled():
 def _signature(action, owner_id, product):
     return URLSafeSerializer(current_app.secret_key, salt="v3-register-products-" + action).dumps(
         [str(owner_id), product.id, product.name,
-         product.price_yen if action == "edit" else product.price]
+         product.price if action == "copy" else product.price_yen]
     )
 
 
@@ -43,6 +42,25 @@ def _original(action, owner_id, product_id, token):
             type(value[2]) is not str or type(value[3]) is not int):
         abort(400)
     return value[2], value[3]
+
+
+def _image_signature(owner_id, product):
+    return URLSafeSerializer(current_app.secret_key, salt="v3-register-product-image").dumps(
+        [str(owner_id), product.id, product.name, product.price_yen, product.image_key])
+
+
+def _image_original(owner_id, product_id, token):
+    try:
+        value = URLSafeSerializer(current_app.secret_key,
+                                  salt="v3-register-product-image").loads(token)
+    except (BadSignature, TypeError):
+        abort(400)
+    if (not isinstance(value, list) or len(value) != 5 or
+            value[:2] != [str(owner_id), product_id] or
+            type(value[2]) is not str or type(value[3]) is not int or
+            (value[4] is not None and type(value[4]) is not str)):
+        abort(400)
+    return value[2], value[3], value[4]
 
 
 def create_register_product_blueprint(*, access_required, resolve_dataset):
@@ -67,15 +85,13 @@ def create_register_product_blueprint(*, access_required, resolve_dataset):
                         .order_by(RegisterProduct.display_order, RegisterProduct.id).all())
             legacy = (Product.query.filter_by(dataset_id=owner.id)
                       .order_by(Product.year.desc(), Product.month.desc(), Product.id.desc()).all())
-        except SQLAlchemyError:
+            image_choices = register_image_choices(current_app.static_folder,
+                                                   is_guest=owner.kind == "guest")
+        except (SQLAlchemyError, ValueError, OSError):
             db.session.rollback()
             abort(503)
-        image_dir = (Path(current_app.static_folder) / "register_images").resolve()
-        image_urls = {key: url_for("static", filename=f"register_images/{key}.webp")
-                      for key in PRODUCT_IMAGE_OPTIONS
-                      if _safe_image_path(image_dir, f"{key}.webp") is not None}
         return render_template("register_products.html", products=products,
-                               legacy=legacy, image_urls=image_urls,
+                               legacy=legacy, image_urls={key: row["url"] for key, row in image_choices.items()},
                                request_key=str(uuid.uuid4()),
                                write_enabled=_write_enabled(),
                                notice=request.args.get("notice"))
@@ -130,6 +146,44 @@ def create_register_product_blueprint(*, access_required, resolve_dataset):
             current_app.logger.exception("Register product edit failed")
             abort(503)
         return redirect(url_for("register_products.list_products", notice="updated"), code=303)
+
+    @blueprint.route("/register/products/<int:product_id>/image", methods=["GET", "POST"])
+    @access_required
+    def choose_image(product_id):
+        owner = resolve_dataset()
+        product = RegisterProduct.query.filter_by(id=product_id, dataset_id=owner.id).one_or_none()
+        if product is None:
+            abort(404)
+        if request.method == "GET":
+            try:
+                choices = register_image_choices(current_app.static_folder,
+                                                 is_guest=owner.kind == "guest")
+            except (ValueError, SQLAlchemyError, OSError):
+                db.session.rollback()
+                abort(503)
+            return render_template("register_product_images.html", product=product,
+                                   choices=choices, write_enabled=_write_enabled(),
+                                   signed_original=_image_signature(owner.id, product))
+        if request.form.get("image_key") is None:
+            return "画像を選択してください。", 400
+        original_name, original_price, original_image = _image_original(
+            owner.id, product_id, request.form.get("signed_original"))
+        try:
+            update_register_product_image(
+                owner, product_id, image_key=request.form["image_key"] or None,
+                expected_name=original_name, expected_price_yen=original_price,
+                expected_image_key=original_image)
+        except ProductSubmissionConflict as error:
+            return str(error), 409
+        except ValueError as error:
+            return str(error), 400
+        except PermissionError:
+            abort(403)
+        except (SQLAlchemyError, OSError):
+            db.session.rollback()
+            current_app.logger.exception("Register product image update failed")
+            abort(503)
+        return redirect(url_for("register_products.list_products", notice="image"), code=303)
 
     @blueprint.route("/register/products/legacy/<int:product_id>/copy", methods=["GET", "POST"])
     @access_required

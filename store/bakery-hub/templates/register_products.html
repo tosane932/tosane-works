@@ -13,7 +13,7 @@
   <h1>レジ商品管理</h1>
   <p>開発中の画面です。標準商品は月ごとの登録なしで使えます。独自商品は名前と価格だけで追加できます。</p>
   {% if not write_enabled %}<p role="status" class="register-product-note">この環境では商品を変更できません。</p>{% endif %}
-  {% set notices = {'created': '独自商品を追加しました。', 'updated': '商品を更新しました。', 'copied': '旧商品をレジ商品へコピーしました。'} %}
+  {% set notices = {'created': '独自商品を追加しました。', 'updated': '商品を更新しました。', 'copied': '旧商品をレジ商品へコピーしました。', 'image': '画像の選択を保存しました。'} %}
   {% if notice in notices %}<p role="status" class="register-product-note">{{ notices[notice] }}</p>{% endif %}
 
   <section aria-labelledby="standard-heading">
@@ -27,6 +27,7 @@
         <div><h3>{{ product.name }}</h3><p>{{ product.price_yen }}円</p>
           <p>{{ 'レジで使用可能' if product.is_active else '販売停止中' }}</p>
           <a href="{{ url_for('register_products.edit', product_id=product.id) }}">編集</a>
+          <a href="{{ url_for('register_products.choose_image', product_id=product.id) }}">画像を選ぶ</a>
         </div>
       </article>
     {% endfor %}
@@ -47,10 +48,11 @@
     {% endif %}
     <ul class="register-product-custom-list">
     {% for product in products if product.template_key is none %}
-      <li><strong>{{ product.name }}</strong>　{{ product.price_yen }}円
+      <li>{% if product.image_key in image_urls %}<img class="register-custom-thumb" src="{{ image_urls[product.image_key] }}" alt="" loading="lazy" onerror="this.hidden=true">{% endif %}<strong>{{ product.name }}</strong>　{{ product.price_yen }}円
         <span>{{ 'レジで使用可能' if product.is_active else '販売停止中' }}</span>
         <span>{{ '画像なし・文字タイル' if not product.image_key else '画像設定あり' }}</span>
         <a href="{{ url_for('register_products.edit', product_id=product.id) }}">編集</a>
+        <a href="{{ url_for('register_products.choose_image', product_id=product.id) }}">画像を選ぶ</a>
       </li>
     {% else %}<li>独自商品はまだありません。</li>{% endfor %}
     </ul>
@@ -69,7 +71,7 @@
     {% else %}<li>旧月次商品はありません。</li>{% endfor %}
     </ul>
   </section>
-  <p class="register-product-note">画像の選択・追加は現在未対応です。承認済み画像の選択は後続の工程で実装します。</p>
+  <p class="register-product-note">承認済みの画像を選択できます。新しい画像のアップロードはこの画面ではできません。</p>
 </main>
 </body>
 </html>

@@ -17,6 +17,8 @@ from register_sales_aggregation import (SalesCutoverIntegrityError, aggregate_sa
                                         sales_read_snapshot)
 from legacy_sales_cutover import LegacySalesClosed, assert_legacy_sales_writable
 from register_products import _lock_dataset
+from prep_sales_reference import prep_sales_reference
+from types import SimpleNamespace
 
 
 TEST_URL = get_isolated_postgresql_test_url()
@@ -131,6 +133,39 @@ def test_snapshot_does_not_mix_concurrent_checkout_headers_and_lines(pg_app):
         assert result["total_yen"] == 240
         assert result["transaction_count"] == 1
         assert result["products"][0]["revenue_yen"] == 240
+
+
+def test_prep_reference_uses_same_snapshot_as_concurrent_sale(pg_app):
+    day = datetime.date(2026, 10, 16)
+    with pg_app.app_context():
+        owner = Dataset.query.filter_by(kind="admin", system_key="admin").one()
+        product = RegisterProduct(dataset_id=owner.id, template_key="croissant",
+                                  name="クロワッサン", price_yen=120)
+        db.session.add_all([product, RegisterCutover(dataset_id=owner.id,
+                                                     first_register_date=day)])
+        db.session.commit()
+        owner_id, product_id = owner.id, product.id
+    recipe = SimpleNamespace(id=7, product_key="template:croissant")
+    with pg_app.app_context():
+        owner = db.session.get(Dataset, owner_id)
+        with sales_read_snapshot() as snapshot:
+            before = prep_sales_reference(owner, [recipe], day, read_session=snapshot)
+            assert before["references"][7]["status"] == "unrecorded"
+            with db.engine.begin() as conn:
+                tx_id = uuid.uuid4()
+                conn.execute(RegisterTransaction.__table__.insert().values(
+                    id=tx_id, dataset_id=owner_id, submission_key=uuid.uuid4(),
+                    request_digest="a" * 64, business_date=day, kind="sale",
+                    total_yen=120, received_yen=120, change_yen=0))
+                conn.execute(RegisterTransactionLine.__table__.insert().values(
+                    transaction_id=tx_id, dataset_id=owner_id,
+                    register_product_id=product_id, product_name_snapshot="クロワッサン",
+                    unit_price_yen=120, quantity=1, line_total_yen=120))
+            during = prep_sales_reference(owner, [recipe], day, read_session=snapshot)
+            assert during["references"][7]["status"] == "unrecorded"
+        with sales_read_snapshot() as snapshot:
+            after = prep_sales_reference(owner, [recipe], day, read_session=snapshot)
+        assert after["references"][7] == {"status": "recorded", "quantity": 1}
 
 
 def test_cutover_lock_serializes_legacy_writer(pg_app):

@@ -12,6 +12,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from models import Dataset, Product, RegisterProduct, db
 import product_images
+from register_images import register_image_choices
 
 
 GUEST_CUSTOM_PRODUCT_LIMIT = 30  # 旧月次Productの30件とは独立した枠。
@@ -210,6 +211,33 @@ def update_register_product(dataset, product_id, *, name, price_yen,
         item.name, item.price_yen = valid_name, valid_price
         db.session.commit()
         return item
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+def update_register_product_image(dataset, product_id, *, image_key,
+                                  expected_name, expected_price_yen, expected_image_key):
+    """承認済み画像だけを選び、別画面の名前・価格・画像更新を上書きしない。"""
+    try:
+        if type(product_id) is not int or product_id <= 0:
+            raise ValueError("レジ商品IDが不正です。")
+        if image_key is not None and (type(image_key) is not str or len(image_key) > 100):
+            raise ValueError("画像の指定が不正です。")
+        owner = _lock_dataset(dataset)
+        product = RegisterProduct.query.filter_by(id=product_id, dataset_id=owner.id).one_or_none()
+        if product is None:
+            raise PermissionError("このDatasetの商品ではありません。")
+        if image_key is not None and image_key not in register_image_choices(
+                current_app.static_folder, is_guest=owner.kind == "guest"):
+            raise ValueError("利用できる承認済み画像を選択してください。")
+        if (product.name, product.price_yen) != (expected_name, expected_price_yen):
+            raise ProductSubmissionConflict("商品情報が変更されています。再読み込みしてください。")
+        if product.image_key != expected_image_key and product.image_key != image_key:
+            raise ProductSubmissionConflict("画像が変更されています。再読み込みしてください。")
+        product.image_key = image_key
+        db.session.commit()
+        return product
     except Exception:
         db.session.rollback()
         raise
