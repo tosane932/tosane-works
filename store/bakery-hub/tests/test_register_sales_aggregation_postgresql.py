@@ -43,9 +43,8 @@ def pg_app():
 def test_cutover_refund_and_two_lines_do_not_multiply_header(pg_app):
     with pg_app.app_context():
         day_before, cutover = datetime.date(2026, 10, 15), datetime.date(2026, 10, 16)
-        owner = Dataset(kind="admin", system_key="admin")
-        db.session.add(owner)
-        db.session.flush()
+        # 既存migrationが管理者Datasetを初期生成するので、その行を使う。
+        owner = Dataset.query.filter_by(kind="admin", system_key="admin").one()
         old = Product(dataset_id=owner.id, year=2026, month=10, name="パン", price=100)
         first = RegisterProduct(dataset_id=owner.id, name="パン", price_yen=120)
         second = RegisterProduct(dataset_id=owner.id, name="塩パン", price_yen=140)
