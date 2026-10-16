@@ -19,3 +19,16 @@ def build_sales_prompt(sales_summary: str) -> str:
 【出力形式】
 箇条書き3点、各1〜2文で簡潔に。
 """
+
+
+def build_register_sales_prompt(sales_summary: str, *, limited=False) -> str:
+    """レジ会計と旧行を営業日で排他集計した差引の意味を明示する。"""
+    scope = "数量上位30商品のみ。全商品合計ではありません。" if limited else "全対象商品の集計です。"
+    return (
+        "ベーカリーの売上について、実行しやすい改善案を3点、簡潔に示してください。\n"
+        "旧日次売上と新レジ会計は営業日ごとに排他的に集計しています。"
+        "差引数量・差引金額には返金の負数を含みます。"
+        "同名でも識別表示が異なる商品は別商品です。"
+        "旧商品の金額は現行単価による推計です。"
+        f"{scope}\n【商品別実績】\n{sales_summary}"
+    )

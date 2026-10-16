@@ -147,6 +147,18 @@ Phase 1Bの`register_products.py`は認可済みDatasetオブジェクトを受�
 
 Phase 3Bでは`app.py`の`_get_today_sales_amount()`、`_has_today_sales_record()`、`_get_sales_from_db()`、`_get_dashboard_sales_months()`、`_get_dashboard_sales_years()`と、`dashboard()`、`api_dashboard_data()`、`api_sales_period_summary()`、`api_ai_advice()`、`home()`の呼び出し・表示契約を確認して段階的に切り替える。既存`/api/sales-period-summary`の返却形は3Aでは変更しない。日別推移・商品ランキング・比較対象の未記録表示・AI入力を新契約へ写すアダプターを3Bでテストする。切替後の旧`/input`書き込み停止と本番切替日は別工程で検証し、切替条件違反の運用表示または警報も公開接続前に決める。新集計を追加しただけでは本番公開は可能にならない。
 
+### Phase 3Bの試験接続と公開前の条件
+
+`REGISTER_V3_AGGREGATION_ENABLED`はレジのプレビュー・保存とは独立し、通常環境の既定は無効。テストまたは明示的なローカル開発時だけ統合集計を使い、OFF時の公開画面・JSON・AIの従来契約を維持する。ON時は`register_sales_view.py`が3Aの結果を`dashboard()`、`api_dashboard_data()`、`api_sales_period_summary()`、`api_ai_advice()`、`home()`へ変換する。既存APIの`total_sales`、`previous_sales`、`difference`、`comparison_rate`、`chart_labels`、`chart_values`、`rankings`と`ranked_sales`配列形を維持し、会計件数・平均・記録の有無・商品キーを追加する。旧系統と新系統の同名商品はID付きの補助表示で区別する。旧売上の正確な会計件数は引き続き算出しない。期間APIの`previous_sales=None`は比較対象に記録がないことを示す。0円と未記録は`has_record`で区別する。AIには識別表示、差引数量、差引金額を渡し、返金の負数と旧単価が推計であることを明示する。Guestの既存AI回数制限を維持する。
+
+PostgreSQLでは通常の認証・SessionがSELECTを開始した後に分離レベルを変更できないため、集計要求に専用接続を開き、`REPEATABLE READ`・`SET TRANSACTION READ ONLY`のトランザクション内でDataset確認、切替確認、日別・商品別、比較期間と候補年月を読み切る。通常の会計保存に行ロックを要求せず、読取後すぐ接続を解放する。SQLiteの通常pytestでは既存sessionを使い、金額照合によって矛盾を検知する。隔離PostgreSQLで会計保存と同時に読み、同一読取要求は旧スナップショットを保ち、次の要求は確定した会計を読むことを検証する。
+
+ON時の切替違反／金額不一致は安全な503画面または`{"error":"sales_integrity_error","incident_id":"…"}`の503 JSONとし、売上数値を返さない。画面更新の失敗時には既に表示されていた期間の数値とグラフを消し、古い数字を新しい選択結果として見せない。ログはエラー型、処理名、Dataset UUIDの短いハッシュ、対象期間、切替違反件数、調査用IDに限る。SQLや秘密情報を利用者へ出さない。
+
+旧`/input`のPOSTは商品・数量検証後、同一DB transaction内でDataset行をロックし、`RegisterCutover.first_register_date`以降を409で拒否する。GETの案内は補助でありPOSTを防ぐ根拠ではない。管理者デモ投入スクリプトも同じロックと日付規則を使う。切替未設定と切替前の旧日の修正は従来の上書きを許すが、旧単価の履歴制約があるため監査記録付きの訂正手順は本番切替前に決める。**将来の切替日設定処理は同じDataset行を先にロック**し、既存旧行を調べてから設定する必要がある。現時点では本番切替日を設定するHTTP経路はなく、このロック規約を守らない外部DB操作まではアプリで防げない。
+
+本番導入前には全期間の違反行棚卸し、切替日前後の旧／新経路の停止確認、切替日を設定する管理手順、デプロイ中の旧アプリワーカー停止または全ワーカー更新の確認が必要。旧版ワーカーは今回の`/input`ガードを持たないため、切替日を投入する前に旧版プロセスが一つもPOSTを受けないことを運用で確認する。端末未同期記録の過去日付取込・価格競合・Guest期限切れ復旧も未解決であり、PRのマージだけで本番レジは利用可能にならない。
+
 仕込みとの最小連携は、販売個数を**参考値**として仕込み画面へDataset・商品キー・営業日付きで渡す読み取り導線。`PrepRecipe`と`PrepPlan`を勝手に更新せず、必要なら店長が予定数に反映する。返品・廃棄・製造ロスを含まないため販売数を実際の材料消費量や在庫変化とは呼ばない。`template:<key>`は新マスタの標準キーへ対応付けられるが、`product:<旧ID>`は移行時に対応を確認し、レシピの参照先を自動で変更しない。材料発注メモへの既存導線は維持する。GuestにAdmin専用の仕込み画面を公開しない。
 
 ## 5. Dataset・権限・画像の境界

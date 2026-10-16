@@ -2,6 +2,7 @@
 
 import datetime
 from pathlib import Path
+import threading
 import uuid
 
 from flask import Flask
@@ -12,7 +13,10 @@ from sqlalchemy import create_engine, text
 from models import (DailySales, Dataset, Product, RegisterCutover, RegisterProduct,
                     RegisterTransaction, RegisterTransactionLine, db)
 from postgresql_test_utils import get_isolated_postgresql_test_url
-from register_sales_aggregation import SalesCutoverIntegrityError, aggregate_sales
+from register_sales_aggregation import (SalesCutoverIntegrityError, aggregate_sales,
+                                        sales_read_snapshot)
+from legacy_sales_cutover import LegacySalesClosed, assert_legacy_sales_writable
+from register_products import _lock_dataset
 
 
 TEST_URL = get_isolated_postgresql_test_url()
@@ -77,3 +81,99 @@ def test_cutover_refund_and_two_lines_do_not_multiply_header(pg_app):
         with pytest.raises(SalesCutoverIntegrityError) as error:
             aggregate_sales(owner, day_before, cutover)
         assert error.value.legacy_count == 1
+
+
+def test_snapshot_does_not_mix_concurrent_checkout_headers_and_lines(pg_app):
+    day = datetime.date(2026, 10, 16)
+    with pg_app.app_context():
+        owner = Dataset.query.filter_by(kind="admin", system_key="admin").one()
+        db.session.add(RegisterCutover(dataset_id=owner.id, first_register_date=day))
+        product = RegisterProduct(dataset_id=owner.id, name="パン", price_yen=120)
+        db.session.add(product)
+        db.session.commit()
+        owner_id, product_id = owner.id, product.id
+
+    finished = threading.Event()
+    writer_errors = []
+
+    def writer():
+        with pg_app.app_context():
+            try:
+                header = RegisterTransaction(dataset_id=owner_id, business_date=day,
+                    submission_key=uuid.uuid4(), request_digest="a" * 64, kind="sale",
+                    total_yen=240, received_yen=240, change_yen=0)
+                db.session.add(header)
+                db.session.flush()
+                db.session.add(RegisterTransactionLine(transaction_id=header.id,
+                    dataset_id=owner_id, register_product_id=product_id,
+                    product_name_snapshot="パン", unit_price_yen=120,
+                    quantity=2, line_total_yen=240))
+                db.session.commit()
+            except Exception as exc:
+                writer_errors.append(exc)
+            finally:
+                finished.set()
+
+    with pg_app.app_context():
+        owner = db.session.get(Dataset, owner_id)
+        with sales_read_snapshot() as snapshot:
+            assert snapshot.execute(text("SHOW transaction_isolation")).scalar_one() == "repeatable read"
+            assert snapshot.execute(text("SHOW transaction_read_only")).scalar_one() == "on"
+            assert aggregate_sales(owner, day, day, read_session=snapshot)["total_yen"] == 0
+            thread = threading.Thread(target=writer)
+            thread.start()
+            assert finished.wait(timeout=10), "読み取り中に会計保存が妨げられた"
+            assert aggregate_sales(owner, day, day, read_session=snapshot)["total_yen"] == 0
+        thread.join(timeout=10)
+        assert not writer_errors
+        with sales_read_snapshot() as snapshot:
+            result = aggregate_sales(owner, day, day, read_session=snapshot)
+        assert result["total_yen"] == 240
+        assert result["transaction_count"] == 1
+        assert result["products"][0]["revenue_yen"] == 240
+
+
+def test_cutover_lock_serializes_legacy_writer(pg_app):
+    day = datetime.date(2026, 10, 16)
+    with pg_app.app_context():
+        owner_id = Dataset.query.filter_by(kind="admin", system_key="admin").one().id
+    locked = threading.Event()
+    release = threading.Event()
+    writer_errors = []
+
+    def cutover_writer():
+        with pg_app.app_context():
+            try:
+                owner = db.session.get(Dataset, owner_id)
+                _lock_dataset(owner)
+                db.session.add(RegisterCutover(dataset_id=owner_id, first_register_date=day))
+                db.session.flush()
+                locked.set()
+                assert release.wait(timeout=10)
+                db.session.commit()
+            except Exception as exc:
+                writer_errors.append(exc)
+                locked.set()
+
+    thread = threading.Thread(target=cutover_writer)
+    thread.start()
+    assert locked.wait(timeout=10)
+
+    def release_cutover():
+        release.set()
+
+    timer = threading.Timer(0.2, release_cutover)
+    timer.start()
+    try:
+        with pg_app.app_context():
+            owner = db.session.get(Dataset, owner_id)
+            with pytest.raises(LegacySalesClosed):
+                assert_legacy_sales_writable(owner, day)
+            db.session.rollback()
+            assert DailySales.query.count() == 0
+    finally:
+        release.set()
+        thread.join(timeout=10)
+        timer.join(timeout=10)
+    assert not thread.is_alive()
+    assert not writer_errors

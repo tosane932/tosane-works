@@ -26,6 +26,9 @@
     >
         ※本日の累計販売数を入力してください。入力済みの数値は上書きされます。
     </p>
+    {% if legacy_input_closed %}
+        <p role="status">本日の売上はレジ会計へ切り替わっています。この画面からは保存できません。</p>
+    {% endif %}
 
     <div class="date-display ui-icon-layout">
         <svg class="ui-icon ui-icon-status" data-icon="calendar-days" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
@@ -89,7 +92,7 @@
         </div>
     {% endif %}
 
-    {% if products %}
+    {% if products and not legacy_input_closed %}
         <form method="POST" onkeydown="return event.key !== 'Enter';">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 

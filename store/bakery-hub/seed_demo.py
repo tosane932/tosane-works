@@ -4,6 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app import app, business_today, get_admin_dataset
 from models import db, Product, DailySales
+from legacy_sales_cutover import assert_legacy_sales_writable
 
 
 DEMO_PRODUCTS = [
@@ -56,6 +57,15 @@ def seed_demo_data(reference_date=None):
 
         year = reference_date.year
         month = reference_date.month
+
+        try:
+            for day_offset in range(1, len(DEMO_QUANTITIES) + 1):
+                assert_legacy_sales_writable(
+                    admin_dataset, datetime.date(year, month, day_offset)
+                )
+        except Exception:
+            db.session.rollback()
+            raise
 
         products = [
             Product(
