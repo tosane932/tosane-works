@@ -156,8 +156,9 @@ def test_concurrent_preservation_same_key_fk_and_immutable_events(pg_app):
     with app.app_context():
         owner = db.session.get(Dataset, owner_id)
         item = create_custom_product(owner, name="復旧商品", price_yen=120)
+        foreign_item = create_custom_product(owner, name="越境検証商品", price_yen=120)
         original = receipt(item, day=DAY)
-        product_id = item.id
+        product_id = foreign_item.id
     barrier = threading.Barrier(2)
 
     def worker():
