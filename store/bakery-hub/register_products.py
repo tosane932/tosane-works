@@ -1,6 +1,9 @@
 """レジ用の継続商品マスタ。HTTPからは認可済みDatasetだけを渡す。"""
 
 from pathlib import Path
+import hashlib
+import json
+import uuid
 
 from flask import current_app
 import sqlalchemy as sa
@@ -16,6 +19,28 @@ GUEST_CUSTOM_PRODUCT_LIMIT = 30  # 旧月次Productの30件とは独立した枠
 
 class CustomProductLimitReached(ValueError):
     pass
+
+
+class ProductSubmissionConflict(ValueError):
+    pass
+
+
+def _submission(owner, request_key, operation, name, price, source_id=None):
+    """Datasetロック後に同じ送信の既存結果を返す。変更後もdigestは不変。"""
+    if request_key is None:
+        return None, None, None
+    try:
+        key = uuid.UUID(str(request_key))
+    except (TypeError, ValueError, AttributeError):
+        raise ValueError("送信キーが不正です。") from None
+    digest = hashlib.sha256(json.dumps(
+        [operation, source_id, name, price], ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    existing = RegisterProduct.query.filter_by(dataset_id=owner.id, creation_key=key).one_or_none()
+    if existing is not None and existing.creation_digest != digest:
+        raise ProductSubmissionConflict("同じ送信キーで異なる商品を登録できません。")
+    return key, digest, existing
 
 
 def _lock_dataset(dataset):
@@ -110,49 +135,64 @@ def ensure_standard_products(dataset):
         raise
 
 
-def _add_custom(owner, name, price):
+def _add_custom(owner, name, price, *, creation_key=None, creation_digest=None):
     if owner.kind == "guest":
         used = RegisterProduct.query.filter_by(dataset_id=owner.id, template_key=None).count()
         if used >= GUEST_CUSTOM_PRODUCT_LIMIT:
             raise CustomProductLimitReached("ゲストのレジ独自商品は30件までです。")
     item = RegisterProduct(dataset_id=owner.id, template_key=None, name=name,
-                           price_yen=price, image_key=None, is_active=True)
+                           price_yen=price, image_key=None, is_active=True,
+                           creation_key=creation_key, creation_digest=creation_digest)
     db.session.add(item)
     db.session.commit()
     return item
 
 
-def create_custom_product(dataset, *, name, price_yen):
+def create_custom_product(dataset, *, name, price_yen, request_key=None):
     """名前・価格だけで独自商品を作成。旧月次商品の枠は消費しない。"""
     try:
         valid_name, valid_price = _name(name), _price(price_yen)
         owner = _lock_dataset(dataset)
-        return _add_custom(owner, valid_name, valid_price)
+        key, digest, existing = _submission(owner, request_key, "create", valid_name, valid_price)
+        if existing is not None:
+            db.session.rollback()
+            return existing
+        return _add_custom(owner, valid_name, valid_price,
+                           creation_key=key, creation_digest=digest)
     except Exception:
         db.session.rollback()
         raise
 
 
-def copy_legacy_product(dataset, product_id, *, confirmed_name, confirmed_price_yen):
+def copy_legacy_product(dataset, product_id, *, confirmed_name, confirmed_price_yen,
+                        request_key=None):
     """明示選択した旧商品を別IDの新商品へコピー。元データは不変。"""
     try:
         if type(product_id) is not int or product_id <= 0:
             raise ValueError("旧商品IDが不正です。")
         owner = _lock_dataset(dataset)
+        valid_name, valid_price = _name(confirmed_name), _price(confirmed_price_yen)
+        key, digest, existing = _submission(owner, request_key, "copy", valid_name,
+                                            valid_price, product_id)
+        if existing is not None:
+            db.session.rollback()
+            return existing
         source = Product.query.filter_by(id=product_id, dataset_id=owner.id).one_or_none()
         if source is None:
             raise PermissionError("このDatasetの旧商品ではありません。")
         if not source.is_active:
             raise ValueError("販売終了した旧商品はコピーできません。")
-        if _name(confirmed_name) != source.name or _price(confirmed_price_yen) != source.price:
+        if valid_name != source.name or valid_price != source.price:
             raise ValueError("確認した旧商品の名前または価格が現在の値と異なります。")
-        return _add_custom(owner, source.name, source.price)
+        return _add_custom(owner, source.name, source.price,
+                           creation_key=key, creation_digest=digest)
     except Exception:
         db.session.rollback()
         raise
 
 
-def update_register_product(dataset, product_id, *, name, price_yen):
+def update_register_product(dataset, product_id, *, name, price_yen,
+                            expected_name=None, expected_price_yen=None):
     """将来の編集用。必ず所有Dataset内の1件だけを変更する。"""
     try:
         if type(product_id) is not int or product_id <= 0:
@@ -162,6 +202,11 @@ def update_register_product(dataset, product_id, *, name, price_yen):
         item = RegisterProduct.query.filter_by(id=product_id, dataset_id=owner.id).one_or_none()
         if item is None:
             raise PermissionError("このDatasetの商品ではありません。")
+        if expected_name is not None and expected_price_yen is not None:
+            # 同じフォームの再送は安全。別画面の編集と衝突したら上書きしない。
+            if (item.name, item.price_yen) != (expected_name, expected_price_yen) and (
+                    item.name, item.price_yen) != (valid_name, valid_price):
+                raise ProductSubmissionConflict("商品情報が変更されています。再読み込みしてください。")
         item.name, item.price_yen = valid_name, valid_price
         db.session.commit()
         return item

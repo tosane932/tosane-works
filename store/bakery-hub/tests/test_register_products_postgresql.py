@@ -4,6 +4,7 @@ import concurrent.futures
 import datetime
 from pathlib import Path
 import threading
+import uuid
 
 from flask import Flask
 from flask_migrate import Migrate, upgrade
@@ -12,7 +13,8 @@ from sqlalchemy import create_engine, text
 
 from models import Dataset, RegisterProduct, db
 from postgresql_test_utils import get_isolated_postgresql_test_url
-from register_products import CustomProductLimitReached, create_custom_product, ensure_standard_products
+from register_products import (CustomProductLimitReached, ProductSubmissionConflict,
+                               create_custom_product, ensure_standard_products)
 
 
 TEST_URL = get_isolated_postgresql_test_url()
@@ -98,3 +100,17 @@ def test_parallel_guest_custom_registration_never_exceeds_thirty(pg_app):
     with app.app_context():
         assert RegisterProduct.query.filter_by(dataset_id=guest_id, template_key=None).count() == 30
         assert RegisterProduct.query.filter_by(dataset_id=guest_id).count() == 48
+
+
+def test_parallel_same_submission_key_creates_one_product_and_detects_conflict(pg_app):
+    app, guest_id = pg_app
+    key = str(uuid.uuid4())
+    ids = _race(app, guest_id, lambda dataset: create_custom_product(
+        dataset, name="同時商品", price_yen=500, request_key=key).id)
+    assert ids[0] == ids[1]
+    with app.app_context():
+        assert RegisterProduct.query.filter_by(dataset_id=guest_id, template_key=None).count() == 1
+        with pytest.raises(ProductSubmissionConflict):
+            create_custom_product(db.session.get(Dataset, guest_id), name="別商品",
+                                  price_yen=500, request_key=key)
+        assert RegisterProduct.query.filter_by(dataset_id=guest_id, template_key=None).count() == 1

@@ -28,6 +28,12 @@ REGISTER_V3_SAVE_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
 REGISTER_V3_AGGREGATION_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
     os.environ.get("REGISTER_V3_AGGREGATION_ENABLED")
 )
+REGISTER_V3_PRODUCTS_PREVIEW_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_PRODUCTS_PREVIEW_ENABLED")
+)
+REGISTER_V3_PRODUCTS_WRITE_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_PRODUCTS_WRITE_ENABLED")
+)
 
 # AIアドバイス生成で使用するGeminiの最新モデル名
 GEMINI_MODEL = "gemini-3.8-flash"

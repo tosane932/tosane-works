@@ -16,7 +16,7 @@ from models import db
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 OLD_HEAD = "e2a7c4d9b105"
-NEW_HEAD = "f3b7e5a9c102"
+NEW_HEAD = "a4e8c2f6d901"
 TABLES = {"register_products", "register_cutovers", "register_transactions", "register_transaction_lines"}
 
 
@@ -80,7 +80,7 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
     assert_previous_rows()
 
     expected_columns = {
-        "register_products": {"id", "dataset_id", "template_key", "name", "price_yen", "image_key", "is_active", "display_order", "created_at", "updated_at"},
+        "register_products": {"id", "dataset_id", "template_key", "name", "price_yen", "image_key", "is_active", "display_order", "created_at", "updated_at", "creation_key", "creation_digest"},
         "register_cutovers": {"dataset_id", "first_register_date"},
         "register_transactions": {"id", "dataset_id", "submission_key", "request_digest", "completed_at", "business_date", "kind", "total_yen", "received_yen", "change_yen"},
         "register_transaction_lines": {"id", "transaction_id", "dataset_id", "register_product_id", "product_name_snapshot", "unit_price_yen", "quantity", "line_total_yen"},
@@ -89,7 +89,7 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
         columns = {col["name"]: col for col in inspector.get_columns(table)}
         assert set(columns) == names
         assert all(not col["nullable"] for name, col in columns.items()
-                   if name not in {"template_key", "image_key", "received_yen", "change_yen"})
+                   if name not in {"template_key", "image_key", "creation_key", "creation_digest", "received_yen", "change_yen"})
 
     expected_fk = {
         "register_products": {("dataset_id",): ("datasets", ("id",))},
@@ -126,6 +126,9 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
         "register_transaction_lines": "ix_register_lines_dataset_product",
     }.items():
         assert name in {x["name"] for x in inspector.get_indexes(table)}
+    assert "ux_register_products_dataset_creation_key" in {
+        x["name"] for x in inspector.get_indexes("register_products") if x["unique"]
+    }
 
     # A future edit to the ORM without matching migration (or vice versa)
     # must be caught before either database gets the new schema.
@@ -186,3 +189,31 @@ def test_downgrade_refuses_populated_tables_before_dropping_any(migration_app, o
     assert TABLES <= table_state()
     assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
     assert db.session.execute(text(f"SELECT COUNT(*) FROM {occupied}")).scalar_one() == 1
+
+
+def test_product_creation_key_upgrade_preserves_existing_data_and_rejects_duplicate(migration_app):
+    migrate("f3b7e5a9c102")
+    owner = db.session.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()
+    db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) "
+                            "VALUES (11,:owner,'既存商品',280)"), {"owner": owner})
+    db.session.commit()
+    migrate("head")
+    assert db.session.execute(text("SELECT name,price_yen,creation_key,creation_digest "
+                                   "FROM register_products WHERE id=11")).one() == (
+                                       "既存商品", 280, None, None)
+    key = uuid.uuid4().hex
+    db.session.execute(text("INSERT INTO register_products "
+                            "(id,dataset_id,name,price_yen,creation_key,creation_digest) "
+                            "VALUES (12,:owner,'新商品',200,:key,:digest)"),
+                       {"owner": owner, "key": key, "digest": "a" * 64})
+    db.session.commit()
+    with pytest.raises(sa.exc.IntegrityError):
+        db.session.execute(text("INSERT INTO register_products "
+                                "(id,dataset_id,name,price_yen,creation_key,creation_digest) "
+                                "VALUES (13,:owner,'重複',200,:key,:digest)"),
+                           {"owner": owner, "key": key, "digest": "a" * 64})
+    db.session.rollback()
+    with pytest.raises(SystemExit):
+        downgrade(directory=str(MIGRATIONS_DIR), revision="f3b7e5a9c102")
+    assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
+    assert db.session.execute(text("SELECT COUNT(*) FROM register_products")).scalar_one() == 2

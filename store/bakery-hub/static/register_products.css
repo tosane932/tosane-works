@@ -1,0 +1,19 @@
+.register-product-page { max-width: 1100px; padding-bottom: 3rem; }
+.register-product-page section { margin: 1.7rem 0; }
+.register-product-page h2 { margin-bottom: .7rem; }
+.register-product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: .75rem; }
+.register-product-card { display: flex; flex-direction: column; border: 1px solid #d7c9ba; background: #fff; padding: .75rem; border-radius: .4rem; }
+.register-product-card img, .register-product-image-empty { width: 100%; height: 105px; object-fit: contain; background: #f5f0e9; }
+.register-product-image-empty { display: grid; place-items: center; }
+.register-product-card h3 { font-size: 1rem; overflow-wrap: anywhere; margin: .6rem 0 .2rem; }
+.register-product-card p { margin: .2rem 0; }
+.register-product-form { display: grid; gap: .8rem; max-width: 440px; padding: 1rem; border: 1px solid #d7c9ba; background: #fff; }
+.register-product-form label { display: grid; gap: .25rem; }
+.register-product-form input:not([type="checkbox"]) { min-height: 44px; padding: .4rem .6rem; font: inherit; }
+.register-product-form button { min-height: 48px; padding: .65rem 1rem; font: inherit; background: #684b39; color: #fff; border: 0; cursor: pointer; }
+.register-product-confirm { display: flex !important; align-items: center; gap: .5rem; }
+.register-product-confirm input { width: 22px; height: 22px; }
+.register-product-custom-list { list-style: none; padding: 0; }
+.register-product-custom-list li { padding: .75rem 0; border-bottom: 1px solid #d7c9ba; overflow-wrap: anywhere; }
+.register-product-custom-list li span { margin-right: .5rem; }
+.register-product-note { padding: .8rem; background: #f5f0e9; }

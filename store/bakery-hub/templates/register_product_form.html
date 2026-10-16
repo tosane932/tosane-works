@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ 'レジ商品を編集' if mode == 'edit' else '旧商品をコピー' }} | Bakery Hub</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='register_products.css') }}">
+</head>
+<body class="app-shell-page">
+{% include "_app_navigation.html" %}
+<main class="container register-product-page">
+  <a href="{{ url_for('register_products.list_products') }}">← レジ商品管理に戻る</a>
+  {% if mode == 'edit' %}
+  <h1>レジ商品を編集</h1>
+  <p>変更後の名前と価格は次に取得するレジ商品一覧へ反映されます。確定済み会計の明細は変わりません。</p>
+  {% if write_enabled %}
+  <form method="post" class="register-product-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="signed_original" value="{{ signed_original }}">
+    <label>商品名 <input name="name" value="{{ product.name }}" maxlength="100" required></label>
+    <label>販売価格（0〜500円） <input name="price_yen" type="number" value="{{ product.price_yen }}" min="0" max="500" step="1" required inputmode="numeric"></label>
+    <button type="submit">変更を保存</button>
+  </form>
+  {% else %}<p>この環境では編集できません。</p>{% endif %}
+  {% else %}
+  <h1>旧商品をレジへコピー</h1>
+  <dl><dt>登録月</dt><dd>{{ product.year }}年{{ product.month }}月</dd>
+      <dt>商品名</dt><dd>{{ product.name }}</dd><dt>価格</dt><dd>{{ product.price }}円</dd></dl>
+  <p>コピー後も旧商品と過去の売上はそのまま残ります。同名でも別商品として登録します。</p>
+  {% if not eligible %}<p role="status">販売終了または500円超の商品はコピーできません。</p>
+  {% elif not write_enabled %}<p>この環境ではコピーできません。</p>
+  {% else %}
+  <form method="post" class="register-product-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="signed_original" value="{{ signed_original }}">
+    <input type="hidden" name="request_key" value="{{ request_key }}">
+    <label class="register-product-confirm"><input type="checkbox" name="confirmed" value="yes" required>表示された商品名と価格を確認しました</label>
+    <button type="submit">確認してレジ商品へコピー</button>
+  </form>
+  {% endif %}
+  {% endif %}
+  <p class="register-product-note">画像選択・画像追加は現在未対応です。</p>
+</main>
+</body>
+</html>
