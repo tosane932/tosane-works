@@ -558,6 +558,7 @@ class RegisterProduct(db.Model):
         db.CheckConstraint("is_active IN (true, false)", name="ck_register_products_active"),
         db.CheckConstraint("display_order >= 0 AND display_order = CAST(display_order AS INTEGER)", name="ck_register_products_display_order"),
         db.Index("ix_register_products_dataset_active_order", "dataset_id", "is_active", "display_order", "id"),
+        db.Index("ux_register_products_dataset_creation_key", "dataset_id", "creation_key", unique=True),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -566,6 +567,8 @@ class RegisterProduct(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price_yen = db.Column(db.Integer, nullable=False)
     image_key = db.Column(db.String(100), nullable=True)
+    creation_key = db.Column(db.Uuid(as_uuid=True), nullable=True)
+    creation_digest = db.Column(db.String(64), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
     display_order = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())

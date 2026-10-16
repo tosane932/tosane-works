@@ -72,6 +72,7 @@ from bakery_news import get_news
 from forecast_history import save_forecast, stored_forecasts
 from product_images import available_product_images, available_product_image_assets
 from register_routes import LOCAL_SCOPE_SESSION_KEY, REGISTER_BODY_LIMIT, create_register_blueprint
+from register_product_routes import create_register_product_blueprint
 from catalog_repository import (
     CatalogPublishError,
     InvalidCatalogImage,
@@ -121,6 +122,8 @@ app.config["PUOPPO_INTEGRATION_ENABLED"] = config.PUOPPO_INTEGRATION_ENABLED
 app.config["REGISTER_V3_PREVIEW_ENABLED"] = config.REGISTER_V3_PREVIEW_ENABLED
 app.config["REGISTER_V3_SAVE_ENABLED"] = config.REGISTER_V3_SAVE_ENABLED
 app.config["REGISTER_V3_AGGREGATION_ENABLED"] = config.REGISTER_V3_AGGREGATION_ENABLED
+app.config["REGISTER_V3_PRODUCTS_PREVIEW_ENABLED"] = config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED
+app.config["REGISTER_V3_PRODUCTS_WRITE_ENABLED"] = config.REGISTER_V3_PRODUCTS_WRITE_ENABLED
 
 app.config["SESSION_COOKIE_SECURE"] = config.SESSION_COOKIE_SECURE
 app.config["SESSION_COOKIE_HTTPONLY"] = config.SESSION_COOKIE_HTTPONLY
@@ -583,6 +586,10 @@ app.register_blueprint(
     )
 )
 app.register_blueprint(create_register_blueprint(
+    access_required=admin_or_guest_required,
+    resolve_dataset=require_current_dataset,
+))
+app.register_blueprint(create_register_product_blueprint(
     access_required=admin_or_guest_required,
     resolve_dataset=require_current_dataset,
 ))

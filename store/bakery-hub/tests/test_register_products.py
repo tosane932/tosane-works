@@ -4,6 +4,7 @@ import datetime
 import concurrent.futures
 from pathlib import Path
 import threading
+import uuid
 
 from flask import Flask
 import pytest
@@ -12,7 +13,7 @@ import app as app_module
 from models import DailySales, Dataset, PrepRecipe, Product, RegisterProduct, db
 import product_images
 from register_products import (
-    CustomProductLimitReached, GUEST_CUSTOM_PRODUCT_LIMIT,
+    CustomProductLimitReached, GUEST_CUSTOM_PRODUCT_LIMIT, ProductSubmissionConflict,
     copy_legacy_product, create_custom_product, ensure_standard_products,
     update_register_product,
 )
@@ -245,5 +246,40 @@ def test_sqlite_parallel_seed_and_guest_limit_use_one_dataset_writer(tmp_path):
     assert sorted(race(try_create)) == ["full", "saved"]
     with app.app_context():
         assert RegisterProduct.query.filter_by(dataset_id=guest_id).count() == 48
+        db.session.remove()
+        db.drop_all()
+
+
+def test_sqlite_parallel_identical_product_submission_creates_one_row(tmp_path):
+    app = Flask("register_products_idempotency_sqlite")
+    app.config.update(SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path / 'products.sqlite'}",
+                      SQLALCHEMY_TRACK_MODIFICATIONS=False)
+    db.init_app(app)
+    with app.app_context():
+        db.create_all()
+        dataset = owner()
+        dataset_id = dataset.id
+    key = str(uuid.uuid4())
+    barrier = threading.Barrier(2)
+
+    def worker():
+        with app.app_context():
+            dataset = db.session.get(Dataset, dataset_id)
+            barrier.wait(timeout=15)
+            try:
+                return create_custom_product(dataset, name="一度だけ", price_yen=500,
+                                             request_key=key).id
+            finally:
+                db.session.remove()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(worker) for _ in range(2)]
+        assert futures[0].result(timeout=20) == futures[1].result(timeout=20)
+    with app.app_context():
+        dataset = db.session.get(Dataset, dataset_id)
+        with pytest.raises(ProductSubmissionConflict):
+            create_custom_product(dataset, name="異なる商品", price_yen=500,
+                                  request_key=key)
+        assert RegisterProduct.query.filter_by(dataset_id=dataset_id).count() == 1
         db.session.remove()
         db.drop_all()
