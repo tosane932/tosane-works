@@ -34,6 +34,10 @@ REGISTER_V3_PRODUCTS_PREVIEW_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_i
 REGISTER_V3_PRODUCTS_WRITE_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
     os.environ.get("REGISTER_V3_PRODUCTS_WRITE_ENABLED")
 )
+# Admin専用の非保存デモ。LOCAL_DEVELOPMENTと正式レジの各フラグから独立。
+REGISTER_V3_PUBLIC_DEMO_ENABLED = _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_PUBLIC_DEMO_ENABLED")
+)
 
 # AIアドバイス生成で使用するGeminiの最新モデル名
 GEMINI_MODEL = "gemini-3.8-flash"

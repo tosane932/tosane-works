@@ -9,6 +9,8 @@
     {% set active_app_page = 'product-catalog' %}
 {% elif current_endpoint.startswith('register_products.') %}
     {% set active_app_page = 'register-products' %}
+{% elif current_endpoint == 'register.demo' %}
+    {% set active_app_page = 'register-demo' %}
 {% elif current_endpoint == 'input_sales' %}
     {% set active_app_page = 'sales' %}
 {% elif current_endpoint == 'dashboard' %}
@@ -178,6 +180,14 @@
            {% if active_app_page == 'register-products' %}aria-current="page"{% endif %}>
             <span class="app-sidebar-icon" aria-hidden="true">▣</span>
             <span>レジ商品管理（開発中）</span>
+        </a>
+        {% endif %}
+        {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_PUBLIC_DEMO_ENABLED %}
+        <a href="{{ url_for('register.demo') }}" data-page="register-demo"
+           class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-demo' %} app-sidebar-link-current{% endif %}"
+           {% if active_app_page == 'register-demo' %}aria-current="page"{% endif %}>
+            <span class="app-sidebar-icon" aria-hidden="true">▣</span>
+            <span>レジ操作デモ（未保存）</span>
         </a>
         {% endif %}
         <a

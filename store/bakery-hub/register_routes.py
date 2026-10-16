@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models import RegisterProduct, db
 from register_images import register_image_choices
-from register_products import ensure_standard_products
+from register_products import _standard_rows, ensure_standard_products
 from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
                               PriceChanged, SubmissionConflict,
                               save_register_transaction)
@@ -18,7 +18,7 @@ REGISTER_BODY_LIMIT = 16_384
 LOCAL_SCOPE_SESSION_KEY = "register_local_scope"
 
 
-def create_register_blueprint(*, access_required, resolve_dataset):
+def create_register_blueprint(*, access_required, admin_required, resolve_dataset):
     blueprint = Blueprint("register", __name__)
 
     @blueprint.before_request
@@ -57,6 +57,27 @@ def create_register_blueprint(*, access_required, resolve_dataset):
             "register.html", products=rows, save_enabled=save_enabled,
             local_scope=f"{owner.id}:{session[LOCAL_SCOPE_SESSION_KEY]}",
         )
+
+    @blueprint.get("/register/demo")
+    @admin_required
+    def demo():
+        if not current_app.config["REGISTER_V3_PUBLIC_DEMO_ENABLED"]:
+            abort(404)
+        # 定義と静的WebPだけで構築。Datasetの取得・商品登録・session変更は行わない。
+        try:
+            definitions = _standard_rows(current_app.static_folder)
+            image_urls = {key: choice["url"] for key, choice in
+                          register_image_choices(current_app.static_folder, is_guest=False).items()}
+        except (ValueError, OSError):
+            abort(503)
+        rows = [{"id": index, "name": row["name"], "price": row["price_yen"],
+                 "image": image_urls.get(row["image_key"]), "standard": True}
+                for index, row in enumerate(definitions, 1)]
+        response = current_app.make_response(render_template(
+            "register.html", products=rows, demo=True, save_enabled=False,
+        ))
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @blueprint.post("/api/register/transactions")
     @access_required
