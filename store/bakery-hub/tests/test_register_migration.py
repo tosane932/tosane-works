@@ -16,8 +16,9 @@ from models import db
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 OLD_HEAD = "e2a7c4d9b105"
-NEW_HEAD = "a4e8c2f6d901"
-TABLES = {"register_products", "register_cutovers", "register_transactions", "register_transaction_lines"}
+NEW_HEAD = "c9d3e7a1b5f2"
+TABLES = {"register_products", "register_cutovers", "register_transactions",
+          "register_transaction_lines", "register_prep_links"}
 
 
 @pytest.fixture()
@@ -80,6 +81,7 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
     assert_previous_rows()
 
     expected_columns = {
+        "register_prep_links": {"dataset_id", "recipe_id", "register_product_id"},
         "register_products": {"id", "dataset_id", "template_key", "name", "price_yen", "image_key", "is_active", "display_order", "created_at", "updated_at", "creation_key", "creation_digest"},
         "register_cutovers": {"dataset_id", "first_register_date"},
         "register_transactions": {"id", "dataset_id", "submission_key", "request_digest", "completed_at", "business_date", "kind", "total_yen", "received_yen", "change_yen"},
@@ -92,6 +94,10 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
                    if name not in {"template_key", "image_key", "creation_key", "creation_digest", "received_yen", "change_yen"})
 
     expected_fk = {
+        "register_prep_links": {
+            ("register_product_id", "dataset_id"): ("register_products", ("id", "dataset_id")),
+            ("recipe_id", "dataset_id"): ("prep_recipes", ("id", "dataset_id")),
+        },
         "register_products": {("dataset_id",): ("datasets", ("id",))},
         "register_cutovers": {("dataset_id",): ("datasets", ("id",))},
         "register_transactions": {("dataset_id",): ("datasets", ("id",))},
@@ -109,6 +115,7 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
                    for fk in inspector.get_foreign_keys(table))
 
     for table, names in {
+        "register_prep_links": {"uq_register_prep_links_dataset_product"},
         "register_products": {"uq_register_products_id_dataset", "uq_register_products_dataset_template"},
         "register_transactions": {"uq_register_transactions_id_dataset", "uq_register_transactions_submission"},
         "register_transaction_lines": {"uq_register_lines_transaction_product"},
@@ -217,3 +224,29 @@ def test_product_creation_key_upgrade_preserves_existing_data_and_rejects_duplic
         downgrade(directory=str(MIGRATIONS_DIR), revision="f3b7e5a9c102")
     assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
     assert db.session.execute(text("SELECT COUNT(*) FROM register_products")).scalar_one() == 2
+
+
+def test_link_migration_rejects_populated_downgrade_and_preserves_old_recipe(migration_app):
+    migrate("a4e8c2f6d901")
+    owner = db.session.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()
+    db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) "
+                            "VALUES (11,:owner,'独自',120)"), {"owner": owner})
+    db.session.execute(text("INSERT INTO prep_recipes "
+                            "(id,dataset_id,product_key,display_name,base_quantity) "
+                            "VALUES (21,:owner,'product:100','旧レシピ',10)"), {"owner": owner})
+    db.session.commit()
+    migrate("head")
+    assert db.session.execute(text("SELECT product_key FROM prep_recipes WHERE id=21")
+                              ).scalar_one() == "product:100"
+    db.session.execute(text("INSERT INTO register_prep_links "
+                            "(dataset_id,recipe_id,register_product_id) VALUES (:owner,21,11)"),
+                       {"owner": owner})
+    db.session.commit()
+    with pytest.raises(SystemExit):
+        downgrade(directory=str(MIGRATIONS_DIR), revision="a4e8c2f6d901")
+    db.session.rollback()
+    assert "register_prep_links" in table_state()
+    assert db.session.execute(text("SELECT register_product_id FROM register_prep_links")
+                              ).scalar_one() == 11
+    assert db.session.execute(text("SELECT product_key FROM prep_recipes WHERE id=21")
+                              ).scalar_one() == "product:100"

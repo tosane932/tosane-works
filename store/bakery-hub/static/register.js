@@ -110,8 +110,10 @@
             : auth ? `認証の確認が必要です ${auth}件 / 未同期 ${pending}件`
             : activeSyncId ? `同期しています 未同期 ${pending}件`
             : pending && (!navigator.onLine || records.some(item => item.status === "pending" && item.attempts > 0))
-                ? `通信できません。再送します 未同期 ${pending}件`
-                : pending ? `送信待ち 未同期 ${pending}件` : "同期済み";
+                ? `端末に保存済み・サーバー反映未確認 ${pending}件（通信後に再送）`
+            : pending ? `端末に保存済み・サーバー反映未確認 ${pending}件` : "同期済み";
+        const check = $("check-register-status");
+        if (check) { check.disabled = !config.saveEnabled || !database || syncing || !records.length; }
         const recovery = $("recovery-list");
         const flagged = records.filter(item => ["needs_review", "guest_expired", "auth_required"].includes(item.status));
         recovery.hidden = flagged.length === 0;
@@ -129,7 +131,7 @@
                 return `${reference}：認証を確認してください。端末の記録は未同期です。`;
             }
             if (item.reason === "business_day_changed") {
-                return `${reference}：営業日が変わったため自動同期できません。端末の記録を保持しています。`;
+                return `${reference}：営業日が変わったため確認が必要です。自動で再登録しません。端末の記録を保持しています。`;
             }
             if (item.reason === "price_changed" && Array.isArray(item.differences)) {
                 const detail = item.differences.map(diff => {
@@ -138,7 +140,10 @@
                     const quantity = snapshot ? snapshot.quantity : 0;
                     return `${name} ${yen(diff.displayed_yen)} → 現在 ${yen(diff.current_yen)}（単価差 ${yen(diff.current_yen - diff.displayed_yen)}、${quantity}個の会計差 ${yen((diff.current_yen - diff.displayed_yen) * quantity)}）`;
                 }).join("、");
-                return `${reference}：価格変更を確認してください。${detail}。自動確定していません。`;
+                return `${reference}：価格変更を確認してください。${detail}。自動で再登録しません。`;
+            }
+            if (item.reason === "key_conflict") {
+                return `${reference}：同じ会計キーの保存済み内容と端末の内容が異なります。自動で再登録しないでください。`;
             }
             return `${reference}：自動同期できません。端末の記録を保持しています。`;
         }).join("\n");
@@ -303,6 +308,78 @@
                  received_yen: receipt.received_yen, refund_confirmed: receipt.refund_confirmed,
                  client_business_date: receipt.client_business_date };
     }
+    function matchesSaved(saved, receipt) {
+        const samePairs = (left, right) => {
+            if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) { return false; }
+            const actual = [...left].sort((a, b) => a[0] - b[0]);
+            const expected = [...right].sort((a, b) => a[0] - b[0]);
+            return actual.every(([id, value], index) =>
+                id === expected[index][0] && value === expected[index][1]);
+        };
+        return saved.status === "saved" && saved.submission_key === receipt.submission_key
+            && saved.transaction_id && saved.kind === receipt.kind
+            && saved.business_date === receipt.client_business_date
+            && saved.total_yen === receipt.total_yen
+            && saved.received_yen === receipt.received_yen
+            && samePairs(saved.items, receipt.items)
+            && samePairs(saved.displayed_prices, receipt.displayed_prices);
+    }
+    async function checkSavedRecords() {
+        if (syncing || !database || !config.saveEnabled || !navigator.onLine) {
+            $("status-check-result").textContent = "通信できません。端末の記録は保持しています。";
+            return;
+        }
+        syncing = true;
+        const run = async () => {
+            const records = (await scopeRecords()).filter(item => item.status !== "synced");
+            let confirmed = 0;
+            for (const record of records) {
+                try {
+                    const response = await fetch(`${config.statusBase}/${encodeURIComponent(record.receipt.submission_key)}/status`,
+                        { method: "GET", credentials: "same-origin" });
+                    if (!response.headers.get("Content-Type")?.includes("application/json")) {
+                        throw new Error("認証を確認してください。");
+                    }
+                    const saved = await response.json();
+                    if (!response.ok) { throw new Error(saved.error || "照会できませんでした。"); }
+                    if (saved.status === "saved") {
+                        if (matchesSaved(saved, record.receipt)) {
+                            record.status = "synced";
+                            record.transactionId = saved.transaction_id;
+                            record.reason = null;
+                            confirmed++;
+                        } else {
+                            record.status = "needs_review";
+                            record.reason = "key_conflict";
+                        }
+                        await operation("queue", "readwrite", store => store.put(record));
+                    }
+                    // not_found は未保存の証明ではない。状態も送信キーも変えない。
+                } catch (_) {
+                    $("status-check-result").textContent = "照会を完了できませんでした。端末の記録を保持しています。";
+                    await updateState();
+                    return;
+                }
+            }
+            $("status-check-result").textContent = confirmed
+                ? `${confirmed}件はサーバーに保存済みです（同じ会計キー・明細・金額を照合）。ほかの会計は端末の記録を保持しています。`
+                : "サーバーへの反映を確認できませんでした。端末の記録を保持しています。";
+            await updateState();
+        };
+        try {
+            if (navigator.locks?.request) {
+                await navigator.locks.request(`bakery-register-sync:${config.scope}`,
+                    { ifAvailable: true }, async lock => {
+                        if (lock) { await run(); }
+                        else { $("status-check-result").textContent = "別のタブが同期中です。しばらくしてから確認してください。"; }
+                    });
+            } else if (await lease()) {
+                try { await run(); } finally { await releaseLease(); }
+            } else { $("status-check-result").textContent = "別のタブが同期中です。"; }
+        } catch (_) { $("status-check-result").textContent = "照会できませんでした。端末の記録を保持しています。"; }
+        finally { syncing = false; await updateState().catch(() => {}); }
+    }
+    $("check-register-status").addEventListener("click", checkSavedRecords);
     async function send(record) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 12000);

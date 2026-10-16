@@ -38,6 +38,10 @@ REGISTER_V3_PRODUCTS_WRITE_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_
 REGISTER_V3_PUBLIC_DEMO_ENABLED = _environment_flag_is_true(
     os.environ.get("REGISTER_V3_PUBLIC_DEMO_ENABLED")
 )
+# Phase 5Bの監査・明示対応画面。migration未適用の本番では常に無効。
+REGISTER_V3_READINESS_ENABLED = _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_READINESS_ENABLED")
+)
 
 # AIアドバイス生成で使用するGeminiの最新モデル名
 GEMINI_MODEL = "gemini-3.8-flash"
