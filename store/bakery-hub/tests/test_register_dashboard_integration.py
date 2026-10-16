@@ -129,7 +129,10 @@ def test_period_api_day_week_month_year_keep_calendar_buckets(
     assert payload["average_display_yen"] == -120
 
 
-def test_integrity_error_returns_503_without_sales(authenticated_client, unified, caplog):
+def test_integrity_error_returns_503_without_sales(authenticated_client, unified, monkeypatch):
+    logged = []
+    monkeypatch.setattr(app_module.logger, "error",
+                        lambda message, *args: logged.append(message % args))
     db.session.add(RegisterCutover(dataset_id=unified.id, first_register_date=TODAY))
     db.session.commit()
     product, record = _register(unified)
@@ -146,12 +149,15 @@ def test_integrity_error_returns_503_without_sales(authenticated_client, unified
     ai_response = post_ai(authenticated_client, "/api/ai-advice")
     assert ai_response.status_code == 503
     assert ai_response.get_json()["error"] == "sales_integrity_error"
-    assert "SalesAggregationConsistencyError" in caplog.text
-    assert str(unified.id) not in caplog.text
+    assert any("SalesAggregationConsistencyError" in line for line in logged)
+    assert all(str(unified.id) not in line for line in logged)
     assert product.id
 
 
-def test_cutover_violation_returns_safe_html_and_json(authenticated_client, unified, caplog):
+def test_cutover_violation_returns_safe_html_and_json(authenticated_client, unified, monkeypatch):
+    logged = []
+    monkeypatch.setattr(app_module.logger, "error",
+                        lambda message, *args: logged.append(message % args))
     _legacy(unified, TODAY)
     db.session.add(RegisterCutover(dataset_id=unified.id, first_register_date=TODAY))
     db.session.commit()
@@ -162,9 +168,9 @@ def test_cutover_violation_returns_safe_html_and_json(authenticated_client, unif
     assert response.status_code == 503
     assert set(response.get_json()) == {"error", "message", "incident_id"}
     assert response.get_json()["error"] == "sales_integrity_error"
-    assert "SalesCutoverIntegrityError" in caplog.text
-    assert "old=1" in caplog.text
-    assert str(unified.id) not in caplog.text
+    assert any("SalesCutoverIntegrityError" in line and "old=1" in line
+               for line in logged)
+    assert all(str(unified.id) not in line for line in logged)
 
 
 def test_legacy_post_closed_at_cutover_even_when_flag_off(authenticated_client,

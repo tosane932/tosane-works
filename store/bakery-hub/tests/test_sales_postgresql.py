@@ -173,14 +173,16 @@ def _wait_for_daily_sales_lock(engine, application_name):
                     "SELECT COUNT(*) FROM pg_stat_activity "
                     "WHERE application_name = :application_name "
                     "AND wait_event_type = 'Lock' "
-                    "AND query ILIKE 'INSERT INTO daily_sales%'"
+                    "AND ((query ILIKE 'INSERT INTO daily_sales%') "
+                    "OR (query ILIKE '%FROM datasets%' "
+                    "AND query ILIKE '%FOR UPDATE%'))"
                 ),
                 {"application_name": application_name},
             ).scalar_one()
         if waiting_count >= 1:
             return
         time.sleep(0.05)
-    pytest.fail("Second DailySales INSERT did not wait on a database lock.")
+    pytest.fail("Second DailySales write did not wait on a database lock.")
 
 
 def test_concurrent_first_sales_insert_succeeds_without_duplicate(tmp_path):
