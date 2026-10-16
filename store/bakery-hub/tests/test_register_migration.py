@@ -16,9 +16,10 @@ from models import db
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 OLD_HEAD = "e2a7c4d9b105"
-NEW_HEAD = "c9d3e7a1b5f2"
+NEW_HEAD = "da5c1e7f9042"
 TABLES = {"register_products", "register_cutovers", "register_transactions",
-          "register_transaction_lines", "register_prep_links"}
+          "register_transaction_lines", "register_prep_links",
+          "register_price_history", "register_cutover_approvals"}
 
 
 @pytest.fixture()
@@ -224,6 +225,27 @@ def test_product_creation_key_upgrade_preserves_existing_data_and_rejects_duplic
         downgrade(directory=str(MIGRATIONS_DIR), revision="f3b7e5a9c102")
     assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
     assert db.session.execute(text("SELECT COUNT(*) FROM register_products")).scalar_one() == 2
+
+
+def test_price_history_migration_does_not_invent_old_prices_and_is_append_only(migration_app):
+    migrate("c9d3e7a1b5f2")
+    owner = db.session.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()
+    db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) "
+                            "VALUES (11,:owner,'以前からある商品',280)"), {"owner": owner})
+    db.session.commit()
+    migrate("head")
+    assert db.session.execute(text("SELECT COUNT(*) FROM register_price_history")).scalar_one() == 0
+    db.session.execute(text("INSERT INTO register_price_history "
+                            "(dataset_id,register_product_id,event,old_price_yen,new_price_yen) "
+                            "VALUES (:owner,11,'changed',280,290)"), {"owner": owner})
+    db.session.commit()
+    with pytest.raises(sa.exc.DBAPIError):
+        db.session.execute(text("DELETE FROM register_price_history WHERE register_product_id=11"))
+    db.session.rollback()
+    with pytest.raises(SystemExit):
+        downgrade(directory=str(MIGRATIONS_DIR), revision="c9d3e7a1b5f2")
+    db.session.rollback()
+    assert db.session.execute(text("SELECT COUNT(*) FROM register_price_history")).scalar_one() == 1
 
 
 def test_link_migration_rejects_populated_downgrade_and_preserves_old_recipe(migration_app):

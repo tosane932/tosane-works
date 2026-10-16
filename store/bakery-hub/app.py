@@ -127,6 +127,8 @@ app.config["REGISTER_V3_PRODUCTS_PREVIEW_ENABLED"] = config.REGISTER_V3_PRODUCTS
 app.config["REGISTER_V3_PRODUCTS_WRITE_ENABLED"] = config.REGISTER_V3_PRODUCTS_WRITE_ENABLED
 app.config["REGISTER_V3_PUBLIC_DEMO_ENABLED"] = config.REGISTER_V3_PUBLIC_DEMO_ENABLED
 app.config["REGISTER_V3_READINESS_ENABLED"] = config.REGISTER_V3_READINESS_ENABLED
+app.config["REGISTER_V3_PRODUCTION_ENABLED"] = config.REGISTER_V3_PRODUCTION_ENABLED
+app.config["REGISTER_V3_CUTOVER_ENABLED"] = config.REGISTER_V3_CUTOVER_ENABLED
 
 app.config["SESSION_COOKIE_SECURE"] = config.SESSION_COOKIE_SECURE
 app.config["SESSION_COOKIE_HTTPONLY"] = config.SESSION_COOKIE_HTTPONLY
@@ -601,6 +603,19 @@ app.register_blueprint(create_register_readiness_blueprint(
     admin_required=admin_required,
     resolve_dataset=require_current_dataset,
 ))
+
+
+@app.context_processor
+def register_navigation_state():
+    """切替後のAdminだけに正式導線を示す。既定OFFでは新テーブルを読まない。"""
+    active = False
+    if (app.config.get("REGISTER_V3_PRODUCTION_ENABLED")
+            and app.config.get("REGISTER_V3_PREVIEW_ENABLED")
+            and current_user.is_authenticated and current_user.is_admin):
+        owner = require_current_dataset()
+        row = db.session.get(RegisterCutover, owner.id)
+        active = row is not None and business_today() >= row.first_register_date
+    return {"register_nav_active": active}
 
 
 def _reserve_guest_ai_usage(current_dataset):
@@ -1950,6 +1965,7 @@ def _dashboard_period_label(target_year, target_month):
 def _unified_sales_enabled():
     return bool(app.config.get("REGISTER_V3_AGGREGATION_ENABLED")) and bool(
         app.config.get("TESTING") or app.config.get("LOCAL_DEVELOPMENT")
+        or app.config.get("REGISTER_V3_PRODUCTION_ENABLED")
     )
 
 

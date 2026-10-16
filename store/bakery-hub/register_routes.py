@@ -6,7 +6,7 @@ from flask import Blueprint, abort, current_app, jsonify, render_template, reque
 from flask_login import current_user
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import RegisterProduct, RegisterTransaction, RegisterTransactionLine, db
+from models import RegisterCutover, RegisterProduct, RegisterTransaction, RegisterTransactionLine, db
 from register_images import register_image_choices
 from register_products import _standard_rows, ensure_standard_products
 from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
@@ -16,6 +16,20 @@ from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
 
 REGISTER_BODY_LIMIT = 16_384
 LOCAL_SCOPE_SESSION_KEY = "register_local_scope"
+
+
+def _production_owner_allowed(owner):
+    if not current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED"):
+        return True
+    return owner.kind == "admin" and current_user.is_authenticated and current_user.is_admin
+
+
+def _production_cutover_ready(owner):
+    if not current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED"):
+        return True
+    from register_service import TOKYO, utc_now
+    cutover = db.session.get(RegisterCutover, owner.id)
+    return cutover is not None and utc_now().astimezone(TOKYO).date() >= cutover.first_register_date
 
 
 def create_register_blueprint(*, access_required, admin_required, resolve_dataset):
@@ -35,6 +49,10 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
         if not current_app.config["REGISTER_V3_PREVIEW_ENABLED"]:
             abort(404)
         owner = resolve_dataset()
+        if not _production_owner_allowed(owner):
+            abort(403)
+        if not _production_cutover_ready(owner):
+            abort(404)
         try:
             ensure_standard_products(owner)
             products = (RegisterProduct.query.filter_by(dataset_id=owner.id, is_active=True)
@@ -45,7 +63,7 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
         except (SQLAlchemyError, ValueError, OSError):
             db.session.rollback()
             abort(503)
-        if LOCAL_SCOPE_SESSION_KEY not in session:
+        if owner.kind == "guest" and LOCAL_SCOPE_SESSION_KEY not in session:
             session[LOCAL_SCOPE_SESSION_KEY] = uuid.uuid4().hex
         rows = [{"id": product.id, "name": product.name, "price": product.price_yen,
                  "image": image_urls.get(product.image_key),
@@ -55,7 +73,9 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
         save_enabled = bool(current_app.config["REGISTER_V3_SAVE_ENABLED"])
         return render_template(
             "register.html", products=rows, save_enabled=save_enabled,
-            local_scope=f"{owner.id}:{session[LOCAL_SCOPE_SESSION_KEY]}",
+            local_scope=(f"{owner.id}:admin" if owner.kind == "admin" else
+                         f"{owner.id}:{session[LOCAL_SCOPE_SESSION_KEY]}"),
+            production=bool(current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED")),
         )
 
     @blueprint.get("/register/demo")
@@ -86,6 +106,8 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
                 and current_app.config["REGISTER_V3_SAVE_ENABLED"]):
             return jsonify(error="レジ会計の保存は現在利用できません。", code="disabled"), 403
         owner = resolve_dataset()
+        if not _production_owner_allowed(owner) or not _production_cutover_ready(owner):
+            return jsonify(error="正式レジを利用できません。", code="disabled"), 403
         if not request.is_json:
             return jsonify(error="JSON形式の会計データが必要です。", code="invalid"), 400
         data = request.get_json(silent=True)
@@ -129,10 +151,13 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
     @blueprint.get("/api/register/transactions/<uuid:submission_key>/status")
     @access_required
     def transaction_status(submission_key):
-        if not (current_app.config["REGISTER_V3_PREVIEW_ENABLED"]
-                and current_app.config["REGISTER_V3_SAVE_ENABLED"]):
+        if not (current_app.config["REGISTER_V3_PREVIEW_ENABLED"] and
+                (current_app.config["REGISTER_V3_SAVE_ENABLED"] or
+                 current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED"))):
             return jsonify(error="保存状況の照会は現在利用できません。", code="disabled"), 403
         owner = resolve_dataset()
+        if not _production_owner_allowed(owner) or not _production_cutover_ready(owner):
+            return jsonify(error="保存状況を照会できません。", code="disabled"), 403
         try:
             saved = RegisterTransaction.query.filter_by(
                 dataset_id=owner.id, submission_key=submission_key).one_or_none()

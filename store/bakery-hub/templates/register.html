@@ -19,7 +19,7 @@
         {% if demo|default(false) %}
         <p class="preview-note" role="note"><strong>練習用の画面です。実際の売上には記録されません。</strong> 入力内容はこの画面を閉じると消えます。</p>
         {% else %}
-        <p class="preview-note" role="note">開発中のレジです。本番の売上記録には使用できません。{% if not save_enabled %}会計保存は無効です。{% endif %}</p>
+        <p class="preview-note" role="note">{% if production|default(false) %}正式レジの会計です。端末内に保存した会計はサーバーへの反映状況を確認してください。{% else %}開発中のレジです。本番の売上記録には使用できません。{% endif %}{% if not save_enabled %}会計保存は停止中です。{% endif %}</p>
         {% endif %}
         <p id="recovery-list" class="recovery-list" role="status" aria-live="polite" hidden></p>
         {% if not demo|default(false) %}<div class="register-status-check"><button id="check-register-status" type="button" disabled>端末内会計の保存状況を確認</button><p id="status-check-result" role="status" aria-live="polite">通信できない場合、端末の記録を残します。</p></div>{% endif %}

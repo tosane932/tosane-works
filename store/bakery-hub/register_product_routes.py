@@ -3,6 +3,7 @@
 import uuid
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
+from flask_login import current_user
 from itsdangerous import BadSignature, URLSafeSerializer
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -17,7 +18,8 @@ from register_products import (
 
 def _preview_enabled():
     return bool(current_app.config.get("REGISTER_V3_PRODUCTS_PREVIEW_ENABLED")) and bool(
-        current_app.config.get("TESTING") or current_app.config.get("LOCAL_DEVELOPMENT"))
+        current_app.config.get("TESTING") or current_app.config.get("LOCAL_DEVELOPMENT")
+        or current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED"))
 
 
 def _write_enabled():
@@ -70,6 +72,9 @@ def create_register_product_blueprint(*, access_required, resolve_dataset):
     def gate():
         if not _preview_enabled():
             abort(404)
+        if current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED") and (
+                not current_user.is_authenticated or not current_user.is_admin):
+            abort(403)
         if request.method == "POST" and not _write_enabled():
             abort(403)
         if request.method == "POST":

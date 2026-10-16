@@ -575,6 +575,33 @@ class RegisterProduct(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
 
 
+class RegisterPriceHistory(db.Model):
+    """導入後に観測した登録時価格と変更。導入前の価格は推測しない。"""
+    __tablename__ = "register_price_history"
+    __table_args__ = (
+        db.ForeignKeyConstraint(["register_product_id", "dataset_id"],
+                                ["register_products.id", "register_products.dataset_id"],
+                                name="fk_register_price_history_product_dataset", ondelete="RESTRICT"),
+        db.CheckConstraint("event IN ('created', 'changed')", name="ck_register_price_history_event"),
+        db.CheckConstraint("old_price_yen IS NULL OR old_price_yen BETWEEN 0 AND 500",
+                           name="ck_register_price_history_old_price"),
+        db.CheckConstraint("new_price_yen BETWEEN 0 AND 500", name="ck_register_price_history_new_price"),
+        db.CheckConstraint("(event = 'created' AND old_price_yen IS NULL) OR "
+                           "(event = 'changed' AND old_price_yen IS NOT NULL AND old_price_yen <> new_price_yen)",
+                           name="ck_register_price_history_transition"),
+        db.Index("ix_register_price_history_dataset_product_time", "dataset_id", "register_product_id", "recorded_at", "id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), nullable=False)
+    register_product_id = db.Column(db.Integer, nullable=False)
+    event = db.Column(db.String(16), nullable=False)
+    old_price_yen = db.Column(db.Integer, nullable=True)
+    new_price_yen = db.Column(db.Integer, nullable=False)
+    recorded_at = db.Column(db.DateTime(timezone=True), nullable=False,
+                            default=utc_now, server_default=db.func.now())
+
+
 class RegisterPrepLink(db.Model):
     """Adminが明示的に承認した独自レジ商品とレシピの一対一対応。"""
     __tablename__ = "register_prep_links"
@@ -600,6 +627,19 @@ class RegisterCutover(db.Model):
 
     dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", name="fk_register_cutovers_dataset", ondelete="RESTRICT"), primary_key=True)
     first_register_date = db.Column(db.Date, nullable=False)
+
+
+class RegisterCutoverApproval(db.Model):
+    """切替と同じトランザクションに保存する管理者の承認記録。"""
+    __tablename__ = "register_cutover_approvals"
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey(
+        "register_cutovers.dataset_id", ondelete="RESTRICT"), primary_key=True)
+    first_register_date = db.Column(db.Date, nullable=False)
+    approved_by = db.Column(db.String(100), nullable=False)
+    approved_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now,
+                            server_default=db.func.now())
+    reason = db.Column(db.String(500), nullable=False)
+    device_inventory = db.Column(db.String(1000), nullable=False)
 
 
 class RegisterTransaction(db.Model):

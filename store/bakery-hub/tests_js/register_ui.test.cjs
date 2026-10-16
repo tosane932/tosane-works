@@ -127,6 +127,16 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
             ? { method: 'GET', url: _url } : JSON.parse(options.body);
         calls.push(call);
         if (fetcher) { return fetcher(call); }
+        if (call.method === 'GET') {
+            const local = [...database.stores.get('queue').values()]
+                .find(row => call.url.includes(row.receipt.submission_key))?.receipt;
+            return { ok: true, status: 200, headers: { get: () => 'application/json' },
+                json: async () => ({ status: 'saved', submission_key: local.submission_key,
+                    transaction_id: 'saved-id', kind: local.kind,
+                    business_date: local.client_business_date, total_yen: local.total_yen,
+                    received_yen: local.received_yen, items: local.items,
+                    displayed_prices: local.displayed_prices }) };
+        }
         return { ok: true, status: 200,
             headers: { get: () => 'application/json' },
             json: async () => ({ submission_key: calls.at(-1).submission_key,
@@ -168,7 +178,8 @@ test('オフライン会計はIndexedDBへ保存して次へ進み、復旧後�
     ui.navigator.onLine = true;
     ui.events.online();
     await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
-    assert.equal(ui.calls.length, 1);
+    assert.equal(ui.calls.filter(call => call.method !== 'GET').length, 1);
+    assert.equal(ui.calls.filter(call => call.method === 'GET').length, 1);
     assert.equal(ui.elements['sync-state'].textContent, '同期済み');
     assert.equal(ui.calls[0].submission_key,
         [...ui.database.stores.get('queue').values()][0].receipt.submission_key);
@@ -247,6 +258,14 @@ test('再読み込み後の下書きを同じ会計キーで復元する', async
 test('同期失敗後の再送は同じ送信キーを保持する', async () => {
     let attempts = 0;
     const ui = harness({ online: true, fetcher: async body => {
+        if (body.method === 'GET') {
+            const local = [...ui.database.stores.get('queue').values()][0].receipt;
+            return { status: 200, ok: true, headers: { get: () => 'application/json' },
+                json: async () => ({ status: 'saved', submission_key: local.submission_key,
+                    transaction_id: 'saved', kind: local.kind, total_yen: local.total_yen,
+                    received_yen: local.received_yen, business_date: local.client_business_date,
+                    items: local.items, displayed_prices: local.displayed_prices }) };
+        }
         if (++attempts === 1) { throw Error('offline'); }
         return { status: 200, ok: true, headers: { get: () => 'application/json' },
             json: async () => ({ submission_key: body.submission_key,
@@ -265,8 +284,9 @@ test('同期失敗後の再送は同じ送信キーを保持する', async () =>
     await new Promise(resolve => setTimeout(resolve, 15));
     ui.events.online();
     await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
-    assert.equal(ui.calls.length, 2);
+    assert.equal(ui.calls.filter(call => call.method !== 'GET').length, 2);
     assert.equal(ui.calls[0].submission_key, ui.calls[1].submission_key);
+    assert.equal(ui.calls[2].method, 'GET');
 });
 
 test('HTML応答は保存成功と判断せず、端末の記録を残す', async () => {
@@ -300,7 +320,8 @@ test('通信断の複数会計を順番に同じキーで再送し、応答確�
     ui.navigator.onLine = true;
     ui.events.online();
     await until(() => [...ui.database.stores.get('queue').values()].every(row => row.status === 'synced'));
-    assert.deepEqual(ui.calls.map(row => row.submission_key), keys);
+    assert.deepEqual(ui.calls.filter(row => row.method !== 'GET').map(row => row.submission_key), keys);
+    assert.equal(ui.calls.filter(row => row.method === 'GET').length, 3);
     assert.equal(ui.database.stores.get('queue').size, 3);
 });
 
@@ -399,7 +420,7 @@ test('認証確認後の同一スコープ再読み込みは同じキーを再�
     const key = first.calls[0].submission_key;
     const reload = harness({ database: db, online: true });
     await until(() => [...db.stores.get('queue').values()][0]?.status === 'synced');
-    assert.equal(reload.calls.length, 1);
+    assert.equal(reload.calls.filter(call => call.method !== 'GET').length, 1);
     assert.equal(reload.calls[0].submission_key, key);
 });
 
@@ -459,4 +480,46 @@ test('照会の不一致と未確認は会計キーと端末記録を保持す�
         if (mode === 'mismatch') { assert.equal(after.reason, 'key_conflict'); }
         assert.equal(ui.calls[0].method, 'GET');
     }
+});
+
+test('POSTの200応答でも保存済み明細が違えば同期済みにしない', async () => {
+    const ui = harness({ online: true, fetcher: async call => {
+        const local = [...ui.database.stores.get('queue').values()][0].receipt;
+        return { ok: true, status: 200, headers: { get: () => 'application/json' },
+            json: async () => call.method === 'GET'
+                ? ({ status: 'saved', submission_key: local.submission_key,
+                    transaction_id: 'saved-id', business_date: local.client_business_date,
+                    kind: local.kind, total_yen: local.total_yen, received_yen: local.received_yen,
+                    items: local.items, displayed_prices: [[1, 121]] })
+                : ({ submission_key: local.submission_key, transaction_id: 'saved-id',
+                    total_yen: local.total_yen, business_date: local.client_business_date }) };
+    } });
+    await until(() => ui.database.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => [...ui.database.stores.get('queue').values()][0]?.status === 'needs_review');
+    const record = [...ui.database.stores.get('queue').values()][0];
+    assert.equal(record.reason, 'key_conflict');
+    assert.equal(record.receipt.displayed_prices[0][1], 120);
+    assert.deepEqual(ui.calls.map(call => call.method || 'POST'), ['POST', 'GET']);
+});
+
+test('Adminの旧ログインscopeは同じDatasetの元会計を保持して引き継ぐ', async () => {
+    const db = new MemoryDB();
+    const old = harness({ database: db, scope: 'dataset:login1', online: false });
+    await until(() => db.stores.has('queue'));
+    old.touch();
+    old.elements['received-yen'].value = '500';
+    old.elements['received-yen'].fire('input');
+    old.elements['complete-checkout'].fire('click');
+    await until(() => db.stores.get('queue').size === 1);
+    const before = structuredClone([...db.stores.get('queue').values()][0]);
+    const admin = harness({ database: db, scope: 'dataset:admin', online: false });
+    await until(() => [...db.stores.get('queue').values()][0].scope === 'dataset:admin');
+    const after = [...db.stores.get('queue').values()][0];
+    assert.deepEqual(after.receipt, before.receipt);
+    assert.equal(after.status, before.status);
+    assert.equal(admin.calls.length, 0);
 });

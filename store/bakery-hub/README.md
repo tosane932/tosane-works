@@ -443,6 +443,8 @@ PR #64ではスマートフォン上部の余白と固定メニューボタン�
 | URL表示 | HTTP / HTTPS絶対URLだけを安全に自動リンク化 |
 | Mobile UI | 長押し・swipe・Undo・FAB・responsive editor |
 | Navigation | Bakery Hubブランド・inline SVG・カテゴリカラー |
+
+> v3正式レジはPhase 5Cで本番切替用の認可・価格履歴・切替日確定処理を準備していますが、**本番では未公開**です。日次売上入力を引き続き使用します。通信障害で過去営業日に持ち越した未同期会計を正式売上へ復旧する処理は未完成であり、公開前の解決が必要です。Admin専用レジ操作デモの練習会計は売上に保存されません。設計とPhase 5Dの停止条件は[レジ設計書](docs/v3-register-design.md)を参照してください。
 | システム概要 | 公開教材ページ・13機能の技術説明・Python基礎17カテゴリ・処理フロー・理解度チェック8問＋Python基礎チェック15問・トラブル逆引き8項目 |
 | Portfolio入口 | ログイン画面にStore / Information / Logisticsの作品・README・デモ導線 |
 | タスク | Dataset単位の追加・完了 / 未完了・削除・複数選択・長押し並び替え |

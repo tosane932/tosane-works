@@ -17,7 +17,7 @@ from postgresql_test_utils import get_isolated_postgresql_test_url
 TEST_URL = get_isolated_postgresql_test_url()
 pytestmark = pytest.mark.skipif(not TEST_URL, reason="isolated PostgreSQL test DB is not configured")
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
-NEW_HEAD = "c9d3e7a1b5f2"
+NEW_HEAD = "da5c1e7f9042"
 OLD_HEAD = "e2a7c4d9b105"
 TABLES = {"register_products", "register_cutovers", "register_transactions", "register_transaction_lines"}
 NOW = datetime.datetime(2026, 10, 16, tzinfo=datetime.timezone.utc)

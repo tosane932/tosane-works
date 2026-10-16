@@ -96,6 +96,18 @@
     function scopeRecords() {
         return operation("queue", "readonly", store => store.index("scope").getAll(config.scope));
     }
+    async function recoverPreviousAdminScopes() {
+        if (!config.scope.endsWith(":admin")) { return; }
+        const prefix = config.scope.slice(0, -"admin".length);
+        const records = await operation("queue", "readonly", store => store.getAll());
+        for (const record of records) {
+            if (record.scope?.startsWith(prefix) && record.scope !== config.scope) {
+                // 同一Datasetの旧ログインscopeだけを移す。会計キーとreceiptは不変。
+                record.scope = config.scope;
+                await operation("queue", "readwrite", store => store.put(record));
+            }
+        }
+    }
     async function updateState() {
         if (!database) { return; }
         const records = await scopeRecords();
@@ -113,7 +125,7 @@
                 ? `端末に保存済み・サーバー反映未確認 ${pending}件（通信後に再送）`
             : pending ? `端末に保存済み・サーバー反映未確認 ${pending}件` : "同期済み";
         const check = $("check-register-status");
-        if (check) { check.disabled = !config.saveEnabled || !database || syncing || !records.length; }
+        if (check) { check.disabled = !database || syncing || !records.length; }
         const recovery = $("recovery-list");
         const flagged = records.filter(item => ["needs_review", "guest_expired", "auth_required"].includes(item.status));
         recovery.hidden = flagged.length === 0;
@@ -147,6 +159,28 @@
             }
             return `${reference}：自動同期できません。端末の記録を保持しています。`;
         }).join("\n");
+        for (const item of records) {
+            const receipt = item.receipt;
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = `${receipt.client_business_date} ${receipt.kind === "refund" ? "返金" : "販売"}・${item.status}・${receipt.submission_key}`;
+            const data = document.createElement("pre");
+            data.textContent = [
+                `送信キー: ${receipt.submission_key}`,
+                `状態: ${item.status} / 理由: ${item.reason || "なし"}`,
+                `サーバー照合: ${item.serverStatus || "未確認"}`,
+                `申告営業日: ${receipt.client_business_date}`,
+                `端末申告時刻（証明ではありません）: ${receipt.completed_at_local}`,
+                `区分: ${receipt.kind} / 合計: ${yen(receipt.total_yen)}`,
+                `お預かり: ${receipt.received_yen === null ? "なし" : yen(receipt.received_yen)}`,
+                `返金確認: ${receipt.refund_confirmed ? "あり" : "なし"}`,
+                ...receipt.snapshots.map(line =>
+                    `商品ID ${line.id} ${line.name}・${line.quantity}個 × 表示単価 ${yen(line.unit_price_yen)} = ${yen(line.line_total_yen)}`),
+            ].join("\n");
+            details.append(summary, data);
+            recovery.append(details);
+        }
+        recovery.hidden = !records.length;
     }
 
     function render() {
@@ -325,7 +359,7 @@
             && samePairs(saved.displayed_prices, receipt.displayed_prices);
     }
     async function checkSavedRecords() {
-        if (syncing || !database || !config.saveEnabled || !navigator.onLine) {
+        if (syncing || !database || !navigator.onLine) {
             $("status-check-result").textContent = "通信できません。端末の記録は保持しています。";
             return;
         }
@@ -354,6 +388,8 @@
                         }
                         await operation("queue", "readwrite", store => store.put(record));
                     }
+                    record.serverStatus = saved.status === "saved" ? "保存済み（内容を照合）" : "未発見（未保存の証明ではありません）";
+                    await operation("queue", "readwrite", store => store.put(record));
                     // not_found は未保存の証明ではない。状態も送信キーも変えない。
                 } catch (_) {
                     $("status-check-result").textContent = "照会を完了できませんでした。端末の記録を保持しています。";
@@ -398,8 +434,20 @@
             if (response.ok && result.submission_key === record.receipt.submission_key
                 && result.total_yen === record.receipt.total_yen && result.transaction_id
                 && result.business_date === record.receipt.client_business_date) {
-                record.transactionId = result.transaction_id;
-                return { status: "synced" };
+                try {
+                    const check = await fetch(`${config.statusBase}/${encodeURIComponent(record.receipt.submission_key)}/status`,
+                        { method: "GET", credentials: "same-origin" });
+                    const saved = check.headers.get("Content-Type")?.includes("application/json")
+                        ? await check.json() : null;
+                    if (check.ok && matchesSaved(saved, record.receipt)) {
+                        record.transactionId = result.transaction_id;
+                        return { status: "synced" };
+                    }
+                    if (check.ok && saved?.status === "saved") {
+                        return { status: "needs_review", reason: "key_conflict" };
+                    }
+                } catch (_) { /* 応答不明のまま元記録を保持する */ }
+                return { status: "pending", reason: "communication" };
             }
             if (response.status === 403 && result.code === "guest_expired") {
                 return { status: "guest_expired", reason: "guest_expired" };
@@ -477,6 +525,7 @@
         try {
             key = uuid();
             database = await openDatabase();
+            await recoverPreviousAdminScopes();
             draftId = tabId();
             const draft = await operation("drafts", "readonly", store => store.get(draftId));
             if (draft) {
