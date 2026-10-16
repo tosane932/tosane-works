@@ -201,6 +201,8 @@ test('価格差や不正応答は要確認として残し、別Datasetには表�
     ui.elements['received-yen'].fire('input');
     ui.elements['complete-checkout'].fire('click');
     await until(() => [...db.stores.get('queue').values()][0]?.status === 'needs_review');
+    await until(() => ui.elements['sync-state'].textContent ===
+        '確認が必要な会計があります 1件 / 未同期 0件');
     assert.equal(ui.elements['sync-state'].textContent, '確認が必要な会計があります 1件 / 未同期 0件');
     const other = harness({ database: db, scope: 'other-dataset:other-session', online: true });
     await until(() => other.elements['sync-state'].textContent === '同期済み');
