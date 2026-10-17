@@ -3,7 +3,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bakery-register-e2e-'));
+// Playwright loads config again in worker processes; all must share the webServer's directory.
+const stateDir = process.env.E2E_STATE_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'bakery-register-e2e-'));
 process.env.E2E_STATE_DIR = stateDir;
 const port = 8765;
 
