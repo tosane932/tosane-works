@@ -73,6 +73,22 @@ def test_audit_and_planned_day_read_only(flask_app, authenticated_client, admin_
     assert RegisterCutover.query.count() == 0
 
 
+def test_readiness_explains_when_explicit_confirmation_can_save(
+        flask_app, authenticated_client, admin_dataset):
+    flask_app.config.update(REGISTER_V3_READINESS_ENABLED=True)
+    response = authenticated_client.get("/register/readiness?date=2026-10-17")
+    assert response.status_code == 200
+    assert "切替日は保存・確定されません" in response.get_data(as_text=True)
+
+    flask_app.config.update(REGISTER_V3_CUTOVER_ENABLED=True,
+                            REGISTER_V3_RECOVERY_ENABLED=True)
+    response = authenticated_client.get("/register/readiness?date=2026-10-17")
+    assert response.status_code == 200
+    assert "確定操作では切替日を保存します" in response.get_data(as_text=True)
+    assert "切替日は保存・確定されません" not in response.get_data(as_text=True)
+    assert RegisterCutover.query.count() == 0
+
+
 def test_audit_blockers_overlap_boundaries_and_mismatched_lines(flask_app, admin_dataset):
     old = _old(admin_dataset, DAY)
     register_product = _custom(admin_dataset)

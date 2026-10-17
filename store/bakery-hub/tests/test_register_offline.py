@@ -33,7 +33,8 @@ def original_for(product, proof, day, *, when=None):
 
 def test_next_day_sync_keeps_original_day_and_price(flask_app, admin_dataset, monkeypatch):
     product, grant, token, proof, day = setup_grant(admin_dataset)
-    recorded = grant.issued_at.astimezone(ZoneInfo("Asia/Tokyo"))
+    # SQLite returns the UTC timestamp without tzinfo; the host timezone is not evidence.
+    recorded = grant.issued_at.replace(tzinfo=datetime.timezone.utc).astimezone(ZoneInfo("Asia/Tokyo"))
     original = original_for(product, proof, day, when=recorded)
     update_register_product(admin_dataset, product.id, name="パン", price_yen=140,
                             expected_name="パン", expected_price_yen=120)
@@ -52,7 +53,8 @@ def test_next_day_sync_keeps_original_day_and_price(flask_app, admin_dataset, mo
 
 def test_rejected_grants_and_conflicting_keys_keep_sales_untouched(flask_app, admin_dataset):
     product, grant, token, proof, day = setup_grant(admin_dataset, next_day=False)
-    original = original_for(product, proof, day, when=grant.issued_at.astimezone(ZoneInfo("Asia/Tokyo")))
+    original = original_for(product, proof, day, when=grant.issued_at.replace(
+        tzinfo=datetime.timezone.utc).astimezone(ZoneInfo("Asia/Tokyo")))
     other = original_for(product, proof, day + datetime.timedelta(days=1))
     with pytest.raises(OfflineReviewRequired):
         save_offline_transaction(admin_dataset, other, token)
@@ -66,7 +68,8 @@ def test_rejected_grants_and_conflicting_keys_keep_sales_untouched(flask_app, ad
 
 def test_old_daily_sales_blocks_offline_sync(flask_app, admin_dataset):
     product, grant, token, proof, day = setup_grant(admin_dataset)
-    original = original_for(product, proof, day, when=grant.issued_at.astimezone(ZoneInfo("Asia/Tokyo")))
+    original = original_for(product, proof, day, when=grant.issued_at.replace(
+        tzinfo=datetime.timezone.utc).astimezone(ZoneInfo("Asia/Tokyo")))
     old = Product(dataset_id=admin_dataset.id, year=day.year, month=day.month,
                   name="旧商品", price=280)
     db.session.add(old)

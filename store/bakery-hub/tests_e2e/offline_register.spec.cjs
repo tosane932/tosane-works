@@ -167,6 +167,33 @@ for (const [name, viewport] of [['smartphone', devices['iPhone 13'].viewport],
             const page = await context.newPage();
             await login(page);
             await prepare(page);
+            // Layout contract: no horizontal overflow or crowded touch targets.
+            // A phone uses full-width, horizontal product rows; tablet retains a grid.
+            const layout = await page.evaluate(() => {
+                const tiles = [...document.querySelectorAll('.product-tile')];
+                const first = tiles[0].getBoundingClientRect();
+                const second = tiles[1].getBoundingClientRect();
+                const targets = [...document.querySelectorAll(
+                    '.product-tile .add-one, .product-tile .remove-one, .product-tile .quantity-input'
+                )].map(element => element.getBoundingClientRect());
+                return {
+                    scrollWidth: document.documentElement.scrollWidth,
+                    viewportWidth: document.documentElement.clientWidth,
+                    sameRow: Math.abs(first.top - second.top) < 4,
+                    minTargetWidth: Math.min(...targets.map(box => box.width)),
+                    minTargetHeight: Math.min(...targets.map(box => box.height)),
+                    imageWidth: tiles[0].querySelector('img')?.getBoundingClientRect().width,
+                };
+            });
+            expect(layout.scrollWidth).toBeLessThanOrEqual(layout.viewportWidth + 1);
+            expect(layout.minTargetWidth).toBeGreaterThanOrEqual(44);
+            expect(layout.minTargetHeight).toBeGreaterThanOrEqual(44);
+            if (name === 'smartphone') {
+                expect(layout.sameRow).toBe(false);
+                expect(layout.imageWidth).toBeGreaterThanOrEqual(90);
+            } else {
+                expect(layout.sameRow).toBe(true);
+            }
             await context.setOffline(true);
             await sale(page);
             expect((await records(page))[0].status).toBe('pending');
