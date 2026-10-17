@@ -136,6 +136,14 @@ test('Chromium: 通信断の連続会計、再読み込み、プロファイル�
         // Persistent contexts launched offline do not always dispatch the browser's
         // online event when Playwright lifts network emulation. Deliver that event.
         await page.evaluate(() => window.dispatchEvent(new Event('online')));
+        await expect(page.locator('#offline-unlock-state')).toContainText('再ログイン');
+        expect(await (await control(request, 'state')).json()).toHaveLength(0);
+        expect(await records(page)).toHaveLength(5);
+        const loginPage = await context.newPage();
+        await login(loginPage);
+        await loginPage.close();
+        await page.reload();
+        await unlock(page);
         await expect.poll(async () => (await (await control(request, 'state')).json()).length,
                           { timeout: 30000 }).toBe(5);
         await page.locator('#check-register-status').click();

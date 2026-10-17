@@ -57,10 +57,16 @@
             const response = await fetch(`/api/register/offline/session?grant_id=${encodeURIComponent(prepared.grant_id)}`,
                 { credentials: "same-origin", cache: "no-store", signal: controller.signal });
             if (run !== validationRun) { return; }
-            if (response.status === 401 || response.status === 403 || response.status === 404 || response.redirected) {
+            if (response.status === 401 || response.redirected) {
                 denied = true; globalThis.RegisterOfflineAuth = "denied";
                 window.dispatchEvent(new Event("register-auth-change"));
-                state.textContent = "⚠ 認証または端末許可を確認できません。オンラインでAdminが再準備してください。";
+                state.textContent = "⚠ Admin認証を確認できません。オンラインで再ログインし、この画面を再読み込みしてPINで開いてください。端末の会計記録は保持しています。";
+                return;
+            }
+            if (response.status === 403 || response.status === 404) {
+                denied = true; globalThis.RegisterOfflineAuth = "denied";
+                window.dispatchEvent(new Event("register-auth-change"));
+                state.textContent = "⚠ 端末許可を確認できません。オンラインでAdminが再準備してください。端末の会計記録は保持しています。";
                 return;
             }
             if (!response.ok) { globalThis.RegisterOfflineAuth = "offline"; return; }
