@@ -17,9 +17,10 @@ from postgresql_test_utils import get_isolated_postgresql_test_url
 TEST_URL = get_isolated_postgresql_test_url()
 pytestmark = pytest.mark.skipif(not TEST_URL, reason="isolated PostgreSQL test DB is not configured")
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
-NEW_HEAD = "c9d3e7a1b5f2"
+NEW_HEAD = "a3c9d7e5f102"
 OLD_HEAD = "e2a7c4d9b105"
-TABLES = {"register_products", "register_cutovers", "register_transactions", "register_transaction_lines"}
+TABLES = {"register_products", "register_cutovers", "register_transactions",
+          "register_transaction_lines", "register_offline_permits"}
 NOW = datetime.datetime(2026, 10, 16, tzinfo=datetime.timezone.utc)
 
 
@@ -61,6 +62,9 @@ def test_postgresql_register_constraints_and_populated_downgrade(migrated_postgr
         ("transaction_id", "dataset_id"): ("register_transactions", ("id", "dataset_id")),
         ("register_product_id", "dataset_id"): ("register_products", ("id", "dataset_id")),
     }
+    offline_refs = {tuple(fk["constrained_columns"]): fk["referred_table"]
+                    for fk in inspector.get_foreign_keys("register_transactions")}
+    assert offline_refs[("offline_permit_id", "dataset_id")] == "register_offline_permits"
 
     admin = Dataset.query.filter_by(kind="admin", system_key="admin").one()
     guest = Dataset(kind="guest", created_at=NOW, last_activity_at=NOW,

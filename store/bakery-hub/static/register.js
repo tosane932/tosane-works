@@ -38,7 +38,7 @@
     function openDatabase() {
         return new Promise((resolve, reject) => {
             if (!globalThis.indexedDB) { reject(new Error("IndexedDBを使用できません。")); return; }
-            const request = indexedDB.open("bakery-hub-register-v3", 1);
+            const request = indexedDB.open("bakery-hub-register-v3", 2);
             request.onupgradeneeded = () => {
                 const db = request.result;
                 if (!db.objectStoreNames.contains("drafts")) { db.createObjectStore("drafts", { keyPath: "id" }); }
@@ -47,6 +47,7 @@
                     queue.createIndex("scope", "scope");
                 }
                 if (!db.objectStoreNames.contains("locks")) { db.createObjectStore("locks", { keyPath: "scope" }); }
+                if (!db.objectStoreNames.contains("offline")) { db.createObjectStore("offline", { keyPath: "id" }); }
             };
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
@@ -96,24 +97,45 @@
     function scopeRecords() {
         return operation("queue", "readonly", store => store.index("scope").getAll(config.scope));
     }
+    async function recoverPreviousAdminScopes() {
+        if (!config.scope.endsWith(":admin")) { return; }
+        const prefix = config.scope.slice(0, -"admin".length);
+        const records = await operation("queue", "readonly", store => store.getAll());
+        for (const record of records) {
+            if (record.scope?.startsWith(prefix) && record.scope !== config.scope) {
+                // 同一Datasetの旧ログインscopeだけを移す。会計キーとreceiptは不変。
+                record.scope = config.scope;
+                await operation("queue", "readwrite", store => store.put(record));
+            }
+        }
+    }
     async function updateState() {
         if (!database) { return; }
         const records = await scopeRecords();
         const pending = records.filter(item => item.status === "pending").length;
+        const unresolved = records.filter(item => item.status !== "synced").length;
+        const synced = records.filter(item => item.status === "synced").length;
         const review = records.filter(item => item.status === "needs_review").length;
         const expired = records.filter(item => item.status === "guest_expired").length;
         const auth = records.filter(item => item.status === "auth_required").length;
         const status = $("sync-state");
+        const observation = $("catalog-observation");
+        if (observation && !navigator.onLine) {
+            observation.textContent = `⚠ オフライン中：最後に取得した商品情報（${config.catalogFetchedAt || "日時不明"}）を使用しています。`;
+        } else if (observation) {
+            observation.textContent = `商品情報のサーバー取得日時：${config.catalogFetchedAt || "日時不明"}。この画面を開いた後の価格変更は反映されません。`;
+        }
         status.classList.toggle("attention", Boolean(pending || review || expired || auth));
-        status.textContent = expired ? `利用期限が終了しました ${expired}件 / 未同期 ${pending}件`
-            : review ? `確認が必要な会計があります ${review}件 / 未同期 ${pending}件`
-            : auth ? `認証の確認が必要です ${auth}件 / 未同期 ${pending}件`
-            : activeSyncId ? `同期しています 未同期 ${pending}件`
+        status.textContent = expired ? `⚠ 利用期限が終了しました ${expired}件 / 未同期 ${unresolved}件`
+            : review ? `⚠ この会計は確認が必要です。記録は保持されています。${review}件 / 未同期 ${unresolved}件`
+            : auth ? `認証の確認が必要です ${auth}件 / 未同期 ${unresolved}件`
+            : activeSyncId ? `↻ 会計をサーバーへ同期しています。未同期 ${unresolved}件`
             : pending && (!navigator.onLine || records.some(item => item.status === "pending" && item.attempts > 0))
-                ? `端末に保存済み・サーバー反映未確認 ${pending}件（通信後に再送）`
-            : pending ? `端末に保存済み・サーバー反映未確認 ${pending}件` : "同期済み";
+                ? `◷ 端末に記録済み・サーバー反映未確認 ${pending}件（通信後に再送）`
+            : pending ? `◷ 端末に記録済み・サーバー反映未確認 ${pending}件`
+            : `✓ サーバー保存済み ${synced}件 / 未同期 0件`;
         const check = $("check-register-status");
-        if (check) { check.disabled = !config.saveEnabled || !database || syncing || !records.length; }
+        if (check) { check.disabled = !database || syncing || !records.length; }
         const recovery = $("recovery-list");
         const flagged = records.filter(item => ["needs_review", "guest_expired", "auth_required"].includes(item.status));
         recovery.hidden = flagged.length === 0;
@@ -147,6 +169,40 @@
             }
             return `${reference}：自動同期できません。端末の記録を保持しています。`;
         }).join("\n");
+        for (const item of records) {
+            const receipt = item.receipt;
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = `${receipt.client_business_date} ${receipt.kind === "refund" ? "返金" : "販売"}・${item.status}・${receipt.submission_key}`;
+            const data = document.createElement("pre");
+            data.textContent = [
+                `送信キー: ${receipt.submission_key}`,
+                `状態: ${item.status} / 理由: ${item.reason || "なし"}`,
+                `サーバー照合: ${item.serverStatus || "未確認"}`,
+                `申告営業日: ${receipt.client_business_date}`,
+                `端末申告時刻（証明ではありません）: ${receipt.completed_at_local}`,
+                `区分: ${receipt.kind} / 合計: ${yen(receipt.total_yen)}`,
+                `お預かり: ${receipt.received_yen === null ? "なし" : yen(receipt.received_yen)}`,
+                `返金確認: ${receipt.refund_confirmed ? "あり" : "なし"}`,
+                ...receipt.snapshots.map(line =>
+                    `商品ID ${line.id} ${line.name}・${line.quantity}個 × 表示単価 ${yen(line.unit_price_yen)} = ${yen(line.line_total_yen)}`),
+            ].join("\n");
+            details.append(summary, data);
+            if (config.recoveryUrl && item.status !== "synced") {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = item.backedUp ? "保全済み案件を再照合" : "この元記録をサーバーへ保全";
+                button.addEventListener("click", () => preserveForReview(item));
+                details.append(button);
+                if (item.backedUp) {
+                    const notice = document.createElement("p");
+                    notice.textContent = "サーバー保全済み（売上確定ではありません）。端末の元記録も保持中。";
+                    details.append(notice);
+                }
+            }
+            recovery.append(details);
+        }
+        recovery.hidden = !records.length;
     }
 
     function render() {
@@ -182,7 +238,8 @@
         $("change-yen").textContent = result.change === null ? "—" : yen(result.change);
         $("cash-hint").textContent = result.error && result.lines.length ? result.error : "お預かり金額を入力してください";
         $("cash-hint").classList.toggle("error", Boolean(result.error && result.lines.length));
-        checkoutButton.disabled = !config.saveEnabled || !database || busy || !result.valid;
+        checkoutButton.disabled = !config.saveEnabled || !database || busy || !result.valid
+            || ["denied", "checking"].includes(globalThis.RegisterOfflineAuth);
     }
     function change(id, value, approved = false) {
         try {
@@ -230,19 +287,32 @@
         if (busy || !database || !config.saveEnabled) { return; }
         busy = true; render();
         try {
+            if (["denied", "checking"].includes(globalThis.RegisterOfflineAuth)) {
+                throw Error("認証または端末許可が失効しました。Adminがオンラインで再準備してください。");
+            }
+            if (config.offlineGrant && (Date.now() > Date.parse(config.offlineExpiresAt)
+                || !config.approvedDays.includes(currentDay()))) {
+                throw Error("承認された営業日または端末利用期限を過ぎました。オンラインで再準備してください。");
+            }
+            if (config.offlineMode && !config.offlineGrant && !navigator.onLine) {
+                throw Error("オフライン利用には端末の事前準備が必要です。");
+            }
             const receipt = core.receipt(cart, receivedInput.value, key);
+            if (config.catalogProof) { receipt.catalog_proof = config.catalogProof; }
             clearTimeout(draftTimer);
             await draftWrite.catch(() => {}); // 下書きの失敗は原子的なqueue保存で再試行する。
             await checkoutToLocal({ id: `${config.scope}:${key}`, scope: config.scope,
-                                    status: "pending", receipt, attempts: 0, nextRetryAt: 0 });
+                                    status: "pending", receipt, grantToken: config.offlineGrant || null,
+                                    attempts: 0, nextRetryAt: 0 });
             cart = core.createCart(products);
             receivedInput.value = "";
             key = uuid();
             clearError();
+            if ($("checkout-result")) { $("checkout-result").textContent = "✓ 会計完了・端末に記録済み。サーバーへの反映待ちです。"; }
             await updateState();
             kickSync();
         } catch (error) {
-            showError(`会計記録を保存できませんでした。${error.message || "保存領域を確認してください。"}`);
+            showError(`⚠ 会計を記録できませんでした。入力内容を保持しています。${error.message || "保存領域を確認してください。"}`);
         } finally { busy = false; render(); }
     }
     checkoutButton.addEventListener("click", complete);
@@ -324,8 +394,34 @@
             && samePairs(saved.items, receipt.items)
             && samePairs(saved.displayed_prices, receipt.displayed_prices);
     }
+    async function preserveForReview(item) {
+        if (!config.recoveryUrl || syncing || !navigator.onLine) {
+            $("status-check-result").textContent = "通信できません。端末の元記録は保持しています。";
+            return;
+        }
+        syncing = true;
+        try {
+            const response = await fetch(config.recoveryUrl, {
+                method: "POST", credentials: "same-origin",
+                headers: { "Content-Type": "application/json",
+                           "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').content },
+                body: JSON.stringify({ receipt: item.receipt, device_status: item.status }),
+            });
+            const result = response.headers.get("Content-Type")?.includes("application/json")
+                ? await response.json() : {};
+            if (!response.ok || !result.case_id) { throw new Error(result.error || "保全できませんでした。"); }
+            // サーバー保全は売上確定でも端末キューの消去でもない。
+            item.backedUp = result.case_id;
+            item.status = "needs_review"; // 照合GETが完全一致するまで同期済みにはしない。
+            item.reason = "recovery_review";
+            await operation("queue", "readwrite", store => store.put(item));
+            $("status-check-result").textContent = `元記録を保全しました。${result.status === "saved" ? "保存済み会計と内容を照合しました。" : "売上には計上していません。管理者の調査が必要です。"}`;
+        } catch (error) {
+            $("status-check-result").textContent = `${error.message} 端末の元記録は保持しています。`;
+        } finally { syncing = false; await updateState().catch(() => {}); }
+    }
     async function checkSavedRecords() {
-        if (syncing || !database || !config.saveEnabled || !navigator.onLine) {
+        if (syncing || !database || !navigator.onLine) {
             $("status-check-result").textContent = "通信できません。端末の記録は保持しています。";
             return;
         }
@@ -354,6 +450,8 @@
                         }
                         await operation("queue", "readwrite", store => store.put(record));
                     }
+                    record.serverStatus = saved.status === "saved" ? "保存済み（内容を照合）" : "未発見（未保存の証明ではありません）";
+                    await operation("queue", "readwrite", store => store.put(record));
                     // not_found は未保存の証明ではない。状態も送信キーも変えない。
                 } catch (_) {
                     $("status-check-result").textContent = "照会を完了できませんでした。端末の記録を保持しています。";
@@ -384,11 +482,32 @@
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 12000);
         try {
-            const response = await fetch(config.postUrl, {
+            if (record.grantToken) {
+                const check = await fetch(`${config.statusBase}/${encodeURIComponent(record.receipt.submission_key)}/status`,
+                    { method: "GET", credentials: "same-origin", signal: controller.signal });
+                if (!check.ok || !check.headers.get("Content-Type")?.includes("application/json")) {
+                    return { status: [401, 403].includes(check.status) || check.redirected ? "auth_required" : "pending",
+                             reason: "status_unavailable" };
+                }
+                const existing = await check.json();
+                if (existing.status === "saved") {
+                    if (matchesSaved(existing, record.receipt)) {
+                        record.transactionId = existing.transaction_id;
+                        return { status: "synced" };
+                    }
+                    return { status: "needs_review", reason: "key_conflict" };
+                }
+                if (existing.status !== "not_found") {
+                    return { status: "needs_review", reason: "status_unknown" };
+                }
+                // not_found is not proof of non-delivery; the same key is enforced under Dataset lock.
+            }
+            const response = await fetch(record.grantToken ? config.offlineSyncUrl : config.postUrl, {
                 method: "POST", credentials: "same-origin", signal: controller.signal,
                 headers: { "Content-Type": "application/json",
                            "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').content },
-                body: JSON.stringify(payload(record.receipt)),
+                body: JSON.stringify(record.grantToken ?
+                    { receipt: record.receipt, grant_token: record.grantToken } : payload(record.receipt)),
             });
             const type = response.headers.get("Content-Type") || "";
             if (!type.includes("application/json")) {
@@ -398,8 +517,20 @@
             if (response.ok && result.submission_key === record.receipt.submission_key
                 && result.total_yen === record.receipt.total_yen && result.transaction_id
                 && result.business_date === record.receipt.client_business_date) {
-                record.transactionId = result.transaction_id;
-                return { status: "synced" };
+                try {
+                    const check = await fetch(`${config.statusBase}/${encodeURIComponent(record.receipt.submission_key)}/status`,
+                        { method: "GET", credentials: "same-origin" });
+                    const saved = check.headers.get("Content-Type")?.includes("application/json")
+                        ? await check.json() : null;
+                    if (check.ok && matchesSaved(saved, record.receipt)) {
+                        record.transactionId = result.transaction_id;
+                        return { status: "synced" };
+                    }
+                    if (check.ok && saved?.status === "saved") {
+                        return { status: "needs_review", reason: "key_conflict" };
+                    }
+                } catch (_) { /* 応答不明のまま元記録を保持する */ }
+                return { status: "pending", reason: "communication" };
             }
             if (response.status === 403 && result.code === "guest_expired") {
                 return { status: "guest_expired", reason: "guest_expired" };
@@ -414,6 +545,9 @@
             if (response.status === 409 && result.code === "business_day_changed") {
                 return { status: "needs_review", reason: "business_day_changed" };
             }
+            if (response.status === 409 && result.code === "offline_review") {
+                return { status: "needs_review", reason: "offline_review" };
+            }
             return (response.status >= 400 && response.status < 500 && response.status !== 429)
                 || response.ok ? { status: "needs_review", reason: result.code || "unexpected_response" }
                     : { status: "pending", reason: "communication" };
@@ -425,9 +559,12 @@
             .sort((a, b) => a.receipt.completed_at_local.localeCompare(b.receipt.completed_at_local));
         for (const record of records) {
             if (record.nextRetryAt > Date.now()) { continue; }
-            if (record.receipt.client_business_date !== currentDay()) {
+            if (!record.grantToken && record.receipt.client_business_date !== currentDay()) {
                 record.status = "needs_review";
                 record.reason = "business_day_changed";
+            } else if (record.backedUp) {
+                record.status = "needs_review";
+                record.reason = "recovery_review";
             } else {
                 activeSyncId = record.id;
                 await updateState();
@@ -449,7 +586,8 @@
         else { clearTimeout(retryTimer); }
     }
     async function kickSync() {
-        if (!config.saveEnabled || !database || syncing || !navigator.onLine) { return; }
+        if (!config.saveEnabled || !database || syncing || !navigator.onLine
+            || (config.offlineGrant && globalThis.RegisterOfflineAuth !== "ready")) { return; }
         syncing = true;
         try {
             if (navigator.locks && navigator.locks.request) {
@@ -469,6 +607,8 @@
         }
     }
     window.addEventListener("online", kickSync);
+    window.addEventListener("register-auth-ready", kickSync);
+    window.addEventListener("register-auth-change", render);
     window.addEventListener("offline", () => updateState().catch(() => {}));
     window.addEventListener("focus", kickSync);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) { kickSync(); } });
@@ -477,7 +617,9 @@
         try {
             key = uuid();
             database = await openDatabase();
-            draftId = tabId();
+            await recoverPreviousAdminScopes();
+            draftId = config.offlineGrant
+                ? `offline-draft:${config.scope}:${config.deviceId}` : tabId();
             const draft = await operation("drafts", "readonly", store => store.get(draftId));
             if (draft) {
                 cart = core.createCart(products, draft.quantities);

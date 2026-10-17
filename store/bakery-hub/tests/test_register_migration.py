@@ -16,9 +16,12 @@ from models import db
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 OLD_HEAD = "e2a7c4d9b105"
-NEW_HEAD = "c9d3e7a1b5f2"
+NEW_HEAD = "a3c9d7e5f102"
 TABLES = {"register_products", "register_cutovers", "register_transactions",
-          "register_transaction_lines", "register_prep_links"}
+          "register_transaction_lines", "register_prep_links",
+          "register_price_history", "register_cutover_approvals",
+          "register_recovery_cases", "register_recovery_lines", "register_recovery_events",
+          "register_offline_permits"}
 
 
 @pytest.fixture()
@@ -84,14 +87,14 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
         "register_prep_links": {"dataset_id", "recipe_id", "register_product_id"},
         "register_products": {"id", "dataset_id", "template_key", "name", "price_yen", "image_key", "is_active", "display_order", "created_at", "updated_at", "creation_key", "creation_digest"},
         "register_cutovers": {"dataset_id", "first_register_date"},
-        "register_transactions": {"id", "dataset_id", "submission_key", "request_digest", "completed_at", "business_date", "kind", "total_yen", "received_yen", "change_yen"},
+        "register_transactions": {"id", "dataset_id", "submission_key", "request_digest", "completed_at", "business_date", "kind", "total_yen", "received_yen", "change_yen", "save_method", "recovery_case_id", "recovery_evidence_digest", "client_completed_at", "offline_permit_id"},
         "register_transaction_lines": {"id", "transaction_id", "dataset_id", "register_product_id", "product_name_snapshot", "unit_price_yen", "quantity", "line_total_yen"},
     }
     for table, names in expected_columns.items():
         columns = {col["name"]: col for col in inspector.get_columns(table)}
         assert set(columns) == names
         assert all(not col["nullable"] for name, col in columns.items()
-                   if name not in {"template_key", "image_key", "creation_key", "creation_digest", "received_yen", "change_yen"})
+                   if name not in {"template_key", "image_key", "creation_key", "creation_digest", "received_yen", "change_yen", "recovery_case_id", "recovery_evidence_digest", "client_completed_at", "offline_permit_id"})
 
     expected_fk = {
         "register_prep_links": {
@@ -100,7 +103,9 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
         },
         "register_products": {("dataset_id",): ("datasets", ("id",))},
         "register_cutovers": {("dataset_id",): ("datasets", ("id",))},
-        "register_transactions": {("dataset_id",): ("datasets", ("id",))},
+        "register_transactions": {("dataset_id",): ("datasets", ("id",)),
+                                  ("recovery_case_id", "dataset_id"): ("register_recovery_cases", ("id", "dataset_id")),
+                                  ("offline_permit_id", "dataset_id"): ("register_offline_permits", ("id", "dataset_id"))},
         "register_transaction_lines": {
             ("transaction_id", "dataset_id"): ("register_transactions", ("id", "dataset_id")),
             ("register_product_id", "dataset_id"): ("register_products", ("id", "dataset_id")),
@@ -224,6 +229,52 @@ def test_product_creation_key_upgrade_preserves_existing_data_and_rejects_duplic
         downgrade(directory=str(MIGRATIONS_DIR), revision="f3b7e5a9c102")
     assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
     assert db.session.execute(text("SELECT COUNT(*) FROM register_products")).scalar_one() == 2
+
+
+def test_price_history_migration_does_not_invent_old_prices_and_is_append_only(migration_app):
+    migrate("c9d3e7a1b5f2")
+    owner = db.session.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()
+    db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) "
+                            "VALUES (11,:owner,'以前からある商品',280)"), {"owner": owner})
+    db.session.commit()
+    migrate("head")
+    assert db.session.execute(text("SELECT COUNT(*) FROM register_price_history")).scalar_one() == 0
+    db.session.execute(text("INSERT INTO register_price_history "
+                            "(dataset_id,register_product_id,event,old_price_yen,new_price_yen) "
+                            "VALUES (:owner,11,'changed',280,290)"), {"owner": owner})
+    db.session.commit()
+    with pytest.raises(sa.exc.DBAPIError):
+        db.session.execute(text("DELETE FROM register_price_history WHERE register_product_id=11"))
+    db.session.rollback()
+    with pytest.raises(SystemExit):
+        downgrade(directory=str(MIGRATIONS_DIR), revision="c9d3e7a1b5f2")
+    db.session.rollback()
+    assert db.session.execute(text("SELECT COUNT(*) FROM register_price_history")).scalar_one() == 1
+
+
+def test_recovery_migration_preserves_legacy_and_refuses_populated_downgrade(migration_app):
+    migrate("da5c1e7f9042")
+    owner = db.session.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()
+    db.session.execute(text("INSERT INTO products (id,dataset_id,year,month,name,price,is_active) "
+                            "VALUES (901,:owner,2026,10,'旧商品',280,true)"), {"owner": owner})
+    db.session.execute(text("INSERT INTO daily_sales (id,product_id,date,quantity) "
+                            "VALUES (902,901,'2026-10-16',3)"))
+    db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) "
+                            "VALUES (11,:owner,'パン',120)"), {"owner": owner})
+    db.session.commit()
+    migrate("head")
+    assert db.session.execute(text("SELECT review_decisions FROM register_cutover_approvals")).all() == []
+    db.session.execute(text("INSERT INTO register_recovery_cases "
+        "(id,dataset_id,submission_key,source_digest,snapshot_json,status,kind,client_business_date,total_yen) "
+        "VALUES (:id,:owner,:key,:digest,'{}','held','sale','2026-10-16',240)"),
+        {"id": uuid.uuid4().hex, "owner": owner, "key": uuid.uuid4().hex, "digest": "a" * 64})
+    db.session.commit()
+    with pytest.raises(SystemExit):
+        downgrade(directory=str(MIGRATIONS_DIR), revision="da5c1e7f9042")
+    db.session.rollback()
+    assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
+    assert TABLES <= table_state()
+    assert_previous_rows()
 
 
 def test_link_migration_rejects_populated_downgrade_and_preserves_old_recipe(migration_app):

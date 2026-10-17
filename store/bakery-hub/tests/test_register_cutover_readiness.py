@@ -110,7 +110,7 @@ def test_new_only_without_cutover_is_blocked_and_existing_cutover_can_be_reviewe
     db.session.commit()
     result = _audit(admin_dataset, DAY)
     assert result["counts"]["transactions"] == result["counts"]["lines"] == 1
-    assert result["status"] == "review"  # 0円は有効だが販売可能な有償品がない。
+    assert result["status"] == "blocked"  # 有償品なしでは切替を許可しない。
 
 
 def test_readiness_gate_auth_and_guest_boundary(flask_app, client, authenticated_client,

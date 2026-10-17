@@ -16,7 +16,7 @@ from postgresql_test_utils import get_isolated_postgresql_test_url
 from register_sales_aggregation import (SalesCutoverIntegrityError, aggregate_sales,
                                         sales_read_snapshot)
 from legacy_sales_cutover import LegacySalesClosed, assert_legacy_sales_writable
-from register_products import _lock_dataset
+from register_products import _lock_dataset, ensure_standard_products
 from prep_sales_reference import prep_sales_reference
 from register_cutover_audit import audit_cutover
 from sqlalchemy.exc import IntegrityError
@@ -236,8 +236,14 @@ def test_readonly_audit_snapshot_and_prep_link_composite_constraints(pg_app):
         with sales_read_snapshot() as snapshot:
             assert snapshot.execute(text("SHOW transaction_read_only")).scalar_one() == "on"
             result = audit_cutover(owner, planned_date=day, read_session=snapshot, today=day)
-            assert result["status"] == "review"
+            assert result["status"] == "blocked"
+            assert result["missing_standard"]
             assert result["counts"]["register_products"] == 1
+        ensure_standard_products(owner)
+        with sales_read_snapshot() as snapshot:
+            result = audit_cutover(owner, planned_date=day, read_session=snapshot, today=day)
+            assert result["status"] == "review"
+            assert result["counts"]["register_products"] == 19
         db.session.add(RegisterPrepLink(dataset_id=owner.id, recipe_id=foreign.id,
                                          register_product_id=product.id))
         with pytest.raises(IntegrityError):

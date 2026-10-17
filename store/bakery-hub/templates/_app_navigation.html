@@ -11,8 +11,12 @@
     {% set active_app_page = 'register-products' %}
 {% elif current_endpoint == 'register.demo' %}
     {% set active_app_page = 'register-demo' %}
+{% elif current_endpoint == 'register.preview' %}
+    {% set active_app_page = 'register' %}
 {% elif current_endpoint.startswith('register_readiness.') %}
     {% set active_app_page = 'register-readiness' %}
+{% elif current_endpoint.startswith('register_recovery.') %}
+    {% set active_app_page = 'register-recovery' %}
 {% elif current_endpoint == 'input_sales' %}
     {% set active_app_page = 'sales' %}
 {% elif current_endpoint == 'dashboard' %}
@@ -176,12 +180,12 @@
             </span>
             <span>商品一覧</span>
         </a>
-        {% if config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED and (config.TESTING or config.LOCAL_DEVELOPMENT) %}
+        {% if config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED and (config.TESTING or config.LOCAL_DEVELOPMENT or register_nav_active) %}
         <a href="{{ url_for('register_products.list_products') }}" data-page="register-products"
            class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-products' %} app-sidebar-link-current{% endif %}"
            {% if active_app_page == 'register-products' %}aria-current="page"{% endif %}>
             <span class="app-sidebar-icon" aria-hidden="true">▣</span>
-            <span>レジ商品管理（開発中）</span>
+            <span>{{ 'レジ商品管理' if register_nav_active else 'レジ商品管理（開発中）' }}</span>
         </a>
         {% endif %}
         {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_PUBLIC_DEMO_ENABLED %}
@@ -199,11 +203,18 @@
             <span class="app-sidebar-icon" aria-hidden="true">▣</span><span>レジ切替前の監査</span>
         </a>
         {% endif %}
+        {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_RECOVERY_ENABLED %}
+        <a href="{{ url_for('register_recovery.index') }}" data-page="register-recovery"
+           class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-recovery' %} app-sidebar-link-current{% endif %}"
+           {% if active_app_page == 'register-recovery' %}aria-current="page"{% endif %}>
+            <span class="app-sidebar-icon" aria-hidden="true">▣</span><span>未同期会計の復旧案件</span>
+        </a>
+        {% endif %}
         <a
-            href="{{ url_for('input_sales') }}"
-            data-page="sales"
-            class="app-sidebar-link app-sidebar-link-sales touch-control-no-select{% if active_app_page == 'sales' %} app-sidebar-link-current{% endif %}"
-            {% if active_app_page == 'sales' %}aria-current="page"{% endif %}>
+            href="{{ url_for('register.preview') if register_nav_active else url_for('input_sales') }}"
+            data-page="{{ 'register' if register_nav_active else 'sales' }}"
+            class="app-sidebar-link app-sidebar-link-sales touch-control-no-select{% if active_app_page == ('register' if register_nav_active else 'sales') %} app-sidebar-link-current{% endif %}"
+            {% if active_app_page == ('register' if register_nav_active else 'sales') %}aria-current="page"{% endif %}>
             <span class="app-sidebar-icon" aria-hidden="true">
                 <svg
                     data-icon="clipboard-pen-line"
@@ -222,7 +233,7 @@
                     <path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"></path>
                 </svg>
             </span>
-            <span>日次売上入力</span>
+            <span>{{ 'レジモード' if register_nav_active else '日次売上入力' }}</span>
         </a>
         <a
             href="{{ url_for('dashboard') }}"
@@ -321,7 +332,7 @@
         <span class="app-sidebar-user-label">
             利用中：{% if current_user.is_guest %}ゲストデモ{% else %}管理者{% endif %}
         </span>
-        <form method="POST" action="{{ url_for('logout') }}">
+        <form method="POST" action="{{ url_for('logout') }}" id="app-logout-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button
                 type="submit"
@@ -409,6 +420,10 @@
         if (!openButton || !closeButton || !overlay || !sidebar) {
             return;
         }
+        document.getElementById("app-logout-form")?.addEventListener("submit", () => {
+            try { localStorage.setItem("bakery-register-offline-locked", "1"); }
+            catch (_) { /* Server-side revocation still applies when storage is blocked. */ }
+        });
         homeToggle?.addEventListener("click", () => {
             const willOpen = homeToggle.getAttribute("aria-expanded") !== "true";
             homeSubmenu.hidden = !willOpen;

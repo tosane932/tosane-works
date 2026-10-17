@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from models import Dataset, Product, RegisterProduct, db
+from models import Dataset, Product, RegisterPriceHistory, RegisterProduct, db
 import product_images
 from register_images import register_image_choices
 
@@ -115,6 +115,8 @@ def ensure_standard_products(dataset):
     try:
         rows = _standard_rows(current_app.static_folder)
         owner = _lock_dataset(dataset)
+        before = ({item.id for item in RegisterProduct.query.filter_by(dataset_id=owner.id).all()}
+                  if owner.kind == "admin" else set())
         values = [dict(row, dataset_id=owner.id) for row in rows]
         dialect = db.engine.dialect.name
         if dialect == "postgresql":
@@ -129,6 +131,13 @@ def ensure_standard_products(dataset):
                 index_elements=["dataset_id", "template_key"]
             ))
             count = result.rowcount
+        # Datasetロックの下で追加分だけを記録する。既存行の過去価格は補完しない。
+        if owner.kind == "admin":
+            for item in RegisterProduct.query.filter_by(dataset_id=owner.id).all():
+                if item.id not in before:
+                    db.session.add(RegisterPriceHistory(
+                        dataset_id=owner.id, register_product_id=item.id,
+                        event="created", new_price_yen=item.price_yen))
         db.session.commit()
         return count
     except Exception:
@@ -145,6 +154,10 @@ def _add_custom(owner, name, price, *, creation_key=None, creation_digest=None):
                            price_yen=price, image_key=None, is_active=True,
                            creation_key=creation_key, creation_digest=creation_digest)
     db.session.add(item)
+    db.session.flush()
+    if owner.kind == "admin":
+        db.session.add(RegisterPriceHistory(dataset_id=owner.id, register_product_id=item.id,
+                                            event="created", new_price_yen=price))
     db.session.commit()
     return item
 
@@ -208,6 +221,10 @@ def update_register_product(dataset, product_id, *, name, price_yen,
             if (item.name, item.price_yen) != (expected_name, expected_price_yen) and (
                     item.name, item.price_yen) != (valid_name, valid_price):
                 raise ProductSubmissionConflict("商品情報が変更されています。再読み込みしてください。")
+        if owner.kind == "admin" and item.price_yen != valid_price:
+            db.session.add(RegisterPriceHistory(
+                dataset_id=owner.id, register_product_id=item.id, event="changed",
+                old_price_yen=item.price_yen, new_price_yen=valid_price))
         item.name, item.price_yen = valid_name, valid_price
         db.session.commit()
         return item

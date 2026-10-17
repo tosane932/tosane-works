@@ -16,22 +16,35 @@ def _environment_flag_is_true(raw_value):
 LOCAL_DEVELOPMENT = _environment_flag_is_true(
     os.environ.get("LOCAL_DEVELOPMENT")
 )
+REGISTER_V3_PRODUCTION_ENABLED = _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_PRODUCTION_ENABLED")
+)
+REGISTER_V3_CUTOVER_ENABLED = _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_CUTOVER_ENABLED")
+)
+REGISTER_V3_RECOVERY_ENABLED = _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_RECOVERY_ENABLED")
+)
+REGISTER_V3_OFFLINE_MODE_ENABLED = _environment_flag_is_true(
+    os.environ.get("REGISTER_V3_OFFLINE_MODE_ENABLED")
+)
+_register_runtime = LOCAL_DEVELOPMENT or REGISTER_V3_PRODUCTION_ENABLED
 
-# 単独のtrue設定だけでは本番で有効にならない。テストまたは明示的なローカル開発環境に限定。
-REGISTER_V3_PREVIEW_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
+# 各フラグの単独trueでは無効。ローカル開発または本番用の独立ゲートも要求する。
+REGISTER_V3_PREVIEW_ENABLED = _register_runtime and _environment_flag_is_true(
     os.environ.get("REGISTER_V3_PREVIEW_ENABLED")
 )
-REGISTER_V3_SAVE_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
+REGISTER_V3_SAVE_ENABLED = _register_runtime and _environment_flag_is_true(
     os.environ.get("REGISTER_V3_SAVE_ENABLED")
 )
-# 集計表示はレジの保存・プレビューとは独立。通常の本番環境では常に無効。
-REGISTER_V3_AGGREGATION_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
+# 集計表示はレジの保存・プレビューとは独立。通常の本番既定値は無効。
+REGISTER_V3_AGGREGATION_ENABLED = _register_runtime and _environment_flag_is_true(
     os.environ.get("REGISTER_V3_AGGREGATION_ENABLED")
 )
-REGISTER_V3_PRODUCTS_PREVIEW_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
+REGISTER_V3_PRODUCTS_PREVIEW_ENABLED = _register_runtime and _environment_flag_is_true(
     os.environ.get("REGISTER_V3_PRODUCTS_PREVIEW_ENABLED")
 )
-REGISTER_V3_PRODUCTS_WRITE_ENABLED = LOCAL_DEVELOPMENT and _environment_flag_is_true(
+REGISTER_V3_PRODUCTS_WRITE_ENABLED = _register_runtime and _environment_flag_is_true(
     os.environ.get("REGISTER_V3_PRODUCTS_WRITE_ENABLED")
 )
 # Admin専用の非保存デモ。LOCAL_DEVELOPMENTと正式レジの各フラグから独立。

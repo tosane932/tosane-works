@@ -1,0 +1,34 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>未同期会計の確認 | Bakery Hub</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='production_prep.css') }}"></head>
+<body class="app-shell-page prep-page">{% include '_app_navigation.html' %}<main class="prep-shell">
+<header class="prep-header"><h1>未同期会計の確認</h1><p><a href="{{ url_for('.index') }}">← 復旧案件一覧</a></p></header>
+<section class="prep-panel"><h2>元の会計記録・{{ {'unreviewed':'未確認','investigating':'調査中','held':'保留','saved':'保存済み','cancelled':'取消確認済み','additional':'要追加対応'}[case.status] }}</h2>
+<p>送信キー {{ case.submission_key }}／申告営業日 {{ case.client_business_date }}／端末申告時刻 {{ receipt.completed_at_local }}（時刻の証明ではありません）</p>
+<p>{{ '返金' if case.kind == 'refund' else '販売' }}：合計 {{ case.total_yen }}円、お預かり {{ receipt.received_yen if receipt.received_yen is not none else 'なし' }}、お釣り {{ receipt.change_yen if receipt.change_yen is not none else 'なし' }}、返金確認 {{ 'あり' if receipt.refund_confirmed else 'なし' }}</p>
+<p>サーバー受信 {{ case.received_at }}／元記録のSHA-256 {{ case.source_digest }}</p>
+<p>サーバー発行の商品情報：{{ '元記録に添付あり（承認時に署名と価格を再検証）' if receipt.catalog_proof else '添付なし。過去日付の確定はできません' }}</p>
+<p><strong>現在のDB照合：</strong>{{ {'matching':'元記録と完全一致する保存済み会計','conflict':'同じキーの保存済み会計と内容が異なる','not_found':'未発見（未保存の証明ではありません）'}[current_result] }}</p>
+<ul>{% for line in receipt.snapshots %}<li>商品ID {{ line.id }}・{{ line.name }}・{{ line.quantity }}個 × 表示価格 {{ line.unit_price_yen }}円 = {{ line.line_total_yen }}円</li>{% endfor %}</ul>
+<p>現在の価格と一致しても、導入前の価格や端末申告時刻は証明できません。</p>
+{% for id, history in price_evidence.items() %}<h3>商品ID {{ id }} の導入後に観測した価格履歴</h3>{% if history %}<ul>{% for event in history %}<li>{{ event.recorded_at }}：{{ event.old_price_yen if event.old_price_yen is not none else '登録時（それ以前は不明）' }} → {{ event.new_price_yen }}円</li>{% endfor %}</ul>{% else %}<p>観測済み履歴なし。導入前価格は不明です。</p>{% endif %}{% endfor %}
+</section>
+<section class="prep-panel"><h2>確認と監査の履歴</h2><ol>{% for event in events %}<li>{{ event.occurred_at }}・{{ event.actor }}：{{ event.from_status or '新規' }} → {{ event.to_status }}。{{ event.reason }}。サーバー照合 {{ {'matching':'元記録と一致する保存済み会計','conflict':'同じキーで内容不一致','not_found':'未発見（未保存の証明ではない）'}[event.server_result] }}。価格差 {{ 'あり' if event.price_conflict else 'なし' }}、営業日差 {{ 'あり' if event.day_conflict else 'なし' }}、現金照合 {{ event.cash_result }}。証拠 {{ event.evidence_kind }} {{ event.evidence_reference }}{% if event.transaction_id %}。確定会計ID {{ event.transaction_id }}、採用営業日 {{ event.adopted_business_date }}{% endif %}</li>{% endfor %}</ol></section>
+{% if case.status != 'saved' %}<section class="prep-panel"><h2>管理者の判断を記録</h2><p>保存済みは最新のDB会計との完全一致が必要です。取消には独立した根拠と現金照合を要します。保留中も元記録と監査履歴は残ります。過去営業日の新規売上を作る操作はありません。</p>
+<form method="post" action="{{ url_for('.review', case_id=case.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>判断 <select name="target" required><option value="">選択してください</option><option value="investigating">調査中</option><option value="held">保留</option><option value="saved">保存済みを再照合</option><option value="cancelled">取消確認済み</option><option value="additional">要追加対応</option></select></label>
+<label>理由・調査内容 <textarea name="reason" minlength="10" maxlength="500" required></textarea></label>
+<label>現金・帳簿の照合 <select name="cash_result" required><option value="unknown">未確認</option><option value="matched">一致</option><option value="mismatch">差異あり</option><option value="not_applicable">対象外（理由に記載）</option></select></label>
+<label>独立した証拠の種類 <input name="evidence_kind" maxlength="100" placeholder="伝票・現金日報など"></label>
+<label>証拠の参照番号・保管先 <input name="evidence_reference" maxlength="500"></label>
+<label><input type="checkbox" name="confirmed" value="yes" required> 元記録・DB照合・現金・営業日・証拠を確認し、この判断を監査記録へ追加します</label>
+<button type="submit" class="prep-primary">確認結果を記録する</button></form></section>{% endif %}
+{% if config.REGISTER_V3_OFFLINE_MODE_ENABLED and config.REGISTER_V3_PRODUCTION_ENABLED and config.REGISTER_V3_SAVE_ENABLED and case.status in ('investigating', 'held', 'additional') %}
+<section class="prep-panel"><h2>独立証拠を確認して過去営業日へ復旧</h2>
+<p>署名付き商品情報は提示価格の根拠です。実際の会計日時と現金授受の証明にはなりません。原本の会計控えと日次現金記録を別々に確認してください。不足する場合は保留にしてください。</p>
+<form method="post" action="{{ url_for('.confirm', case_id=case.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>採用営業日 <input type="date" name="evidence_date" value="{{ case.client_business_date }}" required></label>
+<label>会計控えの識別番号・保管先 <input name="receipt_reference" maxlength="120" required></label>
+<label>日次現金記録の識別番号・保管先 <input name="cash_reference" maxlength="120" required></label>
+<label>独立証拠・二重計上・現金差異を確認した理由 <textarea name="reason" minlength="10" maxlength="500" required></textarea></label>
+<label><input type="checkbox" name="confirmed" value="yes" required> 元記録、両原本、現金額、他の売上への計上を確認し、同じ送信キーで復旧確定します</label>
+<button type="submit" class="prep-primary">証拠を確認して復旧確定する</button></form></section>{% endif %}
+</main></body></html>

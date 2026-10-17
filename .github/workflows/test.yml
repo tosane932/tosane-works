@@ -17,6 +17,31 @@ defaults:
     working-directory: store/bakery-hub
 
 jobs:
+  register-browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated E2E dependencies
+        working-directory: store/bakery-hub
+        run: |
+          pip install -r requirements.txt
+          npm install --no-save --no-package-lock playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Run Chromium offline register E2E
+        working-directory: store/bakery-hub
+        run: npx playwright test --config=tests_e2e/playwright.config.cjs
+      - name: Upload E2E trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: register-browser-traces
+          path: store/bakery-hub/test-results/
+          retention-days: 3
+
   test:
     runs-on: ubuntu-latest
 
@@ -35,7 +60,7 @@ jobs:
 
       - name: JavaScriptテストを実行
         run: |
-          node --test tests_js/register_core.test.cjs tests_js/register_ui.test.cjs
+          node --test tests_js/register_core.test.cjs tests_js/register_ui.test.cjs tests_js/register_demo.test.cjs tests_js/register_offline.test.cjs
 
       - name: pytestを実行
         run: |
@@ -79,7 +104,7 @@ jobs:
 
       - name: PostgreSQL migrationを検証
         run: |
-          pytest tests/test_migrations_postgresql.py tests/test_register_postgresql.py tests/test_register_products_postgresql.py tests/test_register_service_postgresql.py tests/test_register_sales_aggregation_postgresql.py -v
+          pytest tests/test_migrations_postgresql.py tests/test_register_postgresql.py tests/test_register_products_postgresql.py tests/test_register_service_postgresql.py tests/test_register_sales_aggregation_postgresql.py tests/test_register_cutover_postgresql.py -v
 
       - name: PostgreSQL実並行処理を検証
         run: |

@@ -87,7 +87,8 @@ function element(id) {
 }
 
 function harness({ database = new MemoryDB(), scope = 'dataset:login', online = false,
-                   fetcher, sessionValues = new Map() } = {}) {
+                   fetcher, sessionValues = new Map(), recoveryUrl = null,
+                   catalogProof = null, offlineGrant = null, authReady = false } = {}) {
     const ids = ['register-root', 'register-config', 'register-message',
         'complete-checkout', 'received-yen', 'sync-state', 'recovery-list', 'product-grid',
         'cart-lines', 'checkout-kind', 'total-label', 'total-yen', 'cash-area',
@@ -99,6 +100,10 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
     elements['register-config'].textContent = JSON.stringify({
         products, scope, saveEnabled: true, postUrl: '/api/register/transactions',
         statusBase: '/api/register/transactions',
+        recoveryUrl, catalogProof, offlineGrant,
+        offlineSyncUrl: '/api/register/offline/sync', offlineMode: Boolean(offlineGrant),
+        approvedDays: [core.tokyoDay(new Date())],
+        offlineExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     });
     elements['register-back'].href = '/home';
     elements['checkout-title'].scrollIntoView = () => {};
@@ -127,6 +132,16 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
             ? { method: 'GET', url: _url } : JSON.parse(options.body);
         calls.push(call);
         if (fetcher) { return fetcher(call); }
+        if (call.method === 'GET') {
+            const local = [...database.stores.get('queue').values()]
+                .find(row => call.url.includes(row.receipt.submission_key))?.receipt;
+            return { ok: true, status: 200, headers: { get: () => 'application/json' },
+                json: async () => ({ status: 'saved', submission_key: local.submission_key,
+                    transaction_id: 'saved-id', kind: local.kind,
+                    business_date: local.client_business_date, total_yen: local.total_yen,
+                    received_yen: local.received_yen, items: local.items,
+                    displayed_prices: local.displayed_prices }) };
+        }
         return { ok: true, status: 200,
             headers: { get: () => 'application/json' },
             json: async () => ({ submission_key: calls.at(-1).submission_key,
@@ -135,14 +150,66 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
     };
     vm.runInNewContext(source, {
         document, window, indexedDB: { open: () => database.open() },
-        RegisterCore: core, crypto: webcrypto, navigator, fetch, location: { assign() {} },
+        RegisterCore: core, RegisterOfflineAuth: authReady ? 'ready' : undefined,
+        crypto: webcrypto, navigator, fetch, location: { assign() {} },
         sessionStorage: { getItem: name => sessionValues.get(name),
                           setItem: (name, value) => sessionValues.set(name, value) },
-        setTimeout, clearTimeout, AbortController, Date, Intl, Promise, console,
+        setTimeout: (fn, delay) => {
+            const timer = setTimeout(fn, delay);
+            if (delay >= 1000) { timer.unref(); }
+            return timer;
+        }, clearTimeout, AbortController, Date, Intl, Promise, console,
     }, { filename: 'register.js' });
     return { database, elements, events, navigator, calls, plus, quantity, sessionValues,
         touch: () => elements['product-grid'].fire('click', { target: plus }) };
 }
+
+test('未同期の元記録をサーバーへ保全しても端末記録と未確定状態を保持する', async () => {
+    const ui = harness({ recoveryUrl: '/api/register/recovery/cases',
+        fetcher: async call => ({ ok: true, status: 201,
+            headers: { get: () => 'application/json' },
+            json: async () => ({ case_id: 'recovery-case-id', status: 'unreviewed' }) }) });
+    await until(() => ui.database.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => ui.database.stores.get('queue').size === 1);
+    const original = [...ui.database.stores.get('queue').values()][0].receipt;
+    ui.navigator.onLine = true; // 自動送信イベントは起こさず、保全のみ明示操作。
+    await until(() => ui.elements['recovery-list'].children.some(details =>
+        details.children.some(child => child.type === 'button')));
+    const details = ui.elements['recovery-list'].children.find(row =>
+        row.children.some(child => child.type === 'button'));
+    await details.children.find(child => child.type === 'button').fire('click');
+    await until(() => [...ui.database.stores.get('queue').values()][0].backedUp);
+    const remaining = [...ui.database.stores.get('queue').values()][0];
+    assert.deepEqual(remaining.receipt, original);
+    assert.equal(remaining.status, 'needs_review'); // 保全後は通常の自動再送を止める。
+    assert.equal(remaining.backedUp, 'recovery-case-id');
+    assert.equal(ui.calls.length, 1);
+    assert.equal(ui.calls[0].receipt.submission_key, original.submission_key);
+});
+
+test('サーバー発行の商品証跡を元会計に固定し、再送キーと価格を変えない', async () => {
+    const ui = harness({ catalogProof: 'server-signed-catalog' });
+    await until(() => ui.database.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => ui.database.stores.get('queue').size === 1);
+    const original = [...ui.database.stores.get('queue').values()][0].receipt;
+    assert.equal(original.catalog_proof, 'server-signed-catalog');
+    assert.deepEqual(original.displayed_prices, [[1, 120]]);
+    ui.navigator.onLine = true;
+    ui.events.online();
+    await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
+    assert.equal(ui.calls[0].submission_key, original.submission_key);
+    assert.equal(ui.calls[0].catalog_proof, undefined); // 通常POSTの契約は維持。
+    assert.equal([...ui.database.stores.get('queue').values()][0].receipt.catalog_proof,
+                 'server-signed-catalog');
+});
 
 async function until(condition, timeout = 1200) {
     const started = Date.now();
@@ -154,7 +221,7 @@ async function until(condition, timeout = 1200) {
 
 test('オフライン会計はIndexedDBへ保存して次へ進み、復旧後に1回同期する', async () => {
     const ui = harness();
-    await until(() => ui.elements['sync-state'].textContent === '同期済み');
+    await until(() => ui.elements['sync-state'].textContent === '✓ サーバー保存済み 0件 / 未同期 0件');
     ui.touch();
     ui.elements['received-yen'].value = '500';
     ui.elements['received-yen'].fire('input');
@@ -162,14 +229,15 @@ test('オフライン会計はIndexedDBへ保存して次へ進み、復旧後�
     assert.equal(ui.calls.length, 0); // タッチ／金額入力時にHTTPなし。
     ui.elements['complete-checkout'].fire('click');
     await until(() => ui.database.stores.get('queue').size === 1);
-    await until(() => ui.elements['sync-state'].textContent === '端末に保存済み・サーバー反映未確認 1件（通信後に再送）');
+    await until(() => ui.elements['sync-state'].textContent === '◷ 端末に記録済み・サーバー反映未確認 1件（通信後に再送）');
     assert.equal(ui.elements['product-grid'].children[0].querySelector().value, 0);
     assert.equal(ui.calls.length, 0);
     ui.navigator.onLine = true;
     ui.events.online();
     await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
-    assert.equal(ui.calls.length, 1);
-    assert.equal(ui.elements['sync-state'].textContent, '同期済み');
+    assert.equal(ui.calls.filter(call => call.method !== 'GET').length, 1);
+    assert.equal(ui.calls.filter(call => call.method === 'GET').length, 1);
+    assert.equal(ui.elements['sync-state'].textContent, '✓ サーバー保存済み 1件 / 未同期 0件');
     assert.equal(ui.calls[0].submission_key,
         [...ui.database.stores.get('queue').values()][0].receipt.submission_key);
 });
@@ -183,7 +251,7 @@ test('IndexedDB保存失敗で未保存と表示し、カートを消去しな�
     ui.elements['received-yen'].value = '500';
     ui.elements['received-yen'].fire('input');
     ui.elements['complete-checkout'].fire('click');
-    await until(() => ui.elements['register-message'].textContent.includes('会計記録を保存できませんでした'));
+    await until(() => ui.elements['register-message'].textContent.includes('会計を記録できませんでした。入力内容を保持しています'));
     assert.equal(ui.elements['product-grid'].children[0].querySelector().value, 1);
     assert.equal(db.stores.get('queue').size, 0);
     assert.equal(ui.calls.length, 0);
@@ -202,10 +270,10 @@ test('価格差や不正応答は要確認として残し、別Datasetには表�
     ui.elements['complete-checkout'].fire('click');
     await until(() => [...db.stores.get('queue').values()][0]?.status === 'needs_review');
     await until(() => ui.elements['sync-state'].textContent ===
-        '確認が必要な会計があります 1件 / 未同期 0件');
-    assert.equal(ui.elements['sync-state'].textContent, '確認が必要な会計があります 1件 / 未同期 0件');
+        '⚠ この会計は確認が必要です。記録は保持されています。1件 / 未同期 1件');
+    assert.equal(ui.elements['sync-state'].textContent, '⚠ この会計は確認が必要です。記録は保持されています。1件 / 未同期 1件');
     const other = harness({ database: db, scope: 'other-dataset:other-session', online: true });
-    await until(() => other.elements['sync-state'].textContent === '同期済み');
+    await until(() => other.elements['sync-state'].textContent === '✓ サーバー保存済み 0件 / 未同期 0件');
     assert.equal(other.calls.length, 0);
     assert.equal(db.stores.get('queue').size, 1);
 });
@@ -223,7 +291,7 @@ test('直接入力の負数は確認後だけ反映し、戻ると未同期キ�
     assert.equal(ui.elements['cash-area'].hidden, true);
     ui.elements['complete-checkout'].fire('click');
     await until(() => ui.database.stores.get('queue').size === 1);
-    await until(() => ui.elements['sync-state'].textContent === '端末に保存済み・サーバー反映未確認 1件（通信後に再送）');
+    await until(() => ui.elements['sync-state'].textContent === '◷ 端末に記録済み・サーバー反映未確認 1件（通信後に再送）');
     let prevented = false;
     ui.elements['register-back'].fire('click', { preventDefault: () => { prevented = true; } });
     assert.equal(prevented, false); // 確定済み未同期レコードは入力中カートではない。
@@ -247,6 +315,14 @@ test('再読み込み後の下書きを同じ会計キーで復元する', async
 test('同期失敗後の再送は同じ送信キーを保持する', async () => {
     let attempts = 0;
     const ui = harness({ online: true, fetcher: async body => {
+        if (body.method === 'GET') {
+            const local = [...ui.database.stores.get('queue').values()][0].receipt;
+            return { status: 200, ok: true, headers: { get: () => 'application/json' },
+                json: async () => ({ status: 'saved', submission_key: local.submission_key,
+                    transaction_id: 'saved', kind: local.kind, total_yen: local.total_yen,
+                    received_yen: local.received_yen, business_date: local.client_business_date,
+                    items: local.items, displayed_prices: local.displayed_prices }) };
+        }
         if (++attempts === 1) { throw Error('offline'); }
         return { status: 200, ok: true, headers: { get: () => 'application/json' },
             json: async () => ({ submission_key: body.submission_key,
@@ -265,8 +341,9 @@ test('同期失敗後の再送は同じ送信キーを保持する', async () =>
     await new Promise(resolve => setTimeout(resolve, 15));
     ui.events.online();
     await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
-    assert.equal(ui.calls.length, 2);
+    assert.equal(ui.calls.filter(call => call.method !== 'GET').length, 2);
     assert.equal(ui.calls[0].submission_key, ui.calls[1].submission_key);
+    assert.equal(ui.calls[2].method, 'GET');
 });
 
 test('HTML応答は保存成功と判断せず、端末の記録を残す', async () => {
@@ -300,7 +377,8 @@ test('通信断の複数会計を順番に同じキーで再送し、応答確�
     ui.navigator.onLine = true;
     ui.events.online();
     await until(() => [...ui.database.stores.get('queue').values()].every(row => row.status === 'synced'));
-    assert.deepEqual(ui.calls.map(row => row.submission_key), keys);
+    assert.deepEqual(ui.calls.filter(row => row.method !== 'GET').map(row => row.submission_key), keys);
+    assert.equal(ui.calls.filter(row => row.method === 'GET').length, 3);
     assert.equal(ui.database.stores.get('queue').size, 3);
 });
 
@@ -362,7 +440,7 @@ test('Guest期限切れは通信障害と区別して再送停止し、別スコ
     await new Promise(resolve => setTimeout(resolve, 15));
     assert.equal(ui.calls.length, 1);
     const other = harness({ database: db, scope: 'another:session', online: true });
-    await until(() => other.elements['sync-state'].textContent === '同期済み');
+    await until(() => other.elements['sync-state'].textContent === '✓ サーバー保存済み 0件 / 未同期 0件');
     assert.equal(other.calls.length, 0);
     assert.equal(db.stores.get('queue').size, 1);
 });
@@ -381,7 +459,7 @@ test('下書き書込が失敗しても次の書込と会計のキュー保存�
     ui.elements['complete-checkout'].fire('click');
     await until(() => db.stores.get('queue').size === 1);
     await until(() => ui.quantity.value === 0);
-    assert.equal(ui.elements['sync-state'].textContent, '端末に保存済み・サーバー反映未確認 1件（通信後に再送）');
+    assert.equal(ui.elements['sync-state'].textContent, '◷ 端末に記録済み・サーバー反映未確認 1件（通信後に再送）');
 });
 
 test('認証確認後の同一スコープ再読み込みは同じキーを再送し、Guest期限切れは再送しない', async () => {
@@ -399,7 +477,7 @@ test('認証確認後の同一スコープ再読み込みは同じキーを再�
     const key = first.calls[0].submission_key;
     const reload = harness({ database: db, online: true });
     await until(() => [...db.stores.get('queue').values()][0]?.status === 'synced');
-    assert.equal(reload.calls.length, 1);
+    assert.equal(reload.calls.filter(call => call.method !== 'GET').length, 1);
     assert.equal(reload.calls[0].submission_key, key);
 });
 
@@ -459,4 +537,102 @@ test('照会の不一致と未確認は会計キーと端末記録を保持す�
         if (mode === 'mismatch') { assert.equal(after.reason, 'key_conflict'); }
         assert.equal(ui.calls[0].method, 'GET');
     }
+});
+
+test('POSTの200応答でも保存済み明細が違えば同期済みにしない', async () => {
+    const ui = harness({ online: true, fetcher: async call => {
+        const local = [...ui.database.stores.get('queue').values()][0].receipt;
+        return { ok: true, status: 200, headers: { get: () => 'application/json' },
+            json: async () => call.method === 'GET'
+                ? ({ status: 'saved', submission_key: local.submission_key,
+                    transaction_id: 'saved-id', business_date: local.client_business_date,
+                    kind: local.kind, total_yen: local.total_yen, received_yen: local.received_yen,
+                    items: local.items, displayed_prices: [[1, 121]] })
+                : ({ submission_key: local.submission_key, transaction_id: 'saved-id',
+                    total_yen: local.total_yen, business_date: local.client_business_date }) };
+    } });
+    await until(() => ui.database.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    ui.elements['complete-checkout'].fire('click');
+    await until(() => [...ui.database.stores.get('queue').values()][0]?.status === 'needs_review');
+    const record = [...ui.database.stores.get('queue').values()][0];
+    assert.equal(record.reason, 'key_conflict');
+    assert.equal(record.receipt.displayed_prices[0][1], 120);
+    assert.deepEqual(ui.calls.map(call => call.method || 'POST'), ['POST', 'GET']);
+});
+
+test('Adminの旧ログインscopeは同じDatasetの元会計を保持して引き継ぐ', async () => {
+    const db = new MemoryDB();
+    const old = harness({ database: db, scope: 'dataset:login1', online: false });
+    await until(() => db.stores.has('queue'));
+    old.touch();
+    old.elements['received-yen'].value = '500';
+    old.elements['received-yen'].fire('input');
+    old.elements['complete-checkout'].fire('click');
+    await until(() => db.stores.get('queue').size === 1);
+    const before = structuredClone([...db.stores.get('queue').values()][0]);
+    const admin = harness({ database: db, scope: 'dataset:admin', online: false });
+    await until(() => [...db.stores.get('queue').values()][0].scope === 'dataset:admin');
+    const after = [...db.stores.get('queue').values()][0];
+    assert.deepEqual(after.receipt, before.receipt);
+    assert.equal(after.status, before.status);
+    assert.equal(admin.calls.length, 0);
+});
+
+test('事前許可済みの前日会計を50件、元キーで照合して一部失敗を分離する', async () => {
+    const saved = new Map();
+    const calls = [];
+    const json = (value, status = 200) => ({ ok: status < 300, status,
+        headers: { get: () => 'application/json' }, json: async () => value });
+    const fetcher = async call => {
+        calls.push(call);
+        if (call.method === 'GET') {
+            const key = call.url.split('/').at(-2);
+            return json(saved.get(key) || { status: 'not_found' });
+        }
+        const receipt = call.receipt;
+        if (receipt.items[0][1] === 49) { return json({ code: 'offline_review' }, 409); }
+        if (receipt.items[0][1] === 50) { throw Error('connection lost'); }
+        const result = { status: 'saved', submission_key: receipt.submission_key,
+            transaction_id: `tx-${receipt.items[0][1]}`, kind: receipt.kind,
+            business_date: receipt.client_business_date, total_yen: receipt.total_yen,
+            received_yen: receipt.received_yen, items: receipt.items,
+            displayed_prices: receipt.displayed_prices };
+        saved.set(receipt.submission_key, result);
+        return json(result);
+    };
+    const db = new MemoryDB();
+    const ui = harness({ database: db, online: false, authReady: true,
+        offlineGrant: 'signed-grant', catalogProof: 'signed-catalog', fetcher });
+    await until(() => db.stores.has('queue'));
+    for (let n = 1; n <= 50; n++) {
+        ui.quantity.value = String(n);
+        ui.elements['product-grid'].fire('change', { target: ui.quantity });
+        ui.elements['received-yen'].value = '10000';
+        ui.elements['received-yen'].fire('input');
+        ui.elements['complete-checkout'].fire('click');
+        await until(() => db.stores.get('queue').size === n);
+        await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    const records = [...db.stores.get('queue').values()];
+    const ids = records.map(row => row.receipt.submission_key);
+    assert.equal(new Set(ids).size, 50);
+    assert.ok(records.every(row => row.grantToken === 'signed-grant'
+        && row.receipt.catalog_proof === 'signed-catalog'));
+    ui.navigator.onLine = true;
+    ui.events.online();
+    await until(() => {
+        const rows = [...db.stores.get('queue').values()];
+        return rows.filter(row => row.status === 'synced').length === 48
+            && rows.filter(row => row.status === 'needs_review').length === 1
+            && rows.filter(row => row.status === 'pending' && row.attempts > 0).length === 1;
+    }, 10000);
+    const result = [...db.stores.get('queue').values()];
+    assert.equal(result.filter(row => row.status === 'needs_review').length, 1);
+    assert.equal(result.filter(row => row.status === 'pending').length, 1);
+    assert.deepEqual(result.map(row => row.receipt.submission_key), ids);
+    assert.equal(calls.filter(call => call.receipt).length, 50);
+    assert.ok(calls.filter(call => call.receipt).every(call => call.grant_token === 'signed-grant'));
 });
