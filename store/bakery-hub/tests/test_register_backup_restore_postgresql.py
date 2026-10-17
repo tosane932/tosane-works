@@ -134,7 +134,7 @@ def test_real_schema_dump_and_isolated_restore_preserve_rows_and_constraints():
         assert _snapshot(restored) == before
         _rejects(restored, "INSERT INTO register_products "
                  "(dataset_id, template_key, name, price_yen, is_active, display_order) "
-                 "SELECT dataset_id, 'illegal_price', 'bad', 501, true, 0 "
+                 "SELECT id, 'illegal_price', 'bad', 501, true, 0 "
                  "FROM datasets WHERE system_key = 'admin'", "23514")
         _rejects(restored, "INSERT INTO register_products "
                  "(dataset_id, template_key, name, price_yen, is_active, display_order) "
