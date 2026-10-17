@@ -33,7 +33,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .product-label{font-size:.84rem;line-height:1.2;min-height:2.4em;display:grid;place-items:center}
 .product-price{font-size:1.12rem}
 .quantity-label{grid-column:2;grid-row:2;display:flex;justify-content:space-between;align-items:center;padding:5px 10px;background:#f6f1eb;font-weight:700}
-.quantity-input{width:78px;min-height:42px;text-align:center;font-size:1.25rem;font-weight:800;border:1px solid #b5a38e;border-radius:7px;background:#fff}
+.quantity-input{width:78px;min-height:46px;text-align:center;font-size:1.25rem;font-weight:800;border:1px solid #b5a38e;border-radius:7px;background:#fff}
 .product-tile.selected{border:2px solid #7b5634}
 .checkout{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
 .cart-lines{list-style:none;margin:8px 0 20px;padding:0;max-height:28vh;overflow:auto}
