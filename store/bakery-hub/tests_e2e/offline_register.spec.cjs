@@ -182,7 +182,7 @@ for (const [name, viewport] of [['smartphone', devices['iPhone 13'].viewport],
                     sameRow: Math.abs(first.top - second.top) < 4,
                     minTargetWidth: Math.min(...targets.map(box => box.width)),
                     minTargetHeight: Math.min(...targets.map(box => box.height)),
-                    imageWidth: tiles[0].querySelector('img')?.getBoundingClientRect().width,
+                    imageWidth: (tiles[0].querySelector('img') || tiles[0].querySelector('.no-image'))?.getBoundingClientRect().width,
                 };
             });
             expect(layout.scrollWidth).toBeLessThanOrEqual(layout.viewportWidth + 1);
