@@ -191,3 +191,44 @@ def test_guest_cleanup_serializes_with_checkout(pg_app, monkeypatch):
     with app.app_context():
         assert db.session.get(Dataset, owner_id) is None
         assert RegisterTransaction.query.count() == RegisterTransactionLine.query.count() == 0
+
+
+def test_concurrent_offline_next_day_same_key_and_audit(pg_app, monkeypatch):
+    from zoneinfo import ZoneInfo
+    from models import RegisterOfflinePermit
+    import register_offline_service as offline
+    from tests.test_register_recovery import receipt
+
+    app, _, _ = pg_app
+    app.secret_key = "isolated-test-only"
+    with app.app_context():
+        admin = Dataset(kind="admin", system_key="offline-admin")
+        db.session.add(admin)
+        db.session.flush()
+        item = RegisterProduct(dataset_id=admin.id, name="パン", price_yen=120)
+        day = datetime.datetime.now(datetime.timezone.utc).astimezone(ZoneInfo("Asia/Tokyo")).date()
+        db.session.add_all([item, RegisterCutover(dataset_id=admin.id,
+                                                  first_register_date=day)])
+        db.session.commit()
+        admin_id, product_id = admin.id, item.id
+        grant, token, proof, _ = offline.prepare_offline(admin, str(uuid.uuid4()), next_day=True)
+        grant_id = grant.id
+        original = receipt(item, day=day)
+        original["catalog_proof"] = proof
+        original["completed_at_local"] = grant.issued_at.isoformat()
+        monkeypatch.setattr(offline, "utc_now", lambda: datetime.datetime.combine(
+            day + datetime.timedelta(days=1), datetime.time(8),
+            tzinfo=ZoneInfo("Asia/Tokyo")).astimezone(datetime.timezone.utc))
+
+    def save(owner):
+        result = offline.save_offline_transaction(owner, original, token)
+        return result.id
+
+    assert len(set(_race(app, admin_id, save))) == 1
+    with app.app_context():
+        tx = RegisterTransaction.query.filter_by(dataset_id=admin_id).one()
+        assert tx.business_date == day and tx.save_method == "offline"
+        assert tx.offline_permit_id == grant_id
+        assert RegisterTransactionLine.query.filter_by(transaction_id=tx.id).count() == 1
+        assert RegisterOfflinePermit.query.filter_by(dataset_id=admin_id).count() == 1
+        assert RegisterTransaction.query.filter_by(dataset_id=admin_id).count() == 1

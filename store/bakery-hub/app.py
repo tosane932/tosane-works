@@ -159,8 +159,9 @@ def allow_catalog_image_request_size():
     """CSRFがmultipartを読む前に、このPOSTだけ画像とformの容量を確保する。"""
     if request.endpoint == "submit_product_catalog" and request.method == "POST":
         request.max_content_length = MAX_UPLOAD_IMAGE_BYTES + 16 * 1024
-    elif request.endpoint in ("register.create_transaction", "register_recovery.preserve"):
-        request.max_content_length = REGISTER_BODY_LIMIT
+    elif request.endpoint in ("register.create_transaction", "register_recovery.preserve",
+                              "register.offline_sync"):
+        request.max_content_length = REGISTER_BODY_LIMIT + (4096 if request.endpoint == "register.offline_sync" else 0)
 
 
 csrf = CSRFProtect(app)
@@ -1407,6 +1408,14 @@ def login():
 @login_required
 def logout():
     """現在のAdminまたはGuestの認証Sessionだけを終了する。"""
+    if current_user.is_admin and app.config.get("REGISTER_V3_OFFLINE_MODE_ENABLED"):
+        from register_offline_service import revoke_offline
+        try:
+            revoke_offline(require_current_dataset())
+        except SQLAlchemyError:
+            db.session.rollback()
+            app.logger.exception("Could not revoke offline permits on logout")
+            abort(503)
     logout_user()
     session.pop(LOCAL_SCOPE_SESSION_KEY, None)
     session.pop(ADMIN_AUTH_FINGERPRINT_SESSION_KEY, None)

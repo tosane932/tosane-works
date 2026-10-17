@@ -88,7 +88,7 @@ function element(id) {
 
 function harness({ database = new MemoryDB(), scope = 'dataset:login', online = false,
                    fetcher, sessionValues = new Map(), recoveryUrl = null,
-                   catalogProof = null } = {}) {
+                   catalogProof = null, offlineGrant = null, authReady = false } = {}) {
     const ids = ['register-root', 'register-config', 'register-message',
         'complete-checkout', 'received-yen', 'sync-state', 'recovery-list', 'product-grid',
         'cart-lines', 'checkout-kind', 'total-label', 'total-yen', 'cash-area',
@@ -100,7 +100,10 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
     elements['register-config'].textContent = JSON.stringify({
         products, scope, saveEnabled: true, postUrl: '/api/register/transactions',
         statusBase: '/api/register/transactions',
-        recoveryUrl, catalogProof,
+        recoveryUrl, catalogProof, offlineGrant,
+        offlineSyncUrl: '/api/register/offline/sync', offlineMode: Boolean(offlineGrant),
+        approvedDays: [core.tokyoDay(new Date())],
+        offlineExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     });
     elements['register-back'].href = '/home';
     elements['checkout-title'].scrollIntoView = () => {};
@@ -147,10 +150,15 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
     };
     vm.runInNewContext(source, {
         document, window, indexedDB: { open: () => database.open() },
-        RegisterCore: core, crypto: webcrypto, navigator, fetch, location: { assign() {} },
+        RegisterCore: core, RegisterOfflineAuth: authReady ? 'ready' : undefined,
+        crypto: webcrypto, navigator, fetch, location: { assign() {} },
         sessionStorage: { getItem: name => sessionValues.get(name),
                           setItem: (name, value) => sessionValues.set(name, value) },
-        setTimeout, clearTimeout, AbortController, Date, Intl, Promise, console,
+        setTimeout: (fn, delay) => {
+            const timer = setTimeout(fn, delay);
+            if (delay >= 1000) { timer.unref(); }
+            return timer;
+        }, clearTimeout, AbortController, Date, Intl, Promise, console,
     }, { filename: 'register.js' });
     return { database, elements, events, navigator, calls, plus, quantity, sessionValues,
         touch: () => elements['product-grid'].fire('click', { target: plus }) };
@@ -571,4 +579,60 @@ test('Adminの旧ログインscopeは同じDatasetの元会計を保持して引
     assert.deepEqual(after.receipt, before.receipt);
     assert.equal(after.status, before.status);
     assert.equal(admin.calls.length, 0);
+});
+
+test('事前許可済みの前日会計を50件、元キーで照合して一部失敗を分離する', async () => {
+    const saved = new Map();
+    const calls = [];
+    const json = (value, status = 200) => ({ ok: status < 300, status,
+        headers: { get: () => 'application/json' }, json: async () => value });
+    const fetcher = async call => {
+        calls.push(call);
+        if (call.method === 'GET') {
+            const key = call.url.split('/').at(-2);
+            return json(saved.get(key) || { status: 'not_found' });
+        }
+        const receipt = call.receipt;
+        if (receipt.items[0][1] === 49) { return json({ code: 'offline_review' }, 409); }
+        if (receipt.items[0][1] === 50) { throw Error('connection lost'); }
+        const result = { status: 'saved', submission_key: receipt.submission_key,
+            transaction_id: `tx-${receipt.items[0][1]}`, kind: receipt.kind,
+            business_date: receipt.client_business_date, total_yen: receipt.total_yen,
+            received_yen: receipt.received_yen, items: receipt.items,
+            displayed_prices: receipt.displayed_prices };
+        saved.set(receipt.submission_key, result);
+        return json(result);
+    };
+    const db = new MemoryDB();
+    const ui = harness({ database: db, online: false, authReady: true,
+        offlineGrant: 'signed-grant', catalogProof: 'signed-catalog', fetcher });
+    await until(() => db.stores.has('queue'));
+    for (let n = 1; n <= 50; n++) {
+        ui.quantity.value = String(n);
+        ui.elements['product-grid'].fire('change', { target: ui.quantity });
+        ui.elements['received-yen'].value = '10000';
+        ui.elements['received-yen'].fire('input');
+        ui.elements['complete-checkout'].fire('click');
+        await until(() => db.stores.get('queue').size === n);
+        await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    const records = [...db.stores.get('queue').values()];
+    const ids = records.map(row => row.receipt.submission_key);
+    assert.equal(new Set(ids).size, 50);
+    assert.ok(records.every(row => row.grantToken === 'signed-grant'
+        && row.receipt.catalog_proof === 'signed-catalog'));
+    ui.navigator.onLine = true;
+    ui.events.online();
+    await until(() => {
+        const rows = [...db.stores.get('queue').values()];
+        return rows.filter(row => row.status === 'synced').length === 48
+            && rows.filter(row => row.status === 'needs_review').length === 1
+            && rows.filter(row => row.status === 'pending' && row.attempts > 0).length === 1;
+    }, 10000);
+    const result = [...db.stores.get('queue').values()];
+    assert.equal(result.filter(row => row.status === 'needs_review').length, 1);
+    assert.equal(result.filter(row => row.status === 'pending').length, 1);
+    assert.deepEqual(result.map(row => row.receipt.submission_key), ids);
+    assert.equal(calls.filter(call => call.receipt).length, 50);
+    assert.ok(calls.filter(call => call.receipt).every(call => call.grant_token === 'signed-grant'));
 });

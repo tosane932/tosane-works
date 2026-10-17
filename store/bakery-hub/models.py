@@ -654,11 +654,17 @@ class RegisterTransaction(db.Model):
         db.ForeignKeyConstraint(["recovery_case_id", "dataset_id"],
                                 ["register_recovery_cases.id", "register_recovery_cases.dataset_id"],
                                 name="fk_register_transactions_recovery_dataset", ondelete="RESTRICT"),
-        db.CheckConstraint("save_method IN ('normal','recovery')", name="ck_register_transactions_save_method"),
+        db.ForeignKeyConstraint(["offline_permit_id", "dataset_id"],
+                                ["register_offline_permits.id", "register_offline_permits.dataset_id"],
+                                name="fk_register_transactions_offline_permit_dataset", ondelete="RESTRICT"),
+        db.CheckConstraint("save_method IN ('normal','recovery','offline')", name="ck_register_transactions_save_method"),
         db.CheckConstraint("(save_method = 'normal' AND recovery_case_id IS NULL AND client_completed_at IS NULL "
-                           "AND recovery_evidence_digest IS NULL) OR "
+                           "AND recovery_evidence_digest IS NULL AND offline_permit_id IS NULL) OR "
                            "(save_method = 'recovery' AND recovery_case_id IS NOT NULL AND client_completed_at IS NOT NULL "
-                           "AND recovery_evidence_digest IS NOT NULL AND length(recovery_evidence_digest) = 64)",
+                           "AND recovery_evidence_digest IS NOT NULL AND length(recovery_evidence_digest) = 64 "
+                           "AND offline_permit_id IS NULL) OR "
+                           "(save_method = 'offline' AND recovery_case_id IS NULL AND client_completed_at IS NOT NULL "
+                           "AND recovery_evidence_digest IS NULL AND offline_permit_id IS NOT NULL)",
                            name="ck_register_transactions_recovery_fields"),
         db.CheckConstraint("length(request_digest) = 64", name="ck_register_transactions_digest"),
         db.CheckConstraint("kind IN ('sale', 'refund')", name="ck_register_transactions_kind"),
@@ -691,6 +697,28 @@ class RegisterTransaction(db.Model):
     recovery_case_id = db.Column(db.Uuid(as_uuid=True), nullable=True)
     recovery_evidence_digest = db.Column(db.String(64), nullable=True)
     client_completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    offline_permit_id = db.Column(db.Uuid(as_uuid=True), nullable=True)
+
+
+class RegisterOfflinePermit(db.Model):
+    """Adminがオンラインで端末と営業日を事前承認。失効と同期上限はDBが正本。"""
+    __tablename__ = "register_offline_permits"
+    __table_args__ = (
+        db.UniqueConstraint("id", "dataset_id", name="uq_register_offline_permit_id_dataset"),
+        db.CheckConstraint("length(device_id) = 36", name="ck_register_offline_device"),
+        db.CheckConstraint("expires_at > issued_at", name="ck_register_offline_window"),
+        db.Index("ix_register_offline_permit_device", "dataset_id", "device_id"),
+    )
+    id = db.Column(db.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", ondelete="RESTRICT"), nullable=False)
+    device_id = db.Column(db.String(36), nullable=False)
+    approved_by = db.Column(db.String(100), nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    next_business_date = db.Column(db.Date, nullable=True)
+    catalog_digest = db.Column(db.String(64), nullable=False)
+    issued_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
 class RegisterTransactionLine(db.Model):

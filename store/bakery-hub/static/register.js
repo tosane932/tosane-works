@@ -38,7 +38,7 @@
     function openDatabase() {
         return new Promise((resolve, reject) => {
             if (!globalThis.indexedDB) { reject(new Error("IndexedDBを使用できません。")); return; }
-            const request = indexedDB.open("bakery-hub-register-v3", 1);
+            const request = indexedDB.open("bakery-hub-register-v3", 2);
             request.onupgradeneeded = () => {
                 const db = request.result;
                 if (!db.objectStoreNames.contains("drafts")) { db.createObjectStore("drafts", { keyPath: "id" }); }
@@ -47,6 +47,7 @@
                     queue.createIndex("scope", "scope");
                 }
                 if (!db.objectStoreNames.contains("locks")) { db.createObjectStore("locks", { keyPath: "scope" }); }
+                if (!db.objectStoreNames.contains("offline")) { db.createObjectStore("offline", { keyPath: "id" }); }
             };
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
@@ -237,7 +238,8 @@
         $("change-yen").textContent = result.change === null ? "—" : yen(result.change);
         $("cash-hint").textContent = result.error && result.lines.length ? result.error : "お預かり金額を入力してください";
         $("cash-hint").classList.toggle("error", Boolean(result.error && result.lines.length));
-        checkoutButton.disabled = !config.saveEnabled || !database || busy || !result.valid;
+        checkoutButton.disabled = !config.saveEnabled || !database || busy || !result.valid
+            || ["denied", "checking"].includes(globalThis.RegisterOfflineAuth);
     }
     function change(id, value, approved = false) {
         try {
@@ -285,17 +287,28 @@
         if (busy || !database || !config.saveEnabled) { return; }
         busy = true; render();
         try {
+            if (["denied", "checking"].includes(globalThis.RegisterOfflineAuth)) {
+                throw Error("認証または端末許可が失効しました。Adminがオンラインで再準備してください。");
+            }
+            if (config.offlineGrant && (Date.now() > Date.parse(config.offlineExpiresAt)
+                || !config.approvedDays.includes(currentDay()))) {
+                throw Error("承認された営業日または端末利用期限を過ぎました。オンラインで再準備してください。");
+            }
+            if (config.offlineMode && !config.offlineGrant && !navigator.onLine) {
+                throw Error("オフライン利用には端末の事前準備が必要です。");
+            }
             const receipt = core.receipt(cart, receivedInput.value, key);
             if (config.catalogProof) { receipt.catalog_proof = config.catalogProof; }
             clearTimeout(draftTimer);
             await draftWrite.catch(() => {}); // 下書きの失敗は原子的なqueue保存で再試行する。
             await checkoutToLocal({ id: `${config.scope}:${key}`, scope: config.scope,
-                                    status: "pending", receipt, attempts: 0, nextRetryAt: 0 });
+                                    status: "pending", receipt, grantToken: config.offlineGrant || null,
+                                    attempts: 0, nextRetryAt: 0 });
             cart = core.createCart(products);
             receivedInput.value = "";
             key = uuid();
             clearError();
-            if ($("checkout-result")) { $("checkout-result").textContent = "◷ 会計を端末に記録しました。サーバーへの反映はまだです。"; }
+            if ($("checkout-result")) { $("checkout-result").textContent = "✓ 会計完了・端末に記録済み。サーバーへの反映待ちです。"; }
             await updateState();
             kickSync();
         } catch (error) {
@@ -469,11 +482,32 @@
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 12000);
         try {
-            const response = await fetch(config.postUrl, {
+            if (record.grantToken) {
+                const check = await fetch(`${config.statusBase}/${encodeURIComponent(record.receipt.submission_key)}/status`,
+                    { method: "GET", credentials: "same-origin", signal: controller.signal });
+                if (!check.ok || !check.headers.get("Content-Type")?.includes("application/json")) {
+                    return { status: [401, 403].includes(check.status) || check.redirected ? "auth_required" : "pending",
+                             reason: "status_unavailable" };
+                }
+                const existing = await check.json();
+                if (existing.status === "saved") {
+                    if (matchesSaved(existing, record.receipt)) {
+                        record.transactionId = existing.transaction_id;
+                        return { status: "synced" };
+                    }
+                    return { status: "needs_review", reason: "key_conflict" };
+                }
+                if (existing.status !== "not_found") {
+                    return { status: "needs_review", reason: "status_unknown" };
+                }
+                // not_found is not proof of non-delivery; the same key is enforced under Dataset lock.
+            }
+            const response = await fetch(record.grantToken ? config.offlineSyncUrl : config.postUrl, {
                 method: "POST", credentials: "same-origin", signal: controller.signal,
                 headers: { "Content-Type": "application/json",
                            "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').content },
-                body: JSON.stringify(payload(record.receipt)),
+                body: JSON.stringify(record.grantToken ?
+                    { receipt: record.receipt, grant_token: record.grantToken } : payload(record.receipt)),
             });
             const type = response.headers.get("Content-Type") || "";
             if (!type.includes("application/json")) {
@@ -511,6 +545,9 @@
             if (response.status === 409 && result.code === "business_day_changed") {
                 return { status: "needs_review", reason: "business_day_changed" };
             }
+            if (response.status === 409 && result.code === "offline_review") {
+                return { status: "needs_review", reason: "offline_review" };
+            }
             return (response.status >= 400 && response.status < 500 && response.status !== 429)
                 || response.ok ? { status: "needs_review", reason: result.code || "unexpected_response" }
                     : { status: "pending", reason: "communication" };
@@ -522,7 +559,7 @@
             .sort((a, b) => a.receipt.completed_at_local.localeCompare(b.receipt.completed_at_local));
         for (const record of records) {
             if (record.nextRetryAt > Date.now()) { continue; }
-            if (record.receipt.client_business_date !== currentDay()) {
+            if (!record.grantToken && record.receipt.client_business_date !== currentDay()) {
                 record.status = "needs_review";
                 record.reason = "business_day_changed";
             } else if (record.backedUp) {
@@ -549,7 +586,8 @@
         else { clearTimeout(retryTimer); }
     }
     async function kickSync() {
-        if (!config.saveEnabled || !database || syncing || !navigator.onLine) { return; }
+        if (!config.saveEnabled || !database || syncing || !navigator.onLine
+            || (config.offlineGrant && globalThis.RegisterOfflineAuth !== "ready")) { return; }
         syncing = true;
         try {
             if (navigator.locks && navigator.locks.request) {
@@ -569,6 +607,8 @@
         }
     }
     window.addEventListener("online", kickSync);
+    window.addEventListener("register-auth-ready", kickSync);
+    window.addEventListener("register-auth-change", render);
     window.addEventListener("offline", () => updateState().catch(() => {}));
     window.addEventListener("focus", kickSync);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) { kickSync(); } });
@@ -578,7 +618,8 @@
             key = uuid();
             database = await openDatabase();
             await recoverPreviousAdminScopes();
-            draftId = tabId();
+            draftId = config.offlineGrant
+                ? `offline-draft:${config.scope}:${config.deviceId}` : tabId();
             const draft = await operation("drafts", "readonly", store => store.get(draftId));
             if (draft) {
                 cart = core.createCart(products, draft.quantities);

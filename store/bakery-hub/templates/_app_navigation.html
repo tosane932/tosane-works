@@ -332,7 +332,7 @@
         <span class="app-sidebar-user-label">
             利用中：{% if current_user.is_guest %}ゲストデモ{% else %}管理者{% endif %}
         </span>
-        <form method="POST" action="{{ url_for('logout') }}">
+        <form method="POST" action="{{ url_for('logout') }}" id="app-logout-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button
                 type="submit"
@@ -420,6 +420,10 @@
         if (!openButton || !closeButton || !overlay || !sidebar) {
             return;
         }
+        document.getElementById("app-logout-form")?.addEventListener("submit", () => {
+            try { localStorage.setItem("bakery-register-offline-locked", "1"); }
+            catch (_) { /* Server-side revocation still applies when storage is blocked. */ }
+        });
         homeToggle?.addEventListener("click", () => {
             const willOpen = homeToggle.getAttribute("aria-expanded") !== "true";
             homeSubmenu.hidden = !willOpen;

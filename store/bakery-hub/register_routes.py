@@ -3,12 +3,15 @@
 import datetime
 import uuid
 
-from flask import Blueprint, abort, current_app, jsonify, render_template, request, session
+from flask import Blueprint, abort, current_app, jsonify, render_template, request, session, send_from_directory
 from flask_login import current_user
+from flask_wtf.csrf import generate_csrf
 from sqlalchemy.exc import SQLAlchemyError
 
-from models import RegisterCutover, RegisterProduct, RegisterTransaction, RegisterTransactionLine, db
+from models import RegisterCutover, RegisterOfflinePermit, RegisterProduct, RegisterTransaction, RegisterTransactionLine, db
 from register_catalog_proof import issue_catalog_proof
+from register_offline_service import (OfflineReviewRequired, prepare_offline,
+                                      save_offline_transaction)
 from register_images import register_image_choices
 from register_products import _standard_rows, ensure_standard_products
 from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
@@ -40,7 +43,8 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
     @blueprint.before_request
     def api_session_state():
         # 分類にだけsigned sessionを使う。Datasetの認可・保存には使わない。
-        if request.endpoint in {"register.create_transaction", "register.transaction_status"} and not current_user.is_authenticated:
+        if request.endpoint in {"register.create_transaction", "register.transaction_status",
+                                "register.offline_sync"} and not current_user.is_authenticated:
             if str(session.get("_user_id", "")).startswith("guest:"):
                 return jsonify(error="Guestの利用期限が終了しました。", code="guest_expired"), 403
             return jsonify(error="ログインの確認が必要です。", code="auth_required"), 401
@@ -83,11 +87,119 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
             recovery_enabled=owner.kind == "admin" and bool(
                 current_app.config.get("REGISTER_V3_RECOVERY_ENABLED")),
             offline_enabled=offline_enabled,
+            offline_prepare_url="/api/register/offline/prepare" if offline_enabled else None,
             catalog_proof=issue_catalog_proof(owner, products) if offline_enabled else None,
             catalog_fetched_at=datetime.datetime.now(datetime.timezone.utc).isoformat() if offline_enabled else None,
         ))
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    def _offline_allowed(owner):
+        return (owner.kind == "admin" and _production_owner_allowed(owner)
+                and _production_cutover_ready(owner)
+                and all(current_app.config.get(name) for name in (
+                    "REGISTER_V3_PRODUCTION_ENABLED", "REGISTER_V3_PREVIEW_ENABLED",
+                    "REGISTER_V3_SAVE_ENABLED", "REGISTER_V3_OFFLINE_MODE_ENABLED")))
+
+    @blueprint.post("/api/register/offline/prepare")
+    @admin_required
+    def offline_prepare():
+        owner = resolve_dataset()
+        if not _offline_allowed(owner):
+            abort(404)
+        data = request.get_json(silent=True) if request.is_json else None
+        if not isinstance(data, dict) or set(data) != {"device_id", "next_day"}:
+            return jsonify(error="端末準備の形式が不正です。"), 400
+        try:
+            grant, token, proof, products = prepare_offline(
+                owner, data["device_id"], next_day=data["next_day"])
+            image_urls = {key: choice["url"] for key, choice in
+                          register_image_choices(current_app.static_folder, is_guest=False).items()}
+        except (ValueError, OfflineReviewRequired) as error:
+            return jsonify(error=str(error)), 400
+        except PermissionError:
+            abort(403)
+        except SQLAlchemyError:
+            db.session.rollback()
+            abort(503)
+        response = jsonify(dataset_id=str(owner.id), grant_id=str(grant.id), device_id=grant.device_id,
+                           scope=f"{owner.id}:admin", token=token, catalog_proof=proof,
+                           issued_at=grant.issued_at.isoformat(),
+                           expires_at=grant.expires_at.isoformat(),
+                           business_date=grant.business_date.isoformat(),
+                           next_business_date=(grant.next_business_date.isoformat()
+                                               if grant.next_business_date else None),
+                           products=[dict(id=p.id, name=p.name, price=p.price_yen,
+                                          image=image_urls.get(p.image_key), image_key=p.image_key,
+                                          is_active=p.is_active, standard=p.template_key is not None)
+                                     for p in products])
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @blueprint.get("/api/register/offline/session")
+    @admin_required
+    def offline_session():
+        owner = resolve_dataset()
+        if not _offline_allowed(owner):
+            abort(404)
+        grant_id = request.args.get("grant_id", "")
+        try:
+            grant = db.session.get(RegisterOfflinePermit, uuid.UUID(grant_id))
+        except ValueError:
+            grant = None
+        if grant is None or grant.dataset_id != owner.id or grant.revoked_at is not None:
+            return jsonify(error="端末の許可が失効しています。"), 403
+        response = jsonify(dataset_id=str(owner.id), csrf_token=generate_csrf())
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @blueprint.get("/register/offline")
+    @admin_required
+    def offline_shell():
+        owner = resolve_dataset()
+        if not _offline_allowed(owner):
+            abort(404)
+        # No session content, CSRF token, product, Dataset or credential in this shell.
+        response = current_app.make_response(render_template(
+            "register.html", products=[], offline_shell=True, save_enabled=False,
+            production=True, recovery_enabled=False))
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Register-Offline-Shell"] = "1"
+        return response
+
+    @blueprint.get("/register/offline-sw.js")
+    @admin_required
+    def offline_worker():
+        owner = resolve_dataset()
+        if not _offline_allowed(owner):
+            abort(404)
+        response = send_from_directory(current_app.static_folder, "register_offline_sw.js")
+        response.headers["Service-Worker-Allowed"] = "/register/"
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @blueprint.post("/api/register/offline/sync")
+    @admin_required
+    def offline_sync():
+        owner = resolve_dataset()
+        if not _offline_allowed(owner):
+            return jsonify(error="オフライン同期は無効です。", code="disabled"), 403
+        data = request.get_json(silent=True) if request.is_json else None
+        if not isinstance(data, dict) or set(data) != {"receipt", "grant_token"}:
+            return jsonify(error="元会計または端末許可が不正です。", code="invalid"), 400
+        try:
+            saved = save_offline_transaction(owner, data["receipt"], data["grant_token"])
+        except (OfflineReviewRequired, ValueError) as error:
+            return jsonify(error=str(error), code="offline_review"), 409
+        except PermissionError:
+            return jsonify(error="Datasetの認可がありません。", code="forbidden"), 403
+        except SQLAlchemyError:
+            db.session.rollback()
+            current_app.logger.exception("Offline register sync failed")
+            return jsonify(error="同じキーで後から照合してください。", code="temporary"), 503
+        return jsonify(submission_key=str(saved.submission_key), transaction_id=str(saved.id),
+                       business_date=saved.business_date.isoformat(), total_yen=saved.total_yen,
+                       kind=saved.kind), 200
 
     @blueprint.get("/register/demo")
     @admin_required

@@ -35,7 +35,7 @@ jobs:
 
       - name: JavaScriptテストを実行
         run: |
-          node --test tests_js/register_core.test.cjs tests_js/register_ui.test.cjs tests_js/register_demo.test.cjs
+          node --test tests_js/register_core.test.cjs tests_js/register_ui.test.cjs tests_js/register_demo.test.cjs tests_js/register_offline.test.cjs
 
       - name: pytestを実行
         run: |

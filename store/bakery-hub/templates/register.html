@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="csrf-token" content="{{ '' if offline_shell|default(false) else csrf_token() }}">
     <title>{{ 'レジ操作デモ' if demo|default(false) else 'レジ会計（開発プレビュー）' }} | Bakery Hub</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='register.css') }}">
     <script src="{{ url_for('static', filename='register_core.js') }}" defer></script>
-    <script src="{{ url_for('static', filename='register_demo.js' if demo|default(false) else 'register.js') }}" defer></script>
+    {% if offline_shell|default(false) or offline_enabled|default(false) %}<script src="{{ url_for('static', filename='register_offline_store.js') }}" defer></script>{% endif %}
+    <script src="{{ url_for('static', filename='register_offline_boot.js' if offline_shell|default(false) else ('register_demo.js' if demo|default(false) else 'register.js')) }}" defer></script>
+    {% if offline_enabled|default(false) and not offline_shell|default(false) %}<script src="{{ url_for('static', filename='register_offline_setup.js') }}" defer></script>{% endif %}
 </head>
 <body>
     <main class="register-shell" id="register-root">
@@ -19,10 +21,11 @@
         {% if demo|default(false) %}
         <p class="preview-note" role="note"><strong>練習用の画面です。実際の売上には記録されません。</strong> 入力内容はこの画面を閉じると消えます。</p>
         {% else %}
-        <p class="preview-note" role="note">{% if production|default(false) %}正式レジの会計です。端末内に保存した会計はサーバーへの反映状況を確認してください。{% else %}開発中のレジです。本番の売上記録には使用できません。{% endif %}{% if not save_enabled %}会計保存は停止中です。{% endif %}</p>
+        <p class="preview-note" role="note">{% if production|default(false) %}正式レジの会計です。端末内に保存した会計はサーバーへの反映状況を確認してください。{% else %}開発中のレジです。本番の売上記録には使用できません。{% endif %}{% if not save_enabled and not offline_shell|default(false) %}会計保存は停止中です。{% endif %}</p>
         {% endif %}
+        {% if offline_shell|default(false) %}<form id="offline-unlock" class="register-status-check"><h2>端末内レジを開く</h2><label>端末用PIN <input id="offline-pin" type="password" autocomplete="off" minlength="8" required></label><button type="submit">確認して開く</button><p id="offline-unlock-state" role="status"></p></form>{% elif offline_enabled|default(false) %}<form id="offline-setup" class="register-status-check"><h2>この端末をオフライン利用に準備</h2><label>端末用PIN（8文字以上）<input id="offline-setup-pin" type="password" autocomplete="new-password" minlength="8" required></label><label><input id="offline-next-day" type="checkbox">翌営業日も事前承認する</label><button type="submit">商品と端末許可を保存</button><p id="offline-setup-state" role="status"></p></form>{% endif %}
         <p id="recovery-list" class="recovery-list" role="status" aria-live="polite" hidden></p>
-        {% if offline_enabled|default(false) %}<p id="catalog-observation" role="status">商品情報のサーバー取得日時：{{ catalog_fetched_at }}。通信が切れた後は、この画面に表示された商品情報を使用します。</p>{% endif %}
+        {% if offline_enabled|default(false) or offline_shell|default(false) %}<p id="catalog-observation" role="status">{% if not offline_shell|default(false) %}商品情報のサーバー取得日時：{{ catalog_fetched_at }}。通信が切れた後は、この画面に表示された商品情報を使用します。{% endif %}</p>{% endif %}
         {% if not demo|default(false) %}<div class="register-status-check"><button id="check-register-status" type="button" disabled>端末内会計の保存状況を確認</button><p id="status-check-result" role="status" aria-live="polite">通信できない場合、端末の記録を残します。</p>{% if recovery_enabled %}<p><a href="{{ url_for('register_recovery.index') }}">管理者：保全済みの復旧案件</a></p>{% endif %}</div>{% endif %}
         <p id="register-message" class="register-message" role="alert" hidden></p>
         {% if not demo|default(false) %}<p id="checkout-result" role="status" aria-live="polite"></p>{% endif %}
@@ -76,8 +79,10 @@
     </dialog>
     {% if demo|default(false) %}
     <script id="register-config" type="application/json">{{ {"products": products, "demo": true} | tojson }}</script>
+    {% elif offline_shell|default(false) %}
+    <script id="register-config" type="application/json">{"offlineShell":true}</script>
     {% else %}
-    <script id="register-config" type="application/json">{{ {"products": products, "scope": local_scope, "saveEnabled": save_enabled, "postUrl": url_for('register.create_transaction'), "statusBase": url_for('register.create_transaction'), "recoveryUrl": url_for('register_recovery.preserve') if recovery_enabled else none, "catalogProof": catalog_proof|default(none), "catalogFetchedAt": catalog_fetched_at|default(none)} | tojson }}</script>
+    <script id="register-config" type="application/json">{{ {"products": products, "scope": local_scope, "saveEnabled": save_enabled, "postUrl": url_for('register.create_transaction'), "statusBase": url_for('register.create_transaction'), "offlineSyncUrl": url_for('register.offline_sync') if offline_enabled else none, "offlineMode": offline_enabled, "offlinePrepareUrl": offline_prepare_url|default(none), "recoveryUrl": url_for('register_recovery.preserve') if recovery_enabled else none, "catalogProof": catalog_proof|default(none), "catalogFetchedAt": catalog_fetched_at|default(none)} | tojson }}</script>
     {% endif %}
 </body>
 </html>
