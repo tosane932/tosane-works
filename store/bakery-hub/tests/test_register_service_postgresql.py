@@ -202,9 +202,7 @@ def test_concurrent_offline_next_day_same_key_and_audit(pg_app, monkeypatch):
     app, _, _ = pg_app
     app.secret_key = "isolated-test-only"
     with app.app_context():
-        admin = Dataset(kind="admin", system_key="offline-admin")
-        db.session.add(admin)
-        db.session.flush()
+        admin = Dataset.query.filter_by(kind="admin", system_key="admin").one()
         item = RegisterProduct(dataset_id=admin.id, name="パン", price_yen=120)
         day = datetime.datetime.now(datetime.timezone.utc).astimezone(ZoneInfo("Asia/Tokyo")).date()
         db.session.add_all([item, RegisterCutover(dataset_id=admin.id,
