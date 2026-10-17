@@ -132,6 +132,10 @@ test('Chromium: 通信断の連続会計、再読み込み、プロファイル�
             else { await route.continue(); }
         });
         await context.setOffline(false);
+        await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+        // Persistent contexts launched offline do not always dispatch the browser's
+        // online event when Playwright lifts network emulation. Deliver that event.
+        await page.evaluate(() => window.dispatchEvent(new Event('online')));
         await expect.poll(async () => (await (await control(request, 'state')).json()).length,
                           { timeout: 30000 }).toBe(5);
         await page.locator('#check-register-status').click();
