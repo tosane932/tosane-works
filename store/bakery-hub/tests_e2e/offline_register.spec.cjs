@@ -232,7 +232,8 @@ test('Chromium: Adminログアウト後はキャッシュ済みシェルからPI
         const page = await context.newPage();
         await login(page);
         await prepare(page);
-        await page.goto(`${base}/register/preview`);
+        await page.goto(`${base}/home`);
+        await expect(page.locator('#app-logout-form')).toHaveCount(1);
         await page.locator('#app-logout-form').evaluate(form => form.requestSubmit());
         await expect(page).toHaveURL(/\/login/);
         await context.setOffline(true);
