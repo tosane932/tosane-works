@@ -6,6 +6,7 @@
     const state = document.getElementById("offline-unlock-state");
     let prepared;
     let denied = false;
+    let validationRun = 0;
 
     function tile(product) {
         const article = document.createElement("article");
@@ -43,13 +44,19 @@
 
     async function revalidate() {
         if (!prepared || denied) { return; }
-        if (!navigator.onLine) { globalThis.RegisterOfflineAuth = "offline"; return; }
+        const run = ++validationRun;
+        if (!navigator.onLine) {
+            globalThis.RegisterOfflineAuth = "offline";
+            window.dispatchEvent(new Event("register-auth-change"));
+            return;
+        }
         globalThis.RegisterOfflineAuth = "checking";
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000);
         try {
             const response = await fetch(`/api/register/offline/session?grant_id=${encodeURIComponent(prepared.grant_id)}`,
                 { credentials: "same-origin", cache: "no-store", signal: controller.signal });
+            if (run !== validationRun) { return; }
             if (response.status === 401 || response.status === 403 || response.status === 404 || response.redirected) {
                 denied = true; globalThis.RegisterOfflineAuth = "denied";
                 window.dispatchEvent(new Event("register-auth-change"));
@@ -68,8 +75,12 @@
             globalThis.RegisterOfflineAuth = "ready";
             window.dispatchEvent(new Event("register-auth-change"));
             window.dispatchEvent(new Event("register-auth-ready"));
-        } catch (_) { globalThis.RegisterOfflineAuth = "offline"; }
-        finally { clearTimeout(timeout); window.dispatchEvent(new Event("register-auth-change")); }
+        } catch (_) {
+            if (run === validationRun) { globalThis.RegisterOfflineAuth = "offline"; }
+        } finally {
+            clearTimeout(timeout);
+            if (run === validationRun) { window.dispatchEvent(new Event("register-auth-change")); }
+        }
     }
     form.addEventListener("submit", async event => {
         event.preventDefault();
@@ -106,10 +117,10 @@
                 `◷ 保存済み商品情報（${prepared.issued_at}）を使用しています。`;
             state.textContent = "✓ 端末内レジを開きました。";
             const script = document.createElement("script"); script.src = "/static/register.js";
-            document.head.append(script);
-            await revalidate();
             window.addEventListener("online", revalidate);
             window.addEventListener("focus", revalidate);
+            document.head.append(script);
+            void revalidate();
         } catch (error) {
             prepared = null;
             state.textContent = `⚠ ${error.message} 端末の元記録は削除していません。`;

@@ -119,3 +119,50 @@ test('通信断の再起動シェルはPINとDataset・期限を検査して商�
     assert.deepEqual(scripts, ['/static/register.js']);
     assert.equal(globals.RegisterOfflineAuth, 'offline');
 });
+
+test('PIN解除直後の通信復旧イベントを取り逃がさず、古い通信結果で認証状態を戻さない', async () => {
+    const core = require('../static/register_core.js');
+    const nodes = new Map();
+    const node = id => {
+        if (!nodes.has(id)) { nodes.set(id, {
+            id, children: [], hidden: false, textContent: '', dataset: {},
+            addEventListener(type, listener) { this[type] = listener; },
+            setAttribute() {}, append(...children) { this.children.push(...children); },
+            replaceChildren(...children) { this.children = children; },
+        }); }
+        return nodes.get(id);
+    };
+    const day = core.tokyoDay(new Date());
+    const prepared = { dataset_id: 'dataset-1', scope: 'dataset-1:admin',
+        grant_id: 'grant', device_id: 'device', token: 'token', catalog_proof: 'proof',
+        business_date: day, next_business_date: null,
+        issued_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3600000).toISOString(),
+        products: [{ id: 7, name: 'パン', price: 120, image: null, is_active: true }] };
+    node('offline-pin').value = 'secure-pin';
+    let finishFirst;
+    let calls = 0;
+    const listeners = {};
+    const globals = { document: {
+        getElementById: node, createElement: () => node(`node-${nodes.size}`),
+        querySelector: () => node('csrf'), head: { append() {} },
+    }, RegisterOfflineStore: { load: async () => prepared }, RegisterCore: core,
+    navigator: { onLine: true }, localStorage: { getItem: () => null },
+    window: { addEventListener: (type, callback) => { listeners[type] = callback; },
+              dispatchEvent() {} }, Date, Event, AbortController, setTimeout, clearTimeout,
+    fetch: async () => {
+        calls++;
+        if (calls === 1) { return new Promise(resolve => { finishFirst = resolve; }); }
+        return { ok: true, status: 200, redirected: false,
+                 json: async () => ({ dataset_id: 'dataset-1', csrf_token: 'fresh' }) };
+    }, Error, JSON };
+    vm.runInNewContext(source('register_offline_boot.js'), globals);
+    await node('offline-unlock').submit({ preventDefault() {} });
+    assert.equal(typeof listeners.online, 'function');
+    await listeners.online();
+    assert.equal(globals.RegisterOfflineAuth, 'ready');
+    finishFirst({ ok: false, status: 503, redirected: false });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(globals.RegisterOfflineAuth, 'ready');
+    assert.equal(node('csrf').content, 'fresh');
+});
