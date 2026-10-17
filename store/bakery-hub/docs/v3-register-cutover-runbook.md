@@ -144,3 +144,26 @@ Phase 5C終了時の記録は全pytest 1,329 passed / 44 skipped、JavaScript 30
 | 運用 | 管理者最終承認 | NOT TESTED | 署名済みGo判定 |
 
 Phase 7へ渡す資料：完成した実機試験票、全端末台帳、隔離復元の証拠、本番revisionと事前監査の結果、商品価格表、ワーカー移行とフラグの記録、管理者のGo/No-Go承認。どれか一つでも不足すれば本番切替を行わない。
+
+## Phase 7 読取事前監査（2026-10-18 JST）
+
+この節は上の**Phase 6時点の判定票を上書きせず**、Phase 7で実際に読めた範囲を記録する。GitHub `main` は `b06eef8d813a5ccddd289823b01737f42d7d64fb`、PR #120・#121・#122はmerged、PR #122のGitHub Actionsの3ジョブは成功。作業開始時の別worktreeはclean。端末・売上の書込やRender設定の変更は行っていない。
+
+| 項目 | 読取結果 | 限界・次の照合 |
+|---|---|---|
+| Render Web | `bakeryhub` は `main` のDocker・Free・1インスタンス、On Commitの自動デプロイ。`b06eef8` のdeployは `live`。設定上のDocker overrideは空欄 | `Dockerfile` のCMDは `flask db upgrade && python seed_demo.py && gunicorn ...`。現行deploy時のAlembic起動ログは確認した。旧ワーカーの完全な排除と環境変数の実値は未確認 |
+| 接続できたPostgres | `bakery-db-4`、PostgreSQL 18.6、Free・available。`alembic_version=a3c9d7e5f102`、必要なレジテーブルあり | Webサービスの`DATABASE_URL`がこのDBを指す証拠は連携ツールから取得できていない。サービス側接続先との照合を必須とする |
+| Admin Dataset | 1件。旧Product 15件（有効14件、500円超0件）。旧DailySales 99行、対象営業日 2026-10-01～10-15 | 旧価格は販売時点の履歴ではない。日次金額・現金帳簿との一致と対象Datasetの確定は未検証 |
+| レジ・切替 | RegisterProduct 0件、RegisterTransaction 0件、明細0件、RegisterCutover 0件、価格履歴0件、オフライン許可0件、未解決復旧案件0件、レシピ対応0件 | **標準18商品不足は切替監査のblocker**。商品管理を承認後に準備し、現物と価格を確認するまで切替不可。新会計0件なので旧新重複はこのDBでは0件 |
+| 本番フラグ | コードの既定値はfalse | Render環境変数の実値、`LOCAL_DEVELOPMENT`とSecure Cookieの運用状態は未確認。実値の照合なしに有効化を始めない |
+| バックアップ | DBはFree、表示上の期限は2026-11-12 03:19 UTC | Render公式の[Freeプラン説明](https://render.com/docs/free)では管理バックアップなし、30日で失効。保護された手動全量バックアップと隔離復元を実施するか、継続保全可能なプラン・環境を管理者が決めるまで公開不可 |
+
+**暫定判定：NO-GO。** 技術的に切替できるか以前に、標準レジ商品が0件、バックアップ・隔離復元なし、全端末照合と正式レジのスマホ・タブレット実機試験なし。ユーザーが確認したのはAdminの**非保存デモ**のタッチ・数量・現金・返金とスマホ表示であり、正式保存・PIN・通信断・再起動・同期の実機PASSではない。現時点の公開Gateは以下のとおり。
+
+| 判定 | 項目 | 必要な対応 |
+|---|---|---|
+| PASS | PR #122 CIの3ジョブ、Render live SHA、`bakery-db-4`のrevision読取、旧行99件・新会計0件の読取 | 公開直前にも再照合。DB接続先は別途確認 |
+| FAIL | 標準18商品を含む正式レジマスタ0件、現行DBの管理バックアップなし | 商品・価格の承認済み登録。手動バックアップと隔離復元の成功、継続保管方式の決定 |
+| NOT TESTED | 実スマホ/横向きタブレットの正式保存とオフライン復帰、全端末IndexedDB、端末故障時の代替、帳簿・実売上、Render実フラグ・DB接続先、隔離復元、旧ワーカー排除、管理者の切替日・最終承認 | 本書の試験票・端末票・復元ログ・承認記録を埋める。いずれか未完了ならNO-GO |
+
+Free DBの失効日はサービスメタデータに表示された値であり、店舗の運用期限や管理者の許容判断を代行しない。**自動デプロイと起動時migrationがあるため、mainの更新自体が本番DBへ影響し得る。** 新しいmigrationを含むPRをmergeする前に、バックアップと単一の実行経路を整える。今回のPhase 7作業ブランチ・Draft PRを作るだけでは本番切替にならない。Go判定と、対象・切替日・実行操作を特定した管理者の明示承認を得てから操作する。
