@@ -46,8 +46,8 @@ with app.app_context():
     day = datetime.datetime.now(datetime.timezone.utc).astimezone(ZoneInfo("Asia/Tokyo")).date()
     db.session.add(RegisterCutover(dataset_id=owner.id, first_register_date=day))
     db.session.add_all([
-        RegisterProduct(dataset_id=owner.id, name="クロワッサン", price_yen=120),
-        RegisterProduct(dataset_id=owner.id, name="食パン", price_yen=300),
+        RegisterProduct(dataset_id=owner.id, name="検証クロワッサン", price_yen=120),
+        RegisterProduct(dataset_id=owner.id, name="検証食パン", price_yen=300),
     ])
     db.session.commit()
 
@@ -98,7 +98,7 @@ def e2e_next_day():
 @app.get("/__e2e/change-price")
 def e2e_change_price():
     owner = Dataset.query.filter_by(kind="admin", system_key="admin").one()
-    product = RegisterProduct.query.filter_by(dataset_id=owner.id, name="クロワッサン").one()
+    product = RegisterProduct.query.filter_by(dataset_id=owner.id, name="検証クロワッサン").one()
     update_register_product(owner, product.id, name=product.name, price_yen=140,
                             expected_name=product.name, expected_price_yen=120)
     return jsonify(price=140)
@@ -109,7 +109,7 @@ def e2e_reset_scenario():
     global offset
     offset = datetime.timedelta()
     owner = Dataset.query.filter_by(kind="admin", system_key="admin").one()
-    product = RegisterProduct.query.filter_by(dataset_id=owner.id, name="クロワッサン").one()
+    product = RegisterProduct.query.filter_by(dataset_id=owner.id, name="検証クロワッサン").one()
     if product.price_yen != 120:
         update_register_product(owner, product.id, name=product.name, price_yen=120,
                                 expected_name=product.name, expected_price_yen=product.price_yen)

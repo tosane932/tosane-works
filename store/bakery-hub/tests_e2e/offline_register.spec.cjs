@@ -64,14 +64,14 @@ async function unlock(page) {
     await page.locator('#offline-pin').fill('e2e-pin-not-a-secret');
     await page.locator('#offline-unlock button').click();
     await expect(page.locator('#offline-unlock-state')).toContainText('端末内レジを開きました');
-    await expect(page.locator('.product-tile', { hasText: 'クロワッサン' })).toHaveCount(1);
-    await expect(page.locator('.product-tile', { hasText: '食パン' })).toHaveCount(1);
+    await expect(page.locator('.product-tile', { hasText: '検証クロワッサン' })).toHaveCount(1);
+    await expect(page.locator('.product-tile', { hasText: '検証食パン' })).toHaveCount(1);
     await expect(page.locator('#complete-checkout')).toBeDisabled();
 }
 async function sale(page, bread = false) {
-    const tile = page.locator('.product-tile', { hasText: 'クロワッサン' });
+    const tile = page.locator('.product-tile', { hasText: '検証クロワッサン' });
     await tile.locator('.add-one').click({ clickCount: 2 });
-    if (bread) { await page.locator('.product-tile', { hasText: '食パン' }).locator('.add-one').click(); }
+    if (bread) { await page.locator('.product-tile', { hasText: '検証食パン' }).locator('.add-one').click(); }
     await expect(page.locator('#total-yen')).toHaveText(bread ? '540円' : '240円');
     await page.locator('#received-yen').fill('1000');
     await expect(page.locator('#change-yen')).toHaveText(bread ? '460円' : '760円');
@@ -80,7 +80,7 @@ async function sale(page, bread = false) {
     await expect(page.locator('#total-yen')).toHaveText('0円');
 }
 async function refund(page) {
-    await page.locator('.product-tile', { hasText: 'クロワッサン' }).locator('.remove-one').click();
+    await page.locator('.product-tile', { hasText: '検証クロワッサン' }).locator('.remove-one').click();
     await expect(page.locator('#refund-dialog')).toBeVisible();
     await page.locator('#refund-confirm').click();
     await expect(page.locator('#total-yen')).toHaveText('120円');
@@ -140,7 +140,7 @@ test('Chromium: 通信断の連続会計、再読み込み、プロファイル�
         const saved = await (await control(request, 'state')).json();
         expect(new Set(saved.map(item => item.key)).size).toBe(5);
         expect(saved.every(item => item.day === auth().day && item.method === 'offline')).toBe(true);
-        expect(saved.flatMap(item => item.lines).filter(line => line.name === 'クロワッサン')
+        expect(saved.flatMap(item => item.lines).filter(line => line.name === '検証クロワッサン')
             .every(line => line.price === 120)).toBe(true);
         expect(saved.some(item => item.total === -120)).toBe(true);
         expect((await records(page)).length).toBe(5); // synced receipts are retained.
@@ -195,7 +195,7 @@ test('Chromium: IndexedDBへの会計書込失敗ではカートを維持', asyn
         await login(page);
         await prepare(page);
         await context.setOffline(true);
-        await page.locator('.product-tile', { hasText: 'クロワッサン' }).locator('.add-one').click();
+        await page.locator('.product-tile', { hasText: '検証クロワッサン' }).locator('.add-one').click();
         await page.locator('#received-yen').fill('500');
         await page.evaluate(() => {
             const original = IDBDatabase.prototype.transaction;
