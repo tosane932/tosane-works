@@ -13,6 +13,7 @@ from flask import Flask
 from flask_migrate import Migrate, upgrade
 import pytest
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 
 from models import DailySales, Dataset, Product, RegisterPriceHistory, RegisterProduct, db
 from postgresql_test_utils import get_isolated_postgresql_test_url
@@ -40,13 +41,24 @@ def _snapshot(engine):
             "SELECT template_key, name, price_yen, image_key, is_active "
             "FROM register_products ORDER BY template_key"
         )).all()
+        # PostgreSQL may rewrite semantically identical CHECK text on restore.
+        # Compare every name/type and exact FK/UNIQUE/PK definitions, then probe
+        # CHECK, UNIQUE and FK rejection on the restored database below.
         constraints = connection.execute(text(
             "SELECT c.conrelid::regclass::text, c.conname, c.contype, "
-            "pg_get_constraintdef(c.oid) FROM pg_constraint c "
+            "CASE WHEN c.contype = 'c' THEN NULL ELSE pg_get_constraintdef(c.oid) END "
+            "FROM pg_constraint c "
             "JOIN pg_namespace n ON n.oid = c.connamespace "
             "WHERE n.nspname = 'public' ORDER BY 1, 2"
         )).all()
     return counts, revenue, revision, products, constraints
+
+
+def _rejects(engine, sql, code):
+    with engine.connect() as connection:
+        with pytest.raises(IntegrityError) as failure:
+            connection.execute(text(sql))
+        assert failure.value.orig.pgcode == code
 
 
 def test_real_schema_dump_and_isolated_restore_preserve_rows_and_constraints():
@@ -120,6 +132,16 @@ def test_real_schema_dump_and_isolated_restore_preserve_rows_and_constraints():
                             "--dbname", restore_name, str(archive)],
                            env=client_env, check=True, capture_output=True)
         assert _snapshot(restored) == before
+        _rejects(restored, "INSERT INTO register_products "
+                 "(dataset_id, template_key, name, price_yen, is_active, display_order) "
+                 "SELECT dataset_id, 'illegal_price', 'bad', 501, true, 0 "
+                 "FROM datasets WHERE system_key = 'admin'", "23514")
+        _rejects(restored, "INSERT INTO register_products "
+                 "(dataset_id, template_key, name, price_yen, is_active, display_order) "
+                 "SELECT dataset_id, template_key, name, price_yen, is_active, display_order "
+                 "FROM register_products LIMIT 1", "23505")
+        _rejects(restored, "INSERT INTO daily_sales (product_id, date, quantity) "
+                 "VALUES (-123, '2026-10-18', 1)", "23503")
     finally:
         for engine in engines:
             engine.dispose()
