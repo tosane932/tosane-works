@@ -37,9 +37,10 @@ def test_next_day_sync_keeps_original_day_and_price(flask_app, admin_dataset, mo
     original = original_for(product, proof, day, when=recorded)
     update_register_product(admin_dataset, product.id, name="パン", price_yen=140,
                             expected_name="パン", expected_price_yen=120)
+    next_server_time = grant.issued_at.replace(tzinfo=datetime.timezone.utc) + datetime.timedelta(days=1)
+    assert next_server_time.astimezone(ZoneInfo("Asia/Tokyo")).date() == day + datetime.timedelta(days=1)
     monkeypatch.setattr("register_offline_service.utc_now",
-                        lambda: datetime.datetime.combine(day + datetime.timedelta(days=1),
-                            datetime.time(8), tzinfo=ZoneInfo("Asia/Tokyo")).astimezone(datetime.timezone.utc))
+                        lambda: next_server_time)
     saved = save_offline_transaction(admin_dataset, original, token)
     assert saved.business_date == day and saved.save_method == "offline"
     assert saved.total_yen == 240 and saved.offline_permit_id == grant.id
