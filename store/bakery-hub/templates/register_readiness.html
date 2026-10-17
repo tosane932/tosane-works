@@ -1,6 +1,6 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>レジ切替前の監査 | Bakery Hub</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='production_prep.css') }}"></head>
 <body class="app-shell-page prep-page">{% include '_app_navigation.html' %}<main class="prep-shell">
-<header class="prep-header"><h1>レジ切替前の監査</h1><p>この画面は調査だけを行います。切替日は保存・確定されません。端末内の未同期会計はサーバーから数えられません。</p></header>
+<header class="prep-header"><h1>レジ切替前の監査</h1><p>予定日の検証は読取のみです。{% if config.REGISTER_V3_CUTOVER_ENABLED and config.REGISTER_V3_RECOVERY_ENABLED %}下の確定操作では切替日を保存します。全端末とバックアップを確認してから承認してください。{% else %}切替日は保存・確定されません。{% endif %}端末内の未同期会計はサーバーから数えられません。</p></header>
 <form method="get" action="{{ url_for('.audit') }}" class="prep-panel"><label>切替予定日（日本時間の営業日） <input type="date" name="date" value="{{ requested_date }}" required></label><button type="submit" class="prep-primary">予定日を検証</button></form>
 <section class="prep-panel"><h2>判定：{{ {'blocked':'切替不可','review':'確認が必要','ready':'DB上の切替条件を満たす'}[audit.status] }}</h2>
 {% for reason in audit.blockers %}<p role="alert">切替不可：{{ reason }}</p>{% endfor %}{% for reason in audit.reviews %}<p>要確認：{{ reason }}</p>{% endfor %}
