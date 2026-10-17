@@ -225,3 +225,22 @@ test('Chromium: IndexedDBへの会計書込失敗ではカートを維持', asyn
         expect(await records(page)).toHaveLength(0);
     } finally { await context.close(); }
 });
+
+test('Chromium: Adminログアウト後はキャッシュ済みシェルからPINで会計を再開できない', async ({ browser }) => {
+    const context = await browser.newContext();
+    try {
+        const page = await context.newPage();
+        await login(page);
+        await prepare(page);
+        await page.goto(`${base}/register/preview`);
+        await page.locator('#app-logout-form').evaluate(form => form.requestSubmit());
+        await expect(page).toHaveURL(/\/login/);
+        await context.setOffline(true);
+        await page.goto(`${base}/register/offline`, { waitUntil: 'domcontentloaded' });
+        await page.locator('#offline-pin').fill('e2e-pin-not-a-secret');
+        await page.locator('#offline-unlock button').click();
+        await expect(page.locator('#offline-unlock-state')).toContainText('ログアウト後');
+        await expect(page.locator('#product-grid .product-tile')).toHaveCount(0);
+        expect(await records(page)).toHaveLength(0);
+    } finally { await context.close(); }
+});
