@@ -37,7 +37,7 @@ test('PIN暗号化の商品版と許可をIndexedDBから再起動後に復元�
         TextEncoder, TextDecoder, Uint8Array, atob, btoa, Error, JSON,
         RegisterOfflineStore: null };
     vm.runInNewContext(source('register_offline_store.js'), globals);
-    const catalog = { dataset_id: 'admin', products: [{ id: 1, name: 'パン', price: 120 }],
+    const catalog = { dataset_id: 'admin', products: [{ id: 1, name: 'パン', price: 120, image: 'data:image/webp;base64,' + 'A'.repeat(600000) }],
         token: 'signed-permit', business_date: '2026-10-16' };
     await globals.RegisterOfflineStore.save(catalog, 'secure-pin-123');
     const ciphertext = memory.stores.get('offline').get('active');
@@ -146,7 +146,7 @@ test('PIN解除直後の通信復旧イベントを取り逃がさず、古い�
     const globals = { document: {
         getElementById: node, createElement: () => node(`node-${nodes.size}`),
         querySelector: () => node('csrf'), head: { append() {} },
-    }, RegisterOfflineStore: { load: async () => prepared }, RegisterCore: core,
+    }, RegisterOfflineStore: { load: async () => prepared }, RegisterCore: core, RegisterPager: { mount() {} },
     navigator: { onLine: true }, localStorage: { getItem: () => null },
     window: { addEventListener: (type, callback) => { listeners[type] = callback; },
               dispatchEvent() {} }, Date, Event, AbortController, setTimeout, clearTimeout,

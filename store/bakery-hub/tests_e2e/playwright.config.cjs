@@ -11,7 +11,7 @@ const port = 8765;
 module.exports = defineConfig({
     testDir: '.', testMatch: '**/*.spec.cjs', workers: 1, retries: 0,
     timeout: 180000, expect: { timeout: 10000 },
-    use: { baseURL: `http://127.0.0.1:${port}`, trace: 'retain-on-failure' },
+    use: { launchOptions: process.env.E2E_CHROMIUM_EXECUTABLE ? { executablePath: process.env.E2E_CHROMIUM_EXECUTABLE } : {}, baseURL: `http://127.0.0.1:${port}`, trace: 'retain-on-failure' },
     reporter: [['list']],
     webServer: {
         command: `${process.env.E2E_PYTHON || 'python'} tests_e2e/server.py`,

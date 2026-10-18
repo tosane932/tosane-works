@@ -13,6 +13,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from models import Dataset, Product, RegisterPriceHistory, RegisterProduct, db
 import product_images
 from register_images import register_image_choices
+from product_rules import BREAD_KINDS, PRODUCT_CLASSES, MAX_PRODUCT_PRICE_YEN
 
 
 GUEST_CUSTOM_PRODUCT_LIMIT = 30  # 旧月次Productの30件とは独立した枠。
@@ -26,7 +27,7 @@ class ProductSubmissionConflict(ValueError):
     pass
 
 
-def _submission(owner, request_key, operation, name, price, source_id=None):
+def _submission(owner, request_key, operation, name, price, source_id=None, metadata=None):
     """Datasetロック後に同じ送信の既存結果を返す。変更後もdigestは不変。"""
     if request_key is None:
         return None, None, None
@@ -34,8 +35,11 @@ def _submission(owner, request_key, operation, name, price, source_id=None):
         key = uuid.UUID(str(request_key))
     except (TypeError, ValueError, AttributeError):
         raise ValueError("送信キーが不正です。") from None
+    payload = [operation, source_id, name, price]
+    if metadata is not None:
+        payload.append(metadata)
     digest = hashlib.sha256(json.dumps(
-        [operation, source_id, name, price], ensure_ascii=False,
+        payload, ensure_ascii=False,
         separators=(",", ":"),
     ).encode("utf-8")).hexdigest()
     existing = RegisterProduct.query.filter_by(dataset_id=owner.id, creation_key=key).one_or_none()
@@ -73,13 +77,13 @@ def _price(value):
         result = value
     elif isinstance(value, str) and value.isascii() and value.isdigit():
         normalized = value.lstrip("0") or "0"
-        if len(normalized) > 3:
-            raise ValueError("価格は0〜500円です。")
+        if len(normalized) > 6:
+            raise ValueError("価格は0〜100,000円です。")
         result = int(normalized)
     else:
         raise ValueError("価格は整数で入力してください。")
-    if not 0 <= result <= 500:
-        raise ValueError("価格は0〜500円です。")
+    if not 0 <= result <= MAX_PRODUCT_PRICE_YEN:
+        raise ValueError("価格は0〜100,000円です。")
     return result
 
 
@@ -145,14 +149,15 @@ def ensure_standard_products(dataset):
         raise
 
 
-def _add_custom(owner, name, price, *, creation_key=None, creation_digest=None):
+def _add_custom(owner, name, price, *, creation_key=None, creation_digest=None, **attributes):
     if owner.kind == "guest":
         used = RegisterProduct.query.filter_by(dataset_id=owner.id, template_key=None).count()
         if used >= GUEST_CUSTOM_PRODUCT_LIMIT:
             raise CustomProductLimitReached("ゲストのレジ独自商品は30件までです。")
+    order = db.session.query(sa.func.max(RegisterProduct.display_order)).filter_by(dataset_id=owner.id).scalar()
     item = RegisterProduct(dataset_id=owner.id, template_key=None, name=name,
-                           price_yen=price, image_key=None, is_active=True,
-                           creation_key=creation_key, creation_digest=creation_digest)
+                           price_yen=price, is_active=True, display_order=0 if order is None else order + 1,
+                           creation_key=creation_key, creation_digest=creation_digest, **attributes)
     db.session.add(item)
     db.session.flush()
     if owner.kind == "admin":
@@ -162,17 +167,39 @@ def _add_custom(owner, name, price, *, creation_key=None, creation_digest=None):
     return item
 
 
-def create_custom_product(dataset, *, name, price_yen, request_key=None):
-    """名前・価格だけで独自商品を作成。旧月次商品の枠は消費しない。"""
+def _attributes(*, bread_kind, product_class, image_key, photo_webp, is_guest, validate_image_key=True):
+    if (type(bread_kind) is not str or type(product_class) is not str
+            or bread_kind not in BREAD_KINDS or product_class not in PRODUCT_CLASSES):
+        raise ValueError("パンの種類と商品分類を選択してください。")
+    if validate_image_key and image_key is not None and (type(image_key) is not str or image_key not in
+            register_image_choices(current_app.static_folder, is_guest=is_guest, include_urls=False)):
+        raise ValueError("利用できる承認済み画像を選択してください。")
+    if photo_webp is not None and (is_guest or type(photo_webp) is not bytes
+            or not 1 <= len(photo_webp) <= 512000 or image_key is not None):
+        raise ValueError("写真の指定が不正です。")
+    return dict(bread_kind=bread_kind, product_class=product_class,
+                image_key=image_key, photo_webp=photo_webp)
+
+
+def create_custom_product(dataset, *, name, price_yen, request_key=None,
+                          bread_kind="other", product_class="regular",
+                          image_key=None, photo_webp=None):
+    """共通商品を一度だけ登録する。写真は検証・再符号化済みのbytesだけを渡す。"""
     try:
         valid_name, valid_price = _name(name), _price(price_yen)
         owner = _lock_dataset(dataset)
-        key, digest, existing = _submission(owner, request_key, "create", valid_name, valid_price)
+        attrs = _attributes(bread_kind=bread_kind, product_class=product_class,
+                            image_key=image_key, photo_webp=photo_webp, is_guest=owner.kind == "guest")
+        metadata = None if (bread_kind, product_class, image_key, photo_webp) == (
+            "other", "regular", None, None) else [bread_kind, product_class, image_key,
+                hashlib.sha256(photo_webp).hexdigest() if photo_webp else None]
+        key, digest, existing = _submission(owner, request_key, "create", valid_name,
+                                             valid_price, metadata=metadata)
         if existing is not None:
             db.session.rollback()
             return existing
         return _add_custom(owner, valid_name, valid_price,
-                           creation_key=key, creation_digest=digest)
+                           creation_key=key, creation_digest=digest, **attrs)
     except Exception:
         db.session.rollback()
         raise
@@ -206,26 +233,46 @@ def copy_legacy_product(dataset, product_id, *, confirmed_name, confirmed_price_
 
 
 def update_register_product(dataset, product_id, *, name, price_yen,
-                            expected_name=None, expected_price_yen=None):
-    """将来の編集用。必ず所有Dataset内の1件だけを変更する。"""
+                            expected_name=None, expected_price_yen=None,
+                            expected_revision=None, bread_kind=None, product_class=None,
+                            image_key="__keep__", photo_webp=None, is_active=None):
+    """同一IDの将来情報だけを更新。版番号で画像・分類・状態を含む競合を防ぐ。"""
     try:
         if type(product_id) is not int or product_id <= 0:
-            raise ValueError("レジ商品IDが不正です。")
+            raise ValueError("商品IDが不正です。")
         valid_name, valid_price = _name(name), _price(price_yen)
         owner = _lock_dataset(dataset)
-        item = RegisterProduct.query.filter_by(id=product_id, dataset_id=owner.id).one_or_none()
+        item = (RegisterProduct.query.filter_by(id=product_id, dataset_id=owner.id)
+                .populate_existing().one_or_none())
         if item is None:
             raise PermissionError("このDatasetの商品ではありません。")
-        if expected_name is not None and expected_price_yen is not None:
-            # 同じフォームの再送は安全。別画面の編集と衝突したら上書きしない。
-            if (item.name, item.price_yen) != (expected_name, expected_price_yen) and (
-                    item.name, item.price_yen) != (valid_name, valid_price):
+        attrs = _attributes(bread_kind=bread_kind if bread_kind is not None else item.bread_kind,
+            product_class=product_class if product_class is not None else item.product_class,
+            image_key=item.image_key if image_key == "__keep__" and photo_webp is None else
+                      (None if photo_webp is not None else image_key),
+            photo_webp=photo_webp if photo_webp is not None else
+                      (item.photo_webp if image_key == "__keep__" else None),
+            is_guest=owner.kind == "guest", validate_image_key=image_key != "__keep__")
+        # 既存の承認画像が後で欠損しても、状態や価格の変更は可能にする。
+        if is_active is not None and type(is_active) is not bool:
+            raise ValueError("販売状態が不正です。")
+        desired = dict(attrs, name=valid_name, price_yen=valid_price,
+                       is_active=item.is_active if is_active is None else is_active)
+        same = all(getattr(item, key) == value for key, value in desired.items())
+        if expected_revision is not None:
+            if type(expected_revision) is not int or (item.revision != expected_revision and
+                    not (same and item.revision == expected_revision + 1)):
+                raise ProductSubmissionConflict("商品情報が変更されています。再読み込みしてください。")
+        elif expected_name is not None and expected_price_yen is not None:
+            if (item.name, item.price_yen) != (expected_name, expected_price_yen) and not same:
                 raise ProductSubmissionConflict("商品情報が変更されています。再読み込みしてください。")
         if owner.kind == "admin" and item.price_yen != valid_price:
-            db.session.add(RegisterPriceHistory(
-                dataset_id=owner.id, register_product_id=item.id, event="changed",
-                old_price_yen=item.price_yen, new_price_yen=valid_price))
-        item.name, item.price_yen = valid_name, valid_price
+            db.session.add(RegisterPriceHistory(dataset_id=owner.id, register_product_id=item.id,
+                event="changed", old_price_yen=item.price_yen, new_price_yen=valid_price))
+        if not same:
+            for key, value in desired.items():
+                setattr(item, key, value)
+            item.revision += 1
         db.session.commit()
         return item
     except Exception:
@@ -233,8 +280,24 @@ def update_register_product(dataset, product_id, *, name, price_yen,
         raise
 
 
+def set_product_active(dataset, product_id, *, is_active, expected_revision):
+    """ロック取得後の情報を保ち、状態だけを切り替える。"""
+    try:
+        owner = _lock_dataset(dataset)
+        item = (RegisterProduct.query.filter_by(id=product_id, dataset_id=owner.id)
+                .populate_existing().one_or_none())
+        if item is None:
+            raise PermissionError("このDatasetの商品ではありません。")
+        return update_register_product(owner, product_id, name=item.name, price_yen=item.price_yen,
+                                       is_active=is_active, expected_revision=expected_revision)
+    except Exception:
+        db.session.rollback()
+        raise
+
+
 def update_register_product_image(dataset, product_id, *, image_key,
-                                  expected_name, expected_price_yen, expected_image_key):
+                                  expected_name, expected_price_yen, expected_image_key,
+                                  expected_revision=None):
     """承認済み画像だけを選び、別画面の名前・価格・画像更新を上書きしない。"""
     try:
         if type(product_id) is not int or product_id <= 0:
@@ -242,17 +305,25 @@ def update_register_product_image(dataset, product_id, *, image_key,
         if image_key is not None and (type(image_key) is not str or len(image_key) > 100):
             raise ValueError("画像の指定が不正です。")
         owner = _lock_dataset(dataset)
-        product = RegisterProduct.query.filter_by(id=product_id, dataset_id=owner.id).one_or_none()
+        product = (RegisterProduct.query.filter_by(id=product_id, dataset_id=owner.id)
+                   .populate_existing().one_or_none())
         if product is None:
             raise PermissionError("このDatasetの商品ではありません。")
         if image_key is not None and image_key not in register_image_choices(
-                current_app.static_folder, is_guest=owner.kind == "guest"):
+                current_app.static_folder, is_guest=owner.kind == "guest", include_urls=False):
             raise ValueError("利用できる承認済み画像を選択してください。")
         if (product.name, product.price_yen) != (expected_name, expected_price_yen):
             raise ProductSubmissionConflict("商品情報が変更されています。再読み込みしてください。")
         if product.image_key != expected_image_key and product.image_key != image_key:
             raise ProductSubmissionConflict("画像が変更されています。再読み込みしてください。")
-        product.image_key = image_key
+        if expected_revision is not None and product.revision != expected_revision and not (
+                product.revision == expected_revision + 1 and product.image_key == image_key
+                and product.photo_webp is None):
+            raise ProductSubmissionConflict("商品情報が変更されています。再読み込みしてください。")
+        if product.image_key != image_key or product.photo_webp is not None:
+            product.image_key = image_key
+            product.photo_webp = None
+            product.revision += 1
         db.session.commit()
         return product
     except Exception:

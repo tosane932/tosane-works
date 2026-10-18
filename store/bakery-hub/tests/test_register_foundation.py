@@ -70,7 +70,7 @@ def rejected(row):
     db.session.rollback()
 
 
-@pytest.mark.parametrize("price", [501, -1, 0.5])
+@pytest.mark.parametrize("price", [100001, -1, 0.5])
 def test_product_price_rejects_out_of_range_or_fractional(flask_app, price):
     rejected(product(dataset(), price_yen=price))
 
@@ -151,7 +151,7 @@ def test_line_snapshot_price_cannot_exceed_new_register_limit(flask_app):
     item, sale = product(owner), transaction(owner)
     db.session.add_all([item, sale])
     db.session.commit()
-    rejected(line(sale, item, unit_price_yen=501, line_total_yen=501))
+    rejected(line(sale, item, unit_price_yen=100001, line_total_yen=100001))
     rejected(line(sale, item, unit_price_yen=-1, line_total_yen=-1))
 
 

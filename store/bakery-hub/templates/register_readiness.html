@@ -6,7 +6,7 @@
 {% for reason in audit.blockers %}<p role="alert">切替不可：{{ reason }}</p>{% endfor %}{% for reason in audit.reviews %}<p>要確認：{{ reason }}</p>{% endfor %}
 <p>端末の未同期件数は未確認です。DB上の判定が良好でも、全端末の会計キューを別途確認してください。</p>
 <ul><li>旧商品 {{ audit.counts.old_products }}件／旧日次売上 {{ audit.counts.old_sales }}行</li><li>旧売上の範囲 {{ audit.old_first_day or 'なし' }} ～ {{ audit.old_last_day or 'なし' }}（最終記録日 {{ audit.old_last_day or 'なし' }}）</li><li>レジ商品 {{ audit.counts.register_products }}件／確定会計 {{ audit.counts.transactions }}件／明細 {{ audit.counts.lines }}行</li><li>現在の切替日 {{ audit.cutover or '未設定' }}／検証予定日 {{ audit.planned_date or '未指定' }}</li><li>旧新の同日記録 {{ audit.overlap_days|length }}日／会計・明細の不整合 {{ audit.header_line_mismatch }}件</li></ul>
-{% if audit.expensive_old %}<h3>500円を超える旧商品</h3><ul>{% for item in audit.expensive_old %}<li>{{ item.name }}（旧商品ID {{ item.id }}）：{{ item.price }}円</li>{% endfor %}</ul>{% endif %}
+{% if audit.expensive_old %}<h3>100,000円を超える旧商品</h3><ul>{% for item in audit.expensive_old %}<li>{{ item.name }}（旧商品ID {{ item.id }}）：{{ item.price }}円</li>{% endfor %}</ul>{% endif %}
 {% if audit.duplicate_names %}<h3>同名の別レジ商品</h3><ul>{% for item in audit.duplicate_names %}<li>{{ item.name }}（レジ商品ID {{ item.ids|join('、') }}）</li>{% endfor %}</ul>{% endif %}
 {% if audit.inactive_register %}<h3>無効なレジ商品</h3><ul>{% for item in audit.inactive_register %}<li>{{ item.name }}（レジ商品ID {{ item.id }}）</li>{% endfor %}</ul>{% endif %}
 {% if audit.unmapped_old or audit.unmapped_custom %}<h3>レシピ対応が未設定の商品</h3><ul>{% for item in audit.unmapped_old %}<li>旧商品：{{ item.name }}（ID {{ item.id }}）</li>{% endfor %}{% for item in audit.unmapped_custom %}<li>独自レジ商品：{{ item.name }}（ID {{ item.id }}）</li>{% endfor %}</ul>{% endif %}
@@ -20,7 +20,7 @@
 <label>切替日 <input type="date" name="date" value="{{ audit.planned_date }}" required></label>
 <label>確認した端末と未同期件数 <textarea name="device_inventory" minlength="5" maxlength="1000" required></textarea></label>
 <label>承認理由・根拠 <textarea name="reason" minlength="5" maxlength="500" required></textarea></label>
-{% for code in audit.review_codes %}<label>{{ {'inactive_products':'無効なレジ商品','duplicate_names':'同名の別商品','expensive_old':'500円超の旧商品','recipe_mapping':'未設定のレシピ対応'}[code] }}を確認した結果と対応理由 <textarea name="review_{{ code }}" minlength="10" maxlength="500" required></textarea></label>{% endfor %}
+{% for code in audit.review_codes %}<label>{{ {'inactive_products':'無効なレジ商品','duplicate_names':'同名の別商品','expensive_old':'100,000円超の旧商品','recipe_mapping':'未設定のレシピ対応'}[code] }}を確認した結果と対応理由 <textarea name="review_{{ code }}" minlength="10" maxlength="500" required></textarea></label>{% endfor %}
 <label><input type="checkbox" name="devices_checked" value="yes" required> 全利用端末の未同期会計を照合した</label>
 <label><input type="checkbox" name="backup_checked" value="yes" required> 本番バックアップと復元手順を確認した</label>
 <button type="submit" class="prep-primary" {% if audit.blockers %}disabled{% endif %}>この営業日を確定する</button>

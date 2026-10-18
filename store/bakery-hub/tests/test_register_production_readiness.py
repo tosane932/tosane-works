@@ -46,7 +46,7 @@ def test_price_history_records_only_observed_period_and_is_atomic(flask_app, adm
         ("created", None, 200), ("changed", 200, 250)]
     assert db.session.get(RegisterProduct, item.id).price_yen == 250
     with pytest.raises(ValueError):
-        update_register_product(admin_dataset, item.id, name="破棄", price_yen=501)
+        update_register_product(admin_dataset, item.id, name="破棄", price_yen=100001)
     assert RegisterPriceHistory.query.filter_by(register_product_id=item.id).count() == 2
 
 
@@ -142,7 +142,8 @@ def test_production_flag_requires_admin_and_cutover_and_keeps_demo(flask_app,
     page = authenticated_client.get("/register/preview")
     assert page.status_code == 200
     assert "正式レジの会計" in page.get_data(as_text=True)
-    assert authenticated_client.get("/register/products").status_code == 200
+    assert authenticated_client.get("/register/products").status_code == 303
+    assert authenticated_client.get("/products").status_code == 200
     flask_app.config["REGISTER_V3_SAVE_ENABLED"] = False
     assert authenticated_client.get("/register/preview").status_code == 200
     assert authenticated_client.get("/api/register/transactions/00000000-0000-0000-0000-000000000001/status").status_code == 200

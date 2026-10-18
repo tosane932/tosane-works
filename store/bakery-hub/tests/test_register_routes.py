@@ -11,10 +11,14 @@ import pytest
 import app as app_module
 from models import DailySales, Dataset, Product, RegisterCutover, RegisterProduct, RegisterTransaction, db
 from register_service import TOKYO, utc_now
+from register_products import ensure_standard_products
 
 
 def enabled(flask_app, *, save=True):
     flask_app.config.update(REGISTER_V3_PREVIEW_ENABLED=True, REGISTER_V3_SAVE_ENABLED=save)
+    owner = Dataset.query.filter_by(kind="admin", system_key="admin").one_or_none()
+    if owner:
+        ensure_standard_products(owner)
 
 
 def guest(flask_app, *, expired=False):
@@ -76,16 +80,16 @@ def test_default_flags_reject_get_and_post(flask_app, authenticated_client, admi
 
 def test_preview_auth_and_eighteen_plus_custom_text_tiles(flask_app, authenticated_client, admin_dataset):
     enabled(flask_app, save=False)
-    db.session.add(RegisterProduct(dataset_id=admin_dataset.id,
-                                   name="独自パン", price_yen=123, image_key=None))
+    custom = RegisterProduct(dataset_id=admin_dataset.id, name="独自パン", price_yen=123, image_key=None)
+    db.session.add(custom)
     db.session.commit()
     response = preview(authenticated_client)
     token, config, page = token_and_product(response)
     assert response.status_code == 200 and token
     assert len(config["products"]) == 19
-    assert config["products"][-1]["name"] == "独自パン"
-    assert config["products"][-1]["image"] is None
-    assert all(row["image"].endswith(".webp") for row in config["products"][:-1])
+    assert next(row for row in config["products"] if row["id"] == custom.id)["name"] == "独自パン"
+    assert next(row for row in config["products"] if row["id"] == custom.id)["image"] is None
+    assert all(row["image"].endswith(".webp") for row in config["products"] if row["id"] != custom.id)
     assert page.select_one("#complete-checkout").has_attr("disabled")
     assert "本番の売上記録には使用できません" in response.get_data(as_text=True)
     assert preview(authenticated_client).status_code == 200

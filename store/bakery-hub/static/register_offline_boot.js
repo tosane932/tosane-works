@@ -21,7 +21,8 @@
         plus.dataset.action = "plus"; plus.setAttribute("aria-label", `${product.name}を1個追加`);
         const fallback = document.createElement("span");
         fallback.className = "no-image"; fallback.textContent = product.name;
-        if (product.image && /^\/static\/(register_images|product_images)\/[\w.-]+$/.test(product.image)) {
+        if (product.image && (/^\/static\/(register_images|product_images)\/[\w./-]+$/.test(product.image)
+                || (/^data:image\/webp;base64,[A-Za-z0-9+/=]+$/.test(product.image) && product.image.length <= 683000))) {
             const img = document.createElement("img");
             img.src = product.image; img.alt = ""; img.width = 160; img.height = 160;
             img.addEventListener("error", () => { img.hidden = true; fallback.hidden = false; });
@@ -109,6 +110,7 @@
             const products = prepared.products.filter(product => product.is_active !== false);
             globalThis.RegisterOfflineAuth = "checking";
             document.getElementById("product-grid").replaceChildren(...products.map(tile));
+            globalThis.RegisterPager?.mount(document.getElementById("product-grid"));
             document.getElementById("register-config").textContent = JSON.stringify({
                 products, scope: prepared.scope, deviceId: prepared.device_id,
                 saveEnabled: true, offlineMode: true,

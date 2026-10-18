@@ -1,3 +1,4 @@
+{% set unified_products = current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED and (config.TESTING or config.LOCAL_DEVELOPMENT or config.REGISTER_V3_PRODUCTION_ENABLED) %}
 {% set current_endpoint = request.endpoint or '' %}
 {% if current_endpoint == 'home' %}
     {% set active_app_page = 'home' %}
@@ -6,6 +7,8 @@
 {% elif current_endpoint == 'index' %}
     {% set active_app_page = 'products' %}
 {% elif current_endpoint == 'product_catalog' %}
+    {% set active_app_page = 'product-catalog' %}
+{% elif current_endpoint.startswith('register_products.') and unified_products %}
     {% set active_app_page = 'product-catalog' %}
 {% elif current_endpoint.startswith('register_products.') %}
     {% set active_app_page = 'register-products' %}
@@ -141,6 +144,7 @@
             <a href="{{ url_for('shop_schedules.list_schedules') }}" {% if active_app_page == 'schedule' %}aria-current="page"{% endif %}>スケジュール</a>
             <a href="{{ url_for('home') }}#next">次の予定</a>
         </div>
+{% if not unified_products %}
         <a
             href="{{ url_for('index') }}"
             data-page="products"
@@ -167,6 +171,7 @@
             </span>
             <span>商品・メニュー登録</span>
         </a>
+{% endif %}
         <a
             href="{{ url_for('product_catalog') }}"
             data-page="product-catalog"
@@ -180,7 +185,7 @@
             </span>
             <span>商品一覧</span>
         </a>
-        {% if config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED and (config.TESTING or config.LOCAL_DEVELOPMENT or register_nav_active) %}
+        {% if not unified_products and config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED and (config.TESTING or config.LOCAL_DEVELOPMENT or register_nav_active) %}
         <a href="{{ url_for('register_products.list_products') }}" data-page="register-products"
            class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-products' %} app-sidebar-link-current{% endif %}"
            {% if active_app_page == 'register-products' %}aria-current="page"{% endif %}>

@@ -10,26 +10,48 @@
 <body class="app-shell-page">
 {% include "_app_navigation.html" %}
 <main class="container register-product-page">
-  <a href="{{ url_for('register_products.list_products') }}">← レジ商品管理に戻る</a>
-  {% if mode == 'edit' %}
-  <h1>レジ商品を編集</h1>
-  <p>変更後の名前と価格は次に取得するレジ商品一覧へ反映されます。確定済み会計の明細は変わりません。</p>
+  <a href="{{ url_for('register_products.list_products') }}">← 商品一覧に戻る</a>
+  {% if mode in ['edit', 'new'] %}
+  <h1>{{ '商品を編集' if mode == 'edit' else '新しい商品を登録' }}</h1>
+  <p>商品写真と情報はレジにもそのまま表示されます。過去の会計明細は変わりません。</p>
+  {% if mode == 'edit' %}<p role="status">現在の状態：<strong>{{ '販売中' if product.is_active else '終売（保存済み）' }}</strong> · 商品ID {{ product.id }}</p>{% endif %}
   {% if write_enabled %}
-  <form method="post" class="register-product-form">
+  <form method="post" enctype="multipart/form-data" class="register-product-form" id="product-editor">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="signed_original" value="{{ signed_original }}">
-    <label>商品名 <input name="name" value="{{ product.name }}" maxlength="100" required></label>
-    <label>販売価格（0〜500円） <input name="price_yen" type="number" value="{{ product.price_yen }}" min="0" max="500" step="1" required inputmode="numeric"></label>
-    <button type="submit">変更を保存</button>
+    {% if mode == 'edit' %}<input type="hidden" name="signed_original" value="{{ signed_original }}">
+    {% else %}<input type="hidden" name="request_key" value="{{ request_key }}">{% endif %}
+    <fieldset><legend>1. 写真を選ぶ・撮影する</legend>
+    {% if photo_url %}<img id="product-photo-preview" class="product-photo-preview" src="{{ photo_url }}" alt="現在の商品写真">
+    {% else %}<img id="product-photo-preview" class="product-photo-preview" alt="選択した写真" hidden>{% endif %}
+    {% if can_upload %}<label>スマホの写真・新しい写真<input type="file" name="photo" accept="image/jpeg,image/png,image/webp"></label>
+    <label>カメラで撮影<input type="file" name="camera_photo" accept="image/jpeg" capture="environment"></label>
+    <p>JPEG・PNG・WebP、10MiB以下。WebPへ変換して商品と一緒に保存します。</p>{% endif %}
+    <label>承認済み画像から選ぶ<select name="image_key">
+    {% if mode == 'edit' %}<option value="__keep__">現在の写真をそのまま使う</option>{% endif %}
+    <option value="">写真なし（文字タイル）</option>
+    {% for key, choice in choices.items() %}<option value="{{ key }}" data-image-url="{{ choice.url }}">{{ choice.label }}</option>{% endfor %}
+    </select></label><p>新しい写真を選んだ場合は、アップロードした写真を優先します。</p></fieldset>
+    <label>2. 商品名 <input name="name" value="{{ product.name if product else '' }}" maxlength="100" required></label>
+    <label>3. 販売価格（0〜100,000円） <input name="price_yen" type="number" value="{{ product.price_yen if product else '' }}" min="0" max="{{ max_price }}" step="1" required inputmode="numeric"></label>
+    <label>4. パンの種類<select name="bread_kind">{% for key, label in bread_kinds.items() %}<option value="{{ key }}" {% if (product.bread_kind if product else 'other') == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>5. 商品分類<select name="product_class">{% for key, label in product_classes.items() %}<option value="{{ key }}" {% if (product.product_class if product else 'regular') == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <p>0円商品を含む合計0円の会計は保存できません。</p>
+    <button type="submit">登録内容を確認</button>
   </form>
+  <dialog id="product-confirm"><h2>この内容で保存しますか？</h2><p id="product-confirm-summary"></p>
+  <button type="button" id="product-confirm-back">入力に戻る</button><button type="button" id="product-confirm-save">商品一覧に保存</button></dialog>
+  <script src="{{ url_for('static', filename='product_form.js') }}" defer></script>
+  {% if mode == 'edit' and not product.is_active %}<form method="post" class="register-product-form" action="{{ url_for('register_products.status', product_id=product.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="signed_original" value="{{ signed_original }}"><input type="hidden" name="is_active" value="true">
+  <p>現在の販売価格：<strong>{{ product.price_yen }}円</strong>。価格を変更する場合は先に商品情報を保存してください。</p>
+  <label><input type="checkbox" required>現在の価格で販売を再開します</label><button type="submit">販売中に戻す</button></form>{% endif %}
   {% else %}<p>この環境では編集できません。</p>{% endif %}
-  <p><a href="{{ url_for('register_products.choose_image', product_id=product.id) }}">画像を選ぶ・画像なしにする</a></p>
   {% else %}
   <h1>旧商品をレジへコピー</h1>
   <dl><dt>登録月</dt><dd>{{ product.year }}年{{ product.month }}月</dd>
       <dt>商品名</dt><dd>{{ product.name }}</dd><dt>価格</dt><dd>{{ product.price }}円</dd></dl>
   <p>コピー後も旧商品と過去の売上はそのまま残ります。同名でも別商品として登録します。</p>
-  {% if not eligible %}<p role="status">販売終了または500円超の商品はコピーできません。</p>
+  {% if not eligible %}<p role="status">販売終了または100,000円超の商品はコピーできません。</p>
   {% elif not write_enabled %}<p>この環境ではコピーできません。</p>
   {% else %}
   <form method="post" class="register-product-form">
@@ -41,7 +63,7 @@
   </form>
   {% endif %}
   {% endif %}
-  <p class="register-product-note">新しい画像のアップロードはこの画面ではできません。</p>
+
 </main>
 </body>
 </html>

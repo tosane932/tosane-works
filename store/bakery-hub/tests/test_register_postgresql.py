@@ -17,7 +17,7 @@ from postgresql_test_utils import get_isolated_postgresql_test_url
 TEST_URL = get_isolated_postgresql_test_url()
 pytestmark = pytest.mark.skipif(not TEST_URL, reason="isolated PostgreSQL test DB is not configured")
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
-NEW_HEAD = "a3c9d7e5f102"
+NEW_HEAD = "b6d2e9f4a107"
 OLD_HEAD = "e2a7c4d9b105"
 TABLES = {"register_products", "register_cutovers", "register_transactions",
           "register_transaction_lines", "register_offline_permits"}
@@ -75,7 +75,7 @@ def test_postgresql_register_constraints_and_populated_downgrade(migrated_postgr
     guest_item = RegisterProduct(dataset_id=guest.id, template_key="bread", name="食パン", price_yen=500)
     db.session.add_all([item, guest_item])
     db.session.commit()
-    rejected(RegisterProduct(dataset_id=admin.id, name="高額", price_yen=501))
+    rejected(RegisterProduct(dataset_id=admin.id, name="高額", price_yen=100001))
     rejected(RegisterProduct(dataset_id=admin.id, name="別の商品", price_yen=100, template_key="bread"))
 
     sale = RegisterTransaction(dataset_id=admin.id, submission_key=uuid.uuid4(), request_digest="a" * 64,

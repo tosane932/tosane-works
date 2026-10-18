@@ -12,7 +12,7 @@ from models import RegisterCutover, RegisterOfflinePermit, RegisterProduct, Regi
 from register_catalog_proof import issue_catalog_proof
 from register_offline_service import (OfflineReviewRequired, prepare_offline,
                                       save_offline_transaction)
-from register_images import register_image_choices
+from register_images import register_image_choices, product_image_url
 from register_products import _standard_rows, ensure_standard_products
 from register_service import (BusinessDayChanged, GuestTransactionLimitReached,
                               PriceChanged, SubmissionConflict, RecoveryReviewRequired,
@@ -60,7 +60,8 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
         if not _production_cutover_ready(owner):
             abort(404)
         try:
-            ensure_standard_products(owner)
+            if owner.kind == "guest":
+                ensure_standard_products(owner)
             products = (RegisterProduct.query.filter_by(dataset_id=owner.id, is_active=True)
                         .order_by(RegisterProduct.display_order, RegisterProduct.id).all())
             image_urls = {key: choice["url"] for key, choice in
@@ -72,10 +73,9 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
         if owner.kind == "guest" and LOCAL_SCOPE_SESSION_KEY not in session:
             session[LOCAL_SCOPE_SESSION_KEY] = uuid.uuid4().hex
         rows = [{"id": product.id, "name": product.name, "price": product.price_yen,
-                 "image": image_urls.get(product.image_key),
+                 "image": product_image_url(product, {key: {"url": value} for key, value in image_urls.items()}),
                  "standard": product.template_key is not None}
                 for product in products]
-        rows.sort(key=lambda row: not row["standard"])
         save_enabled = bool(current_app.config["REGISTER_V3_SAVE_ENABLED"])
         offline_enabled = bool(owner.kind == "admin" and save_enabled and
                                current_app.config.get("REGISTER_V3_OFFLINE_MODE_ENABLED"))
@@ -130,7 +130,7 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
                            next_business_date=(grant.next_business_date.isoformat()
                                                if grant.next_business_date else None),
                            products=[dict(id=p.id, name=p.name, price=p.price_yen,
-                                          image=image_urls.get(p.image_key), image_key=p.image_key,
+                                          image=product_image_url(p, {key: {"url": value} for key, value in image_urls.items()}, embedded=True), image_key=p.image_key,
                                           is_active=p.is_active, standard=p.template_key is not None)
                                      for p in products])
         response.headers["Cache-Control"] = "no-store"
