@@ -11,6 +11,7 @@
     const names = new Map(products.map(item => [item.id, item.name]));
     const yen = value => `${new Intl.NumberFormat("ja-JP").format(value)}円`;
     const received = $("received-yen");
+    const cashPad = globalThis.RegisterCashPad?.mount(received);
     const completeButton = $("complete-checkout");
     const nextButton = $("demo-next");
     const resultMessage = $("demo-result");
@@ -22,6 +23,7 @@
     function error(text) { message.textContent = text; message.hidden = false; }
     function clearError() { message.textContent = ""; message.hidden = true; }
     function render() {
+        cashPad?.refresh(completed);
         const calculation = core.calculation(cart, received.value);
         for (const tile of $("product-grid").querySelectorAll(".product-tile")) {
             const quantity = cart.quantities.get(Number(tile.dataset.productId)) || 0;
@@ -56,7 +58,7 @@
         $("cash-area").hidden = calculation.kind === "refund" && calculation.lines.length > 0;
         $("change-yen").textContent = calculation.change === null ? "—" : yen(calculation.change);
         $("cash-hint").textContent = calculation.error && calculation.lines.length
-            ? calculation.error : "お預かり金額を入力してください";
+            ? calculation.error : "数字ボタンでお預かり金額を入力してください";
         $("cash-hint").classList.toggle("error", Boolean(calculation.error && calculation.lines.length));
         completeButton.disabled = completed || !calculation.valid;
     }

@@ -1,3 +1,4 @@
+const { enterCash, openTools } = require('./register_helpers.cjs');
 const { test, expect } = require('playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -29,26 +30,26 @@ async function drag(page, from, to) {
 test.afterEach(async ({ request }) => { await catalog(request, 0, true); });
 
 for (const [count, pages] of [[0,0],[8,1],[12,1],[13,2],[18,2],[24,2],[30,3],[50,5]]) {
-    test(`Chromium: ${count}商品のページ数と最大12商品・PC代替操作`, async ({ page, request }) => {
+    test(`Chromium: ${count}商品の12商品グループと連続スクロール・PC代替操作`, async ({ page, request }) => {
         await catalog(request, count);
         await login(page);
         await page.goto('/register/preview');
         await expect(page.locator('.product-tile')).toHaveCount(count);
         await expect(page.locator('.product-page')).toHaveCount(pages);
-        await expect(page.locator('#products-position')).toHaveText(pages ? `1 / ${pages}` : '0 / 0');
+        await expect(page.locator('#products-position')).toContainText(`/ ${count}商品`);
         const sizes = await page.locator('.product-page').evaluateAll(nodes => nodes.map(node => node.children.length));
         expect(sizes.every(n => n <= 12)).toBe(true);
         if (pages > 1) {
             await page.locator('.product-page').first().locator('.add-one').first().click();
-            await page.locator('#received-yen').fill('5000');
+            await enterCash(page, '5000');
             await page.locator('#products-next').click();
-            await expect(page.locator('#products-position')).toHaveText(`2 / ${pages}`);
+            await expect.poll(() => page.locator('#product-grid').evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
             await page.locator('.product-page').nth(1).locator('.add-one').first().click();
             await expect(page.locator('#total-yen')).toHaveText('2,000円');
             await expect(page.locator('#change-yen')).toHaveText('3,000円');
             await page.locator('#product-grid').focus();
             await page.keyboard.press('ArrowLeft');
-            await expect(page.locator('#products-position')).toHaveText(`1 / ${pages}`);
+            await expect(page.locator('#products-position')).toContainText(`/ ${count}商品`);
             await expect(page.locator('.product-page').first().locator('.quantity-input').first()).toHaveValue('1');
             await expect(page.locator('#received-yen')).toHaveValue('5000');
             await expect(page.locator('#total-yen')).toHaveText('2,000円');
@@ -69,10 +70,10 @@ for (const [device, viewport] of [['smartphone', {width:390,height:844}], ['tabl
         const first = await tile.boundingBox();
         const y = Math.max(60, Math.min(viewport.height - 90, first.y + first.height / 2));
         await drag(page, { x:box.x + box.width * .85,y }, {x:box.x + box.width * .15,y});
-        await expect(page.locator('#products-position')).toHaveText('2 / 3');
+        await expect.poll(() => grid.evaluate(node => node.scrollLeft)).toBeGreaterThan(30);
         await expect(page.locator('#total-yen')).toHaveText('0円');
         await drag(page, { x:box.x + box.width * .15,y }, {x:box.x + box.width * .85,y});
-        await expect(page.locator('#products-position')).toHaveText('1 / 3');
+        await expect(page.locator('#products-position')).toContainText('/ 30商品');
         await expect(page.locator('#total-yen')).toHaveText('0円');
         await tile.click();
         await expect(page.locator('#total-yen')).toHaveText('1,000円');
@@ -92,9 +93,9 @@ test('Chromium: 非保存デモでも横ページを使い、DB・IndexedDBへ�
     await expect(page.locator('.product-page')).toHaveCount(2);
     await page.locator('.add-one').first().click();
     await page.locator('#products-next').click();
-    await expect(page.locator('#products-position')).toHaveText('2 / 2');
+    await expect.poll(() => page.locator('#product-grid').evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
     await page.locator('.product-page').nth(1).locator('.add-one').first().click();
-    await page.locator('#received-yen').fill('10000');
+    await enterCash(page, '10000');
     const state = () => request.get('/__e2e/state', {headers:{'X-E2E-Control':auth().control}}).then(r => r.json());
     const before = await state();
     await page.locator('#complete-checkout').click();
@@ -132,6 +133,7 @@ test('Chromium: 写真中心の登録・終売と再開・暗号化商品版の�
     await page.getByRole('button',{name:'販売中に戻す',exact:true}).click();
     await expect(page.locator(`#${productId}`)).toContainText('販売中');
     await page.goto('/register/preview');
+    await openTools(page);
     await page.locator('#offline-setup-pin').fill('e2e-photo-offline-pin');
     await page.locator('#offline-setup button[type=submit]').click();
     await expect(page.locator('#offline-setup-state')).toContainText('端末を準備しました');
@@ -147,7 +149,7 @@ test('Chromium: 写真中心の登録・終売と再開・暗号化商品版の�
     await photoTile.locator('.add-one').click();
     await page.locator('#products-previous').click();
     await page.locator('.product-page').first().locator('.add-one').first().click();
-    await page.locator('#received-yen').fill('2000');
+    await enterCash(page, '2000');
     await expect(page.locator('#total-yen')).toHaveText('1,850円');
     await expect(page.locator('#change-yen')).toHaveText('150円');
     await page.locator('#complete-checkout').click();

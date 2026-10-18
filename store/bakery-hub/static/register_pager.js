@@ -1,4 +1,4 @@
-/* Native horizontal scroll + snap. The pager never reads or changes checkout state. */
+/* Continuous native horizontal scroll. Groups of 12 never own checkout state. */
 (function (root) {
     "use strict";
     const PAGE_SIZE = 12;
@@ -14,24 +14,28 @@
         const previous = document.getElementById("products-previous");
         const next = document.getElementById("products-next");
         const position = document.getElementById("products-position");
-        const dots = document.getElementById("products-dots");
-        let page = 0;
+        const progress = document.getElementById("products-progress");
         let pages = [];
+        let tiles = [];
         function display() {
-            page = Math.max(0, Math.min(page, pages.length - 1));
-            position.textContent = pages.length ? `${page + 1} / ${pages.length}` : "0 / 0";
-            dots.textContent = pages.map((_, index) => index === page ? "●" : "○").join(" ");
-            previous.disabled = page === 0;
-            next.disabled = page >= pages.length - 1;
-            pages.forEach((node, index) => { node.inert = index !== page; });
+            const viewport = container.getBoundingClientRect();
+            const visible = tiles.map((tile, index) => ({ index, box: tile.getBoundingClientRect() }))
+                .filter(({ box }) => box.right > viewport.left + 4 && box.left < viewport.right - 4);
+            position.textContent = visible.length ?
+                `${visible[0].index + 1}–${visible[visible.length - 1].index + 1} / ${tiles.length}商品` : `0 / ${tiles.length}商品`;
+            const max = Math.max(0, container.scrollWidth - container.clientWidth);
+            previous.disabled = container.scrollLeft <= 1;
+            next.disabled = container.scrollLeft >= max - 1;
+            progress.value = max ? Math.min(100, 100 * container.scrollLeft / max) : (tiles.length ? 100 : 0);
         }
         function refresh() {
-            const tiles = Array.from(container.querySelectorAll(".product-tile"));
+            const left = container.scrollLeft;
+            tiles = Array.from(container.querySelectorAll(".product-tile"));
             pages = group(tiles).map((items, index) => {
                 const node = document.createElement("div");
                 node.className = "product-page product-grid";
                 node.setAttribute("role", "group");
-                node.setAttribute("aria-label", `商品ページ ${index + 1}`);
+                node.setAttribute("aria-label", `商品グループ ${index + 1}`);
                 node.append(...items);
                 return node;
             });
@@ -43,25 +47,23 @@
                 empty.textContent = "販売中の商品はありません。商品一覧で登録・販売再開してください。";
                 container.append(empty);
             }
-            display();
-            container.scrollLeft = page * container.clientWidth;
-        }
-        function go(value) {
-            page = Math.max(0, Math.min(value, pages.length - 1));
-            container.scrollTo({ left: page * container.clientWidth, behavior: "auto" });
+            container.scrollLeft = left;
             display();
         }
-        previous.addEventListener("click", () => go(page - 1));
-        next.addEventListener("click", () => go(page + 1));
+        function move(direction, amount = container.clientWidth * 0.8) {
+            container.scrollBy({ left: direction * amount, behavior: "auto" });
+            display();
+        }
+        previous.addEventListener("click", () => move(-1));
+        next.addEventListener("click", () => move(1));
         container.addEventListener("keydown", event => {
             if (event.target.matches("input,select,textarea")) { return; }
             if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-                event.preventDefault(); go(page + (event.key === "ArrowLeft" ? -1 : 1));
+                event.preventDefault();
+                move(event.key === "ArrowLeft" ? -1 : 1, (tiles[0]?.getBoundingClientRect().width || 160) + 10);
             }
         });
-        container.addEventListener("scroll", () => {
-            if (container.clientWidth) { page = Math.round(container.scrollLeft / container.clientWidth); display(); }
-        }, { passive: true });
+        container.addEventListener("scroll", display, { passive: true });
         let origin;
         let moved = false;
         container.addEventListener("pointerdown", event => {
@@ -76,7 +78,7 @@
             if (moved && event.detail !== 0) { event.preventDefault(); event.stopImmediatePropagation(); }
         }, true);
         if (typeof ResizeObserver !== "undefined") {
-            new ResizeObserver(() => { container.scrollLeft = page * container.clientWidth; }).observe(container);
+            new ResizeObserver(display).observe(container);
         }
         mounted.set(container, { refresh });
         refresh();
