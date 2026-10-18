@@ -136,7 +136,7 @@
         <section class="operations-card operations-links" aria-labelledby="operations-links-heading">
             <h2 id="operations-links-heading">次の作業へ</h2>
             <a href="{{ url_for('material_orders.list_items') }}">店舗メモツールへ</a>
-            <a href="{{ url_for('index') }}">商品・メニュー登録へ</a>
+            <a href="{{ url_for('product_catalog') if current_user.is_admin and config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED else url_for('index') }}">{{ '商品一覧へ' if current_user.is_admin and config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED else '商品・メニュー登録へ' }}</a>
             <a href="{{ url_for('input_sales') }}">日次売上入力へ</a>
         </section>
     </div>

@@ -215,7 +215,7 @@ def test_cutover_review_decisions_are_required_and_recorded(flask_app, admin_dat
     proposed = datetime.datetime.now(ZoneInfo("Asia/Tokyo")).date()
     db.session.add_all([
         Product(dataset_id=admin_dataset.id, year=proposed.year, month=proposed.month,
-                name="旧高額品", price=510),
+                name="旧高額品", price=100010),
         RegisterProduct(dataset_id=admin_dataset.id, name="同名別ID", price_yen=120),
         RegisterProduct(dataset_id=admin_dataset.id, name="同名別ID", price_yen=150),
     ])

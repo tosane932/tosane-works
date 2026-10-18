@@ -19,7 +19,8 @@ def enable(app, *, write=True):
 def get(client, path="/register/products"):
     g.pop("_login_user", None)
     g.pop("csrf_token", None)
-    return client.get(path)
+    response = client.get(path)
+    return client.get(response.location) if response.status_code == 303 and response.location.endswith("/products") else response
 
 
 def form(response):
@@ -63,7 +64,7 @@ def test_flags_and_authentication(flask_app, authenticated_client, admin_dataset
     assert "この環境では商品を変更できません" in page.get_data(as_text=True)
     assert submit(authenticated_client, "/register/products/new",
                   {"request_key": str(uuid.uuid4()), "name": "不可", "price_yen": "100"}).status_code == 403
-    assert RegisterProduct.query.filter_by(dataset_id=admin_dataset.id).count() == 18
+    assert RegisterProduct.query.filter_by(dataset_id=admin_dataset.id).count() == 0
     token = form(get(authenticated_client)).select_one('input[name="csrf_token"]')["value"]
     flask_app.config.update(REGISTER_V3_PRODUCTS_PREVIEW_ENABLED=False,
                             REGISTER_V3_PRODUCTS_WRITE_ENABLED=True)
@@ -76,13 +77,14 @@ def test_flags_and_authentication(flask_app, authenticated_client, admin_dataset
 def test_create_validation_retry_and_register_reflection(flask_app, authenticated_client, admin_dataset):
     enable(flask_app)
     assert get(authenticated_client).status_code == 200
+    assert submit(authenticated_client, "/register/products/initial-candidates", {"confirmed": "yes"}).status_code == 303
     for name, price in [("独自0", "0"), ("独自500", "500")]:
         assert create(authenticated_client, name, price).status_code == 303
     key = str(uuid.uuid4())
     assert create(authenticated_client, " 新商品 ", "123", key=key).status_code == 303
     assert create(authenticated_client, "新商品", "123", key=key).status_code == 303
     assert create(authenticated_client, "別名", "123", key=key).status_code == 409
-    for name, price in [(" ", "100"), ("a" * 101, "100"), ("高額", "501"),
+    for name, price in [(" ", "100"), ("a" * 101, "100"), ("高額", "100001"),
                         ("負数", "-1"), ("小数", "2.5"), ("文字", "abc")]:
         assert create(authenticated_client, name, price).status_code == 400
     assert RegisterProduct.query.filter_by(dataset_id=admin_dataset.id).count() == 21
@@ -134,7 +136,7 @@ def test_explicit_legacy_copy_preserves_old_rows(flask_app, authenticated_client
     enable(flask_app)
     old = [Product(dataset_id=admin_dataset.id, year=2026, month=10, name="同名", price=price,
                    is_active=active, image_key="croissant") for price, active in
-           [(250, True), (270, True), (510, True), (200, False)]]
+           [(250, True), (270, True), (100001, True), (200, False)]]
     db.session.add_all(old)
     db.session.commit()
     db.session.add(DailySales(product_id=old[0].id, date=datetime.date(2026, 10, 15), quantity=2))

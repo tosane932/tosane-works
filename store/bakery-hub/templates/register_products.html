@@ -1,77 +1,42 @@
 <!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>レジ商品管理 | Bakery Hub</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='register_products.css') }}">
-</head>
-<body class="app-shell-page">
-{% include "_app_navigation.html" %}
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>商品一覧 | Bakery Hub</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='register_products.css') }}"></head>
+<body class="app-shell-page">{% include "_app_navigation.html" %}
 <main class="container register-product-page">
-  <h1>レジ商品管理</h1>
-  <p>開発中の画面です。標準商品は月ごとの登録なしで使えます。独自商品は名前と価格だけで追加できます。</p>
-  {% if not write_enabled %}<p role="status" class="register-product-note">この環境では商品を変更できません。</p>{% endif %}
-  {% set notices = {'created': '独自商品を追加しました。', 'updated': '商品を更新しました。', 'copied': '旧商品をレジ商品へコピーしました。', 'image': '画像の選択を保存しました。'} %}
-  {% if notice in notices %}<p role="status" class="register-product-note">{{ notices[notice] }}</p>{% endif %}
-
-  <section aria-labelledby="standard-heading">
-    <h2 id="standard-heading">標準商品（18種類）</h2>
-    <div class="register-product-grid">
-    {% for product in products if product.template_key is not none %}
-      <article class="register-product-card">
-        {% if product.image_key in image_urls %}
-        <img src="{{ image_urls[product.image_key] }}" alt="" loading="lazy">
-        {% else %}<span class="register-product-image-empty">画像なし</span>{% endif %}
-        <div><h3>{{ product.name }}</h3><p>{{ product.price_yen }}円</p>
-          <p>{{ 'レジで使用可能' if product.is_active else '販売停止中' }}</p>
-          <a href="{{ url_for('register_products.edit', product_id=product.id) }}">編集</a>
-          <a href="{{ url_for('register_products.choose_image', product_id=product.id) }}">画像を選ぶ</a>
-        </div>
-      </article>
-    {% endfor %}
-    </div>
-  </section>
-
-  <section aria-labelledby="custom-heading">
-    <h2 id="custom-heading">独自商品</h2>
-    {% if write_enabled %}
-    <form action="{{ url_for('register_products.create') }}" method="post" class="register-product-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="request_key" value="{{ request_key }}">
-      <label>商品名 <input name="name" maxlength="100" required autocomplete="off"></label>
-      <label>販売価格（0〜500円） <input name="price_yen" type="number" min="0" max="500" step="1" required inputmode="numeric"></label>
-      <button type="submit">独自商品を追加</button>
-    </form>
-    <p>0円の商品登録は可能です。0円会計の保存は現在できません。</p>
-    {% endif %}
-    <ul class="register-product-custom-list">
-    {% for product in products if product.template_key is none %}
-      <li>{% if product.image_key in image_urls %}<img class="register-custom-thumb" src="{{ image_urls[product.image_key] }}" alt="" loading="lazy" onerror="this.hidden=true">{% endif %}<strong>{{ product.name }}</strong>　{{ product.price_yen }}円
-        <span>{{ 'レジで使用可能' if product.is_active else '販売停止中' }}</span>
-        <span>{{ '画像なし・文字タイル' if not product.image_key else '画像設定あり' }}</span>
-        <a href="{{ url_for('register_products.edit', product_id=product.id) }}">編集</a>
-        <a href="{{ url_for('register_products.choose_image', product_id=product.id) }}">画像を選ぶ</a>
-      </li>
-    {% else %}<li>独自商品はまだありません。</li>{% endfor %}
-    </ul>
-  </section>
-
-  <section aria-labelledby="legacy-heading">
-    <h2 id="legacy-heading">旧月次商品からコピー</h2>
-    <p>旧商品は変更しません。商品名と価格を確認してから、別のレジ商品として作成します。</p>
-    <ul class="register-product-custom-list">
-    {% for product in legacy %}
-      <li>{{ product.year }}年{{ product.month }}月　<strong>{{ product.name }}</strong>　{{ product.price }}円
-        {% if not product.is_active %}<span>販売終了・コピー不可</span>
-        {% elif product.price > 500 %}<span>500円超・コピー不可</span>
-        {% else %}<a href="{{ url_for('register_products.copy', product_id=product.id) }}">内容を確認してコピー</a>{% endif %}
-      </li>
-    {% else %}<li>旧月次商品はありません。</li>{% endfor %}
-    </ul>
-  </section>
-  <p class="register-product-note">承認済みの画像を選択できます。新しい画像のアップロードはこの画面ではできません。</p>
-</main>
-</body>
-</html>
+<h1>商品一覧</h1>
+<p>写真・価格・分類・販売状態をここで管理します。登録した商品は翌年も同じIDで使えます。</p>
+{% if write_enabled %}<a class="product-primary-action" href="{{ url_for('register_products.create') }}">＋ 新しい商品を登録</a>
+{% else %}<p role="status" class="register-product-note">この環境では商品を変更できません。</p>{% endif %}
+{% set notices = {'created': '商品を登録しました。', 'updated': '商品を更新しました。', 'copied': '確認した旧商品を登録しました。', 'image': '写真の選択を保存しました。'} %}
+{% if notice in notices %}<p role="status" class="register-product-note">{{ notices[notice] }}</p>{% endif %}
+{% for active, heading in [(true, '販売中'), (false, '終売（保存済み）')] %}
+<section aria-labelledby="products-{{ loop.index }}"><h2 id="products-{{ loop.index }}">{{ heading }}</h2>
+{% if not active %}<p>写真・分類・価格・過去の履歴は残ります。価格を確認して、同じ商品を販売中に戻せます。</p>{% endif %}
+<div class="register-product-grid">
+{% for product in products if product.is_active == active %}
+<article class="register-product-card" id="product-{{ product.id }}">
+{% if product_urls[product.id] %}<img src="{{ product_urls[product.id] }}" alt="{{ product.name }}" loading="lazy">
+{% else %}<span class="register-product-image-empty">{{ product.name }}<br>写真なし・文字タイル</span>{% endif %}
+<h3>{{ product.name }}</h3><p><strong>{{ '{:,}'.format(product.price_yen) }}円</strong></p>
+<p>{{ bread_kinds[product.bread_kind] }} ／ {{ product_classes[product.product_class] }}</p>
+<p>{{ '販売中' if active else '終売' }} · 商品ID {{ product.id }}</p>
+<a class="product-card-action" href="{{ url_for('register_products.edit', product_id=product.id) }}">{{ '写真・商品情報を編集' if active else '価格を確認・販売中に戻す' }}</a>
+{% if write_enabled and active %}<form method="post" action="{{ url_for('register_products.status', product_id=product.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="signed_original" value="{{ status_tokens[product.id] }}"><input type="hidden" name="is_active" value="false">
+<button class="product-card-action" type="submit">終売にする（商品を保存）</button></form>{% endif %}
+</article>
+{% else %}<p>{{ '販売中の商品はまだありません。' if active else '終売の商品はありません。' }}</p>{% endfor %}
+</div></section>{% endfor %}
+<details class="product-legacy"><summary>初期候補18商品・旧月次商品の確認</summary>
+<p>初期候補は登録後、他の商品と同じように編集・終売できます。表示価格は候補価格です。実売価を確認してください。</p>
+{% if write_enabled %}<form method="post" action="{{ url_for('register_products.initial_candidates') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label><input type="checkbox" name="confirmed" value="yes" required>候補価格を登録後に確認します</label>
+<button class="product-card-action" type="submit">初期候補18商品を追加（既存商品は変更しません）</button></form>{% endif %}
+<h2>旧月次商品から確認して登録</h2><p>名前だけでは統合しません。選択した旧商品を新しいIDへコピーします。旧商品と旧売上は変更しません。</p>
+<ul class="register-product-custom-list">{% for product in legacy %}<li>{{ product.year }}年{{ product.month }}月 · ID {{ product.id }} · {{ product.name }} · {{ product.price }}円
+{% if not product.is_active or product.price > max_price %}<span>コピー不可</span>{% else %}<a href="{{ url_for('register_products.copy', product_id=product.id) }}">内容を確認してコピー</a>{% endif %}</li>{% else %}<li>旧月次商品はありません。</li>{% endfor %}</ul>
+{% if current_user.is_admin %}<p><a href="{{ url_for('index', legacy=1) }}">旧日次入力用の月次登録を確認</a></p>{% endif %}
+</details></main></body></html>

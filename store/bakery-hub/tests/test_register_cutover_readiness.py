@@ -40,7 +40,7 @@ def _audit(owner, day=None):
 
 def test_audit_and_planned_day_read_only(flask_app, authenticated_client, admin_dataset):
     flask_app.config["REGISTER_V3_READINESS_ENABLED"] = True
-    old = _old(admin_dataset, DAY - datetime.timedelta(days=1), 501)
+    old = _old(admin_dataset, DAY - datetime.timedelta(days=1), 100001)
     ensure_standard_products(admin_dataset)
     recipe = PrepRecipe(dataset_id=admin_dataset.id, product_key=f"product:{old.id}",
                         display_name="旧商品", base_quantity=10)

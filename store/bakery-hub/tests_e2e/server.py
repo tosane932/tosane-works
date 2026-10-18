@@ -33,6 +33,8 @@ app.secret_key = secrets.token_urlsafe(32)
 app.config.update(
     TESTING=True, SESSION_COOKIE_SECURE=False,
     ADMIN_USERNAME=username, ADMIN_PASSWORD_HASH=generate_password_hash(password),
+    REGISTER_V3_PRODUCTS_PREVIEW_ENABLED=True, REGISTER_V3_PRODUCTS_WRITE_ENABLED=True,
+    REGISTER_V3_PUBLIC_DEMO_ENABLED=True,
     REGISTER_V3_PRODUCTION_ENABLED=True, REGISTER_V3_PREVIEW_ENABLED=True,
     REGISTER_V3_SAVE_ENABLED=True, REGISTER_V3_AGGREGATION_ENABLED=True,
     REGISTER_V3_OFFLINE_MODE_ENABLED=True, REGISTER_V3_RECOVERY_ENABLED=True,
@@ -114,6 +116,30 @@ def e2e_reset_scenario():
         update_register_product(owner, product.id, name=product.name, price_yen=120,
                                 expected_name=product.name, expected_price_yen=product.price_yen)
     return jsonify(day=test_now().astimezone(ZoneInfo("Asia/Tokyo")).date().isoformat())
+
+
+@app.get("/__e2e/pager-catalog")
+def e2e_pager_catalog():
+    count = int(request.args.get("count", "0"))
+    if not 0 <= count <= 50:
+        abort(400)
+    owner = Dataset.query.filter_by(kind="admin", system_key="admin").one()
+    rows = RegisterProduct.query.filter_by(dataset_id=owner.id).all()
+    for item in rows:
+        item.is_active = False
+    for index in range(count):
+        name = f"ページ検証{index + 1:02}"
+        item = next((p for p in rows if p.name == name), None)
+        if item is None:
+            item = RegisterProduct(dataset_id=owner.id, name=name, price_yen=1000,
+                                   display_order=100 + index)
+            db.session.add(item)
+        item.is_active = True
+    if request.args.get("restore") == "1":
+        for item in rows:
+            item.is_active = item.name in {"検証クロワッサン", "検証食パン"}
+    db.session.commit()
+    return jsonify(count=count)
 
 
 if __name__ == "__main__":

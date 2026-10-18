@@ -5,7 +5,15 @@
     const decoder = new TextDecoder();
     const tag = encoder.encode("bakery-register-offline-v1");
     const bytes = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
-    const base64 = value => btoa(String.fromCharCode(...new Uint8Array(value)));
+    function base64(value) {
+        // A photo catalog can exceed the JS argument limit; encode bounded chunks.
+        const buffer = new Uint8Array(value);
+        const chunks = [];
+        for (let offset = 0; offset < buffer.length; offset += 8192) {
+            chunks.push(String.fromCharCode(...buffer.subarray(offset, offset + 8192)));
+        }
+        return btoa(chunks.join(""));
+    }
 
     function open() {
         return new Promise((resolve, reject) => {

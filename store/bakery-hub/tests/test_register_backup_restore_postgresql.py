@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from models import DailySales, Dataset, Product, RegisterPriceHistory, RegisterProduct, db
 from postgresql_test_utils import get_isolated_postgresql_test_url
-from register_products import ensure_standard_products
+from register_products import ensure_standard_products, update_register_product
 
 
 TEST_URL = get_isolated_postgresql_test_url()
@@ -38,7 +38,8 @@ def _snapshot(engine):
         )).scalar_one()
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
         products = connection.execute(text(
-            "SELECT template_key, name, price_yen, image_key, is_active "
+            "SELECT id, dataset_id, template_key, name, price_yen, image_key, is_active, "
+            "bread_kind, product_class, encode(photo_webp, 'hex'), revision "
             "FROM register_products ORDER BY template_key"
         )).all()
         # PostgreSQL may rewrite semantically identical CHECK text on restore.
@@ -51,7 +52,11 @@ def _snapshot(engine):
             "JOIN pg_namespace n ON n.oid = c.connamespace "
             "WHERE n.nspname = 'public' ORDER BY 1, 2"
         )).all()
-    return counts, revenue, revision, products, constraints
+        history = connection.execute(text(
+            "SELECT id, dataset_id, register_product_id, event, old_price_yen, new_price_yen, recorded_at "
+            "FROM register_price_history ORDER BY id"
+        )).all()
+    return counts, revenue, revision, products, constraints, history
 
 
 def _rejects(engine, sql, code):
@@ -103,6 +108,12 @@ def test_real_schema_dump_and_isolated_restore_preserve_rows_and_constraints():
             assert RegisterProduct.query.filter_by(dataset_id=owner.id).count() == 18
             assert RegisterPriceHistory.query.filter_by(dataset_id=owner.id).count() == 18
             assert Product.query.count() == DailySales.query.count() == 1
+            item = RegisterProduct.query.filter_by(dataset_id=owner.id, template_key="croissant").one()
+            photo = (MIGRATIONS_DIR.parent / "static/register_images/croissant.webp").read_bytes()
+            update_register_product(owner, item.id, name=item.name, price_yen=850,
+                expected_revision=0, bread_kind="loaf", product_class="seasonal",
+                photo_webp=photo, is_active=False)
+            assert RegisterPriceHistory.query.filter_by(dataset_id=owner.id).count() == 19
             db.session.remove()
             db.engine.dispose()
 
@@ -113,6 +124,9 @@ def test_real_schema_dump_and_isolated_restore_preserve_rows_and_constraints():
         assert before[0]["register_products"] == 18
         assert before[0]["daily_sales"] == 1
         assert before[1] == 840
+        assert before[0]["register_price_history"] == 19
+        assert any(row[4:] == (850, None, False, "loaf", "seasonal", photo.hex(), 1)
+                   for row in before[3])
 
         client_env = dict(os.environ)
         client_env.update(PGHOST=base_url.host, PGPORT=str(base_url.port or 5432),
@@ -134,7 +148,7 @@ def test_real_schema_dump_and_isolated_restore_preserve_rows_and_constraints():
         assert _snapshot(restored) == before
         _rejects(restored, "INSERT INTO register_products "
                  "(dataset_id, template_key, name, price_yen, is_active, display_order) "
-                 "SELECT id, 'illegal_price', 'bad', 501, true, 0 "
+                 "SELECT id, 'illegal_price', 'bad', 100001, true, 0 "
                  "FROM datasets WHERE system_key = 'admin'", "23514")
         _rejects(restored, "INSERT INTO register_products "
                  "(dataset_id, template_key, name, price_yen, is_active, display_order) "

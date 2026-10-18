@@ -236,7 +236,9 @@ def test_readonly_audit_snapshot_and_prep_link_composite_constraints(pg_app):
         with sales_read_snapshot() as snapshot:
             assert snapshot.execute(text("SHOW transaction_read_only")).scalar_one() == "on"
             result = audit_cutover(owner, planned_date=day, read_session=snapshot, today=day)
-            assert result["status"] == "blocked"
+            assert result["status"] == "review"
+            assert not result["blockers"]
+            assert "recipe_mapping" in result["review_codes"]
             assert result["missing_standard"]
             assert result["counts"]["register_products"] == 1
         ensure_standard_products(owner)

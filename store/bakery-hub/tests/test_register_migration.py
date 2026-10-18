@@ -16,7 +16,7 @@ from models import db
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 OLD_HEAD = "e2a7c4d9b105"
-NEW_HEAD = "a3c9d7e5f102"
+NEW_HEAD = "b6d2e9f4a107"
 TABLES = {"register_products", "register_cutovers", "register_transactions",
           "register_transaction_lines", "register_prep_links",
           "register_price_history", "register_cutover_approvals",
@@ -85,7 +85,7 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
 
     expected_columns = {
         "register_prep_links": {"dataset_id", "recipe_id", "register_product_id"},
-        "register_products": {"id", "dataset_id", "template_key", "name", "price_yen", "image_key", "is_active", "display_order", "created_at", "updated_at", "creation_key", "creation_digest"},
+        "register_products": {"id", "dataset_id", "template_key", "name", "price_yen", "image_key", "is_active", "display_order", "created_at", "updated_at", "creation_key", "creation_digest", "bread_kind", "product_class", "photo_webp", "revision"},
         "register_cutovers": {"dataset_id", "first_register_date"},
         "register_transactions": {"id", "dataset_id", "submission_key", "request_digest", "completed_at", "business_date", "kind", "total_yen", "received_yen", "change_yen", "save_method", "recovery_case_id", "recovery_evidence_digest", "client_completed_at", "offline_permit_id"},
         "register_transaction_lines": {"id", "transaction_id", "dataset_id", "register_product_id", "product_name_snapshot", "unit_price_yen", "quantity", "line_total_yen"},
@@ -94,7 +94,7 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
         columns = {col["name"]: col for col in inspector.get_columns(table)}
         assert set(columns) == names
         assert all(not col["nullable"] for name, col in columns.items()
-                   if name not in {"template_key", "image_key", "creation_key", "creation_digest", "received_yen", "change_yen", "recovery_case_id", "recovery_evidence_digest", "client_completed_at", "offline_permit_id"})
+                   if name not in {"template_key", "image_key", "creation_key", "creation_digest", "photo_webp", "received_yen", "change_yen", "recovery_case_id", "recovery_evidence_digest", "client_completed_at", "offline_permit_id"})
 
     expected_fk = {
         "register_prep_links": {

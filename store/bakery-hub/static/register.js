@@ -207,7 +207,7 @@
 
     function render() {
         const result = core.calculation(cart, receivedInput.value);
-        for (const tile of $("product-grid").children) {
+        for (const tile of $("product-grid").querySelectorAll(".product-tile")) {
             const quantity = cart.quantities.get(Number(tile.dataset.productId)) || 0;
             tile.querySelector(".quantity-input").value = quantity;
             tile.classList.toggle("selected", quantity !== 0);

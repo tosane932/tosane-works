@@ -113,6 +113,7 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
     quantity.matches = selector => selector === '.quantity-input';
     quantity.closest = () => tile;
     elements['product-grid'].children.push(tile);
+    elements['product-grid'].querySelectorAll = selector => selector === '.product-tile' ? [tile] : [];
     const plus = { dataset: { action: 'plus' }, closest: selector =>
         selector === 'button[data-action]' ? plus : tile };
     const events = {};

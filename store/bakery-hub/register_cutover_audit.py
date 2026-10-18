@@ -1,6 +1,7 @@
 """認可済みDatasetの切替前監査。ここから切替行・売上を保存しない。"""
 
 import datetime
+from product_rules import MAX_PRODUCT_PRICE_YEN
 import re
 from zoneinfo import ZoneInfo
 
@@ -89,7 +90,7 @@ def audit_cutover(dataset, *, planned_date=None, read_session=None, today=None):
     unmapped_old = [{"id": item.id, "name": item.name} for item in old_products
                     if f"product:{item.id}" not in recipe_keys]
     expensive_old = [{"id": item.id, "name": item.name, "price": item.price}
-                     for item in old_products if item.price > 500]
+                     for item in old_products if item.price > MAX_PRODUCT_PRICE_YEN]
     unresolved = session.query(func.count(RegisterRecoveryCase.id)).filter(
         RegisterRecoveryCase.dataset_id == owner_id,
         RegisterRecoveryCase.status.notin_(("saved", "cancelled"))).scalar()
@@ -112,8 +113,6 @@ def audit_cutover(dataset, *, planned_date=None, read_session=None, today=None):
         blockers.append("既存の切替日と予定日が異なります。自動変更しません。")
     if planned_date and cutover is None and planned_date < today:
         blockers.append("過去の営業日は新しい切替予定日に指定できません。")
-    if standards_missing or standards_inactive:
-        blockers.append(f"標準18商品の不足{len(standards_missing)}件・無効{len(standards_inactive)}件を解消してください。")
     if inactive_register:
         reviews.append(f"無効なレジ商品{len(inactive_register)}件を確認してください。")
         review_codes.append("inactive_products")
@@ -123,7 +122,7 @@ def audit_cutover(dataset, *, planned_date=None, read_session=None, today=None):
     if not any(item.is_active and item.price_yen > 0 for item in products):
         blockers.append("販売可能な0円超の商品がありません。")
     if expensive_old:
-        reviews.append(f"旧商品のうち{len(expensive_old)}件は新レジの500円上限を超えます。")
+        reviews.append(f"旧商品のうち{len(expensive_old)}件は新レジの100,000円上限を超えます。")
         review_codes.append("expensive_old")
     if unmapped_old or unmapped_custom:
         reviews.append(f"レシピとの対応未設定：旧商品{len(unmapped_old)}件、独自商品{len(unmapped_custom)}件。")
