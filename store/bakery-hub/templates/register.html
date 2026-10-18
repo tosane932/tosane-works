@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ '' if offline_shell|default(false) else csrf_token() }}">
     <title>{{ 'レジ操作デモ' if demo|default(false) else 'レジ会計（開発プレビュー）' }} | Bakery Hub</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='register.css', v='cash-pad-2') }}">
-    <script src="{{ url_for('static', filename='register_core.js', v='cash-pad-2') }}" defer></script>
-    <script src="{{ url_for('static', filename='register_pager.js', v='cash-pad-2') }}" defer></script>
-    <script src="{{ url_for('static', filename='register_cash_pad.js', v='cash-pad-2') }}" defer></script>
-    {% if offline_shell|default(false) or offline_enabled|default(false) %}<script src="{{ url_for('static', filename='register_offline_store.js', v='cash-pad-2') }}" defer></script>{% endif %}
-    <script src="{{ url_for('static', filename='register_offline_boot.js' if offline_shell|default(false) else ('register_demo.js' if demo|default(false) else 'register.js'), v='cash-pad-2') }}" defer></script>
-    {% if offline_enabled|default(false) and not offline_shell|default(false) %}<script src="{{ url_for('static', filename='register_offline_setup.js', v='cash-pad-2') }}" defer></script>{% endif %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='register.css', v='product-tile-3') }}">
+    <script src="{{ url_for('static', filename='register_core.js', v='product-tile-3') }}" defer></script>
+    <script src="{{ url_for('static', filename='register_pager.js', v='product-tile-3') }}" defer></script>
+    <script src="{{ url_for('static', filename='register_cash_pad.js', v='product-tile-3') }}" defer></script>
+    {% if offline_shell|default(false) or offline_enabled|default(false) %}<script src="{{ url_for('static', filename='register_offline_store.js', v='product-tile-3') }}" defer></script>{% endif %}
+    <script src="{{ url_for('static', filename='register_offline_boot.js' if offline_shell|default(false) else ('register_demo.js' if demo|default(false) else 'register.js'), v='product-tile-3') }}" defer></script>
+    {% if offline_enabled|default(false) and not offline_shell|default(false) %}<script src="{{ url_for('static', filename='register_offline_setup.js', v='product-tile-3') }}" defer></script>{% endif %}
 </head>
 <body>
     <main class="register-shell" id="register-root">
@@ -31,23 +31,22 @@
         {% if offline_shell|default(false) %}<form id="offline-unlock" class="register-status-check"><h2>端末内レジを開く</h2><label>端末用PIN <input id="offline-pin" type="password" autocomplete="off" minlength="8" required></label><button type="submit">確認して開く</button><p id="offline-unlock-state" role="status"></p></form>{% endif %}
         <div class="register-layout">
             <section class="catalog" aria-labelledby="catalog-title">
-                <div class="section-heading"><h2 id="catalog-title">商品を選ぶ</h2><p>写真を押すと1個追加します</p></div>
+                <div class="section-heading"><h2 id="catalog-title">商品を選ぶ</h2><p>タイルを押すと1個追加します</p></div>
                 <p id="products-swipe-hint">左右にスクロールして商品を探せます。上下の操作で画面をスクロールできます。</p>
                 <div class="product-grid" id="product-grid" tabindex="0" aria-label="商品一覧（横スクロール）" aria-describedby="products-swipe-hint">
                     {% for product in products %}
                     <article class="product-tile" data-product-id="{{ product.id }}">
-                        <button type="button" class="remove-one" data-action="minus" aria-label="{{ product.name }}を1個減らす">−</button>
+                        <button type="button" class="remove-one" data-action="minus" aria-label="{{ product.name }}を1個減らす"><span aria-hidden="true">−</span></button>
                         <button type="button" class="add-one" data-action="plus" aria-label="{{ product.name }}を1個追加">
-                            {% if product.image %}<img src="{{ product.image }}" alt="" width="160" height="160" loading="lazy" decoding="async">
+                            {% if product.image %}<img src="{{ product.image }}" alt="" width="160" height="160" loading="lazy" decoding="async" draggable="false">
                             <span class="no-image" hidden>{{ product.name }}</span>
                             {% else %}<span class="no-image">{{ product.name }}</span>{% endif %}
                             <span class="product-label">{{ product.name }}</span>
-                            <strong class="product-price">{{ product.price }}円</strong>
+                            <strong class="product-price{{ ' product-price-long' if product.price >= 100000 else '' }}">{{ product.price }}円</strong>
                         </button>
-                        <label class="quantity-label">個数
+                        <label class="quantity-label"><span class="quantity-caption" aria-hidden="true">個数</span>
                             <input class="quantity-input" inputmode="numeric" type="number" min="-50" max="50" step="1" value="0" data-action="quantity" aria-label="{{ product.name }}の個数">
                         </label>
-                        <button type="button" class="increase-one" data-action="plus" aria-label="{{ product.name }}の個数を1個増やす">＋</button>
                     </article>
                     {% endfor %}
                 </div>

@@ -1,10 +1,10 @@
 /* Dedicated shell only. Never cache authenticated register HTML, cookies or API responses. */
-const VERSION = "register-offline-v2-cash-pad";
+const VERSION = "register-offline-v3-product-tile";
 const SHELL = "/register/offline";
 const ASSET_PATHS = [ "/static/register.css", "/static/register_core.js",
                 "/static/register.js", "/static/register_cash_pad.js", "/static/register_pager.js", "/static/register_offline_store.js",
                 "/static/register_offline_boot.js"];
-const ASSETS = ASSET_PATHS.map(path => `${path}?v=cash-pad-2`);
+const ASSETS = ASSET_PATHS.map(path => `${path}?v=product-tile-3`);
 
 self.addEventListener("install", event => {
     event.waitUntil((async () => {
