@@ -47,7 +47,7 @@ function harness() {
             if (type === 'error') { this.fail = handler; }
         } };
     elements['product-grid'].children = [tile];
-    elements['product-grid'].querySelectorAll = selector => selector === 'img' ? [image] : [];
+    elements['product-grid'].querySelectorAll = selector => selector === 'img' ? [image] : (selector === '.product-tile' ? [tile] : []);
     elements['register-back'].href = '/home';
     const document = { getElementById: id => elements[id], createElement: element };
     let calls = 0;

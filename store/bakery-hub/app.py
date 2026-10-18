@@ -159,6 +159,8 @@ def allow_catalog_image_request_size():
     """CSRFがmultipartを読む前に、このPOSTだけ画像とformの容量を確保する。"""
     if request.endpoint == "submit_product_catalog" and request.method == "POST":
         request.max_content_length = MAX_UPLOAD_IMAGE_BYTES + 16 * 1024
+    elif request.endpoint in ("register_products.create", "register_products.edit") and request.method == "POST":
+        request.max_content_length = MAX_UPLOAD_IMAGE_BYTES + 32 * 1024
     elif request.endpoint in ("register.create_transaction", "register_recovery.preserve",
                               "register.offline_sync"):
         request.max_content_length = REGISTER_BODY_LIMIT + (4096 if request.endpoint == "register.offline_sync" else 0)
@@ -1511,6 +1513,10 @@ def record_home_weather():
 @app.route("/", methods=["GET", "POST"])
 @admin_or_guest_required
 def index():
+    from register_product_routes import _preview_enabled
+    if (current_user.is_admin and _preview_enabled() and request.method == "GET"
+            and request.args.get("legacy") != "1"):
+        return redirect(url_for("product_catalog"), code=303)
     try:
         current_dataset = require_current_dataset()
     except InternalServerError:
@@ -1900,6 +1906,9 @@ def submit_product_catalog():
 def product_catalog():
     """今月の登録商品と、過去月の最新履歴をDataset内で表示する。"""
     current_dataset = require_current_dataset()
+    from register_product_routes import _preview_enabled, render_product_list
+    if current_user.is_admin and _preview_enabled():
+        return render_product_list(current_dataset)
     today = business_today()
     products = (
         Product.query

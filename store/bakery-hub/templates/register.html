@@ -7,6 +7,7 @@
     <title>{{ 'レジ操作デモ' if demo|default(false) else 'レジ会計（開発プレビュー）' }} | Bakery Hub</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='register.css') }}">
     <script src="{{ url_for('static', filename='register_core.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='register_pager.js') }}" defer></script>
     {% if offline_shell|default(false) or offline_enabled|default(false) %}<script src="{{ url_for('static', filename='register_offline_store.js') }}" defer></script>{% endif %}
     <script src="{{ url_for('static', filename='register_offline_boot.js' if offline_shell|default(false) else ('register_demo.js' if demo|default(false) else 'register.js')) }}" defer></script>
     {% if offline_enabled|default(false) and not offline_shell|default(false) %}<script src="{{ url_for('static', filename='register_offline_setup.js') }}" defer></script>{% endif %}
@@ -32,7 +33,8 @@
         <div class="register-layout">
             <section class="catalog" aria-labelledby="catalog-title">
                 <div class="section-heading"><h2 id="catalog-title">商品を選ぶ</h2><p>写真を押すと1個追加します</p></div>
-                <div class="product-grid" id="product-grid">
+                <p id="products-swipe-hint">左右にスワイプして次の商品へ（1ページ最大12商品）。上下の操作でページをスクロールできます。</p>
+                <div class="product-grid" id="product-grid" tabindex="0" aria-label="商品ページ" aria-describedby="products-swipe-hint">
                     {% for product in products %}
                     <article class="product-tile" data-product-id="{{ product.id }}">
                         <button type="button" class="remove-one" data-action="minus" aria-label="{{ product.name }}を1個減らす">−</button>
@@ -49,6 +51,9 @@
                     </article>
                     {% endfor %}
                 </div>
+                <div class="product-page-controls"><button type="button" id="products-previous" aria-controls="product-grid">← 前へ</button>
+                <div class="product-page-status"><p id="products-dots" aria-hidden="true"></p><p id="products-position" role="status" aria-live="polite"></p></div>
+                <button type="button" id="products-next" aria-controls="product-grid">次へ →</button></div>
             </section>
             <section class="checkout" aria-labelledby="checkout-title">
                 <div class="section-heading"><h2 id="checkout-title">今回の会計</h2><p id="checkout-kind">商品を選択してください</p></div>

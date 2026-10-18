@@ -2,7 +2,7 @@
 const VERSION = "register-offline-v1";
 const SHELL = "/register/offline";
 const ASSETS = [SHELL, "/static/register.css", "/static/register_core.js",
-                "/static/register.js", "/static/register_offline_store.js",
+                "/static/register.js", "/static/register_pager.js", "/static/register_offline_store.js",
                 "/static/register_offline_boot.js"];
 
 self.addEventListener("install", event => {

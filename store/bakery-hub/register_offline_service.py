@@ -50,7 +50,7 @@ def prepare_offline(dataset, device_id, *, next_day=False):
         if cutover is None or day < cutover.first_register_date:
             raise OfflineReviewRequired("切替日より前は端末を準備できません。")
         products = RegisterProduct.query.filter_by(
-            dataset_id=owner.id, is_active=True).order_by(RegisterProduct.id).all()
+            dataset_id=owner.id, is_active=True).order_by(RegisterProduct.display_order, RegisterProduct.id).all()
         if not products:
             raise OfflineReviewRequired("販売可能な商品がありません。")
         proof = issue_catalog_proof(owner, products)

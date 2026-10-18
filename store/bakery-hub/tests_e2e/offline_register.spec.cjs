@@ -90,7 +90,7 @@ async function refund(page) {
 
 test('Chromium: 通信断の連続会計、再読み込み、プロファイル再起動、翌日と価格改定後の同期', async ({ request }) => {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'bakery-register-profile-'));
-    let context = await chromium.launchPersistentContext(profile, { headless: true });
+    let context = await chromium.launchPersistentContext(profile, { headless: true, ...(process.env.E2E_CHROMIUM_EXECUTABLE ? { executablePath: process.env.E2E_CHROMIUM_EXECUTABLE } : {}) });
     try {
         let page = context.pages()[0] || await context.newPage();
         await login(page);
@@ -108,7 +108,7 @@ test('Chromium: 通信断の連続会計、再読み込み、プロファイル�
         expect(prior).toHaveLength(4);
         await context.close();
 
-        context = await chromium.launchPersistentContext(profile, { headless: true, offline: true });
+        context = await chromium.launchPersistentContext(profile, { headless: true, offline: true, ...(process.env.E2E_CHROMIUM_EXECUTABLE ? { executablePath: process.env.E2E_CHROMIUM_EXECUTABLE } : {}) });
         page = context.pages()[0] || await context.newPage();
         await page.goto(`${base}/register/offline`, { waitUntil: 'domcontentloaded' });
         await unlock(page);

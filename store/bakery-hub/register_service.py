@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from models import (DailySales, Product, RegisterCutover, RegisterProduct, RegisterRecoveryCase,
                     RegisterTransaction, RegisterTransactionLine, db)
 from register_products import _lock_dataset
+from product_rules import MAX_PRODUCT_PRICE_YEN
 
 
 TOKYO = ZoneInfo("Asia/Tokyo")
@@ -147,7 +148,7 @@ def _expected_prices(value, lines):
         if not isinstance(entry, (list, tuple)) or len(entry) != 2:
             raise ValueError("表示した商品単価が不正です。")
         product_id = _integer(entry[0], "商品ID", maximum=2_147_483_647)
-        price = _integer(entry[1], "表示単価", maximum=500)
+        price = _integer(entry[1], "表示単価", maximum=MAX_PRODUCT_PRICE_YEN)
         if product_id in expected:
             raise ValueError("表示単価に商品IDの重複があります。")
         expected[product_id] = price

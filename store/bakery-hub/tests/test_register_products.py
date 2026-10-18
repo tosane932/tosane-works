@@ -80,7 +80,7 @@ def test_invalid_template_fails_atomically(flask_app, monkeypatch):
     dataset = owner()
     changed = dict(product_images.PRODUCT_IMAGE_OPTIONS)
     last_key = list(changed)[-1]
-    changed[last_key] = dict(changed[last_key], default_price=501)
+    changed[last_key] = dict(changed[last_key], default_price=100001)
     monkeypatch.setattr(product_images, "PRODUCT_IMAGE_OPTIONS", changed)
     with pytest.raises(ValueError):
         ensure_standard_products(dataset)
@@ -103,7 +103,7 @@ def test_seed_rolls_back_every_insert_if_commit_fails(flask_app, monkeypatch):
 
 @pytest.mark.parametrize("name,price", [
     (" ", 200), ("a" * 101, 200), (None, 200), ("パン", -1),
-    ("パン", 501), ("パン", 20.5), ("パン", "20.5"),
+    ("パン", 100001), ("パン", 20.5), ("パン", "20.5"),
     ("パン", "パン"), ("パン", True),
 ])
 def test_custom_validation_rejects_invalid_values(flask_app, name, price):
@@ -161,7 +161,7 @@ def test_legacy_copy_requires_confirmation_and_never_changes_old_data(flask_app)
     admin, guest = owner("admin"), owner()
     legacy = [Product(dataset_id=admin.id, year=2026, month=10, name="くるみパン",
                       price=price, image_key="croissant", is_active=active)
-              for price, active in ((260, True), (290, True), (510, True), (200, False))]
+              for price, active in ((260, True), (290, True), (100001, True), (200, False))]
     db.session.add_all(legacy)
     db.session.commit()
     sale = DailySales(product_id=legacy[0].id, date=datetime.date(2026, 10, 15), quantity=2)
@@ -177,7 +177,7 @@ def test_legacy_copy_requires_confirmation_and_never_changes_old_data(flask_app)
         assert copy.id != row.id or copy.__tablename__ != row.__tablename__
         assert (copy.name, copy.price_yen, copy.image_key) == ("くるみパン", row.price, None)
     with pytest.raises(ValueError):
-        copy_legacy_product(admin, legacy[2].id, confirmed_name="くるみパン", confirmed_price_yen=510)
+        copy_legacy_product(admin, legacy[2].id, confirmed_name="くるみパン", confirmed_price_yen=100001)
     with pytest.raises(ValueError):
         copy_legacy_product(admin, legacy[3].id, confirmed_name="くるみパン", confirmed_price_yen=200)
     with pytest.raises(ValueError):

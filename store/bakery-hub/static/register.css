@@ -102,3 +102,12 @@ dialog h2{font-size:1.2rem;margin:0 0 12px}
   .mobile-checkout-link{position:static;margin-top:14px}
   .register-shell{padding-bottom:24px}
 }
+/* The product area has no vertical scroll container or fixed height. */
+.product-pages{display:flex;gap:0;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;overscroll-behavior-y:auto;touch-action:auto;scrollbar-width:thin;min-width:0}
+.product-page{flex:0 0 100%;min-width:0;scroll-snap-align:start;scroll-snap-stop:always;align-content:start;padding:3px;grid-template-columns:repeat(3,minmax(0,1fr))}
+.product-page-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0}
+.product-page-controls button{min-width:88px;min-height:48px;padding:10px;border:1px solid #9f8e79;border-radius:8px;background:#fff;color:#493321}
+.product-page-status{text-align:center;overflow-wrap:anywhere}.product-page-status p{margin:4px}
+@media(min-width:851px) and (max-width:959px){.product-page{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:541px) and (max-width:850px){.product-page{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:540px){.product-page{grid-template-columns:minmax(0,1fr)}}

@@ -554,8 +554,12 @@ class RegisterProduct(db.Model):
         db.CheckConstraint("length(trim(name)) BETWEEN 1 AND 100", name="ck_register_products_name"),
         db.CheckConstraint("template_key IS NULL OR length(trim(template_key)) BETWEEN 1 AND 100", name="ck_register_products_template_key"),
         db.CheckConstraint("image_key IS NULL OR length(trim(image_key)) BETWEEN 1 AND 100", name="ck_register_products_image_key"),
-        db.CheckConstraint("price_yen BETWEEN 0 AND 500 AND price_yen = CAST(price_yen AS INTEGER)", name="ck_register_products_price"),
+        db.CheckConstraint("price_yen BETWEEN 0 AND 100000 AND price_yen = CAST(price_yen AS INTEGER)", name="ck_register_products_price"),
         db.CheckConstraint("is_active IN (true, false)", name="ck_register_products_active"),
+        db.CheckConstraint("bread_kind IN ('savory','sweet','loaf','hard','sandwich','fried','baked','other')", name="ck_register_products_bread_kind"),
+        db.CheckConstraint("product_class IN ('regular','seasonal','special')", name="ck_register_products_class"),
+        db.CheckConstraint("photo_webp IS NULL OR (length(photo_webp) BETWEEN 1 AND 512000 AND image_key IS NULL)", name="ck_register_products_photo"),
+        db.CheckConstraint("revision >= 0", name="ck_register_products_revision"),
         db.CheckConstraint("display_order >= 0 AND display_order = CAST(display_order AS INTEGER)", name="ck_register_products_display_order"),
         db.Index("ix_register_products_dataset_active_order", "dataset_id", "is_active", "display_order", "id"),
         db.Index("ux_register_products_dataset_creation_key", "dataset_id", "creation_key", unique=True),
@@ -567,6 +571,10 @@ class RegisterProduct(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price_yen = db.Column(db.Integer, nullable=False)
     image_key = db.Column(db.String(100), nullable=True)
+    bread_kind = db.Column(db.String(16), nullable=False, default="other", server_default="other")
+    product_class = db.Column(db.String(16), nullable=False, default="regular", server_default="regular")
+    photo_webp = db.Column(db.LargeBinary, nullable=True)
+    revision = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     creation_key = db.Column(db.Uuid(as_uuid=True), nullable=True)
     creation_digest = db.Column(db.String(64), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
@@ -583,9 +591,9 @@ class RegisterPriceHistory(db.Model):
                                 ["register_products.id", "register_products.dataset_id"],
                                 name="fk_register_price_history_product_dataset", ondelete="RESTRICT"),
         db.CheckConstraint("event IN ('created', 'changed')", name="ck_register_price_history_event"),
-        db.CheckConstraint("old_price_yen IS NULL OR old_price_yen BETWEEN 0 AND 500",
+        db.CheckConstraint("old_price_yen IS NULL OR old_price_yen BETWEEN 0 AND 100000",
                            name="ck_register_price_history_old_price"),
-        db.CheckConstraint("new_price_yen BETWEEN 0 AND 500", name="ck_register_price_history_new_price"),
+        db.CheckConstraint("new_price_yen BETWEEN 0 AND 100000", name="ck_register_price_history_new_price"),
         db.CheckConstraint("(event = 'created' AND old_price_yen IS NULL) OR "
                            "(event = 'changed' AND old_price_yen IS NOT NULL AND old_price_yen <> new_price_yen)",
                            name="ck_register_price_history_transition"),
@@ -730,7 +738,7 @@ class RegisterTransactionLine(db.Model):
         db.UniqueConstraint("transaction_id", "register_product_id", name="uq_register_lines_transaction_product"),
         db.CheckConstraint("length(trim(product_name_snapshot)) BETWEEN 1 AND 100", name="ck_register_lines_name"),
         db.CheckConstraint("quantity BETWEEN -50 AND 50 AND quantity <> 0 AND quantity = CAST(quantity AS INTEGER)", name="ck_register_lines_quantity"),
-        db.CheckConstraint("unit_price_yen BETWEEN 0 AND 500 AND unit_price_yen = CAST(unit_price_yen AS INTEGER)", name="ck_register_lines_unit_price"),
+        db.CheckConstraint("unit_price_yen BETWEEN 0 AND 100000 AND unit_price_yen = CAST(unit_price_yen AS INTEGER)", name="ck_register_lines_unit_price"),
         db.CheckConstraint("line_total_yen = unit_price_yen * quantity", name="ck_register_lines_total"),
         db.Index("ix_register_lines_dataset_product", "dataset_id", "register_product_id"),
     )
@@ -781,7 +789,7 @@ class RegisterRecoveryLine(db.Model):
                                 ["register_products.id", "register_products.dataset_id"], ondelete="RESTRICT"),
         db.UniqueConstraint("case_id", "register_product_id", name="uq_register_recovery_line_product"),
         db.CheckConstraint("quantity BETWEEN -50 AND 50 AND quantity <> 0", name="ck_register_recovery_line_qty"),
-        db.CheckConstraint("unit_price_yen BETWEEN 0 AND 500", name="ck_register_recovery_line_price"),
+        db.CheckConstraint("unit_price_yen BETWEEN 0 AND 100000", name="ck_register_recovery_line_price"),
         db.CheckConstraint("line_total_yen = quantity * unit_price_yen", name="ck_register_recovery_line_total"),
     )
     id = db.Column(db.Integer, primary_key=True)
