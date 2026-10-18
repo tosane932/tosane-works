@@ -7,7 +7,7 @@ from flask_migrate import downgrade, upgrade
 from PIL import Image
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from models import (Dataset, RegisterCutover, RegisterPriceHistory, RegisterProduct,
                     RegisterTransactionLine, db)
@@ -52,7 +52,8 @@ def test_upgrade_downgrade_and_preexisting_business_rows(pg_app):
             "FROM register_transaction_lines")).one() == (904,903,"販売時のパン",500,1,500)
         assert db.session.execute(text("SELECT total_yen FROM register_transactions")).scalar_one() == 500
         with pytest.raises(RuntimeError, match="populated"):
-            downgrade(directory=str(MIGRATIONS_DIR), revision=OLD)
+            # Inspect the migration guard before Flask-Migrate converts it to CLI SystemExit.
+            downgrade.__wrapped__(directory=str(MIGRATIONS_DIR), revision=OLD)
         assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW
         assert db.session.get(RegisterProduct, 903).name == "継続パン"
 
@@ -79,7 +80,7 @@ def test_large_price_photo_constraints_history_and_refund(pg_app):
         assert item.id == original_id and item.photo_webp == buf.getvalue()
         assert [line.unit_price_yen for line in RegisterTransactionLine.query.all()] == [100000,100000]
         assert [(r.old_price_yen,r.new_price_yen) for r in RegisterPriceHistory.query.order_by(RegisterPriceHistory.id)] == [(None,100000),(100000,850)]
-        with pytest.raises(IntegrityError):
+        with pytest.raises(DBAPIError, match="register audit is append only"):
             db.session.execute(text("UPDATE register_price_history SET new_price_yen=1"))
         db.session.rollback()
         for column, value in (("price_yen",100001),("bread_kind","unknown"),("product_class","unknown"),
