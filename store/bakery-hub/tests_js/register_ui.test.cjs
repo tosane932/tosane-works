@@ -174,7 +174,7 @@ test('未同期の元記録をサーバーへ保全しても端末記録と未�
     ui.touch();
     ui.elements['received-yen'].value = '500';
     ui.elements['received-yen'].fire('input');
-    ui.elements['complete-checkout'].fire('click');
+    await ui.elements['complete-checkout'].fire('click'); // 通信復旧前にローカル完了処理まで待つ。
     await until(() => ui.database.stores.get('queue').size === 1);
     const original = [...ui.database.stores.get('queue').values()][0].receipt;
     ui.navigator.onLine = true; // 自動送信イベントは起こさず、保全のみ明示操作。

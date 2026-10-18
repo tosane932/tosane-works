@@ -39,7 +39,12 @@
         input.type = "number"; input.inputMode = "numeric"; input.min = "-50"; input.max = "50";
         input.step = "1"; input.value = "0"; input.dataset.action = "quantity";
         input.setAttribute("aria-label", `${product.name}の個数`);
-        quantity.append(input); article.append(minus, plus, quantity);
+        quantity.append(input);
+        const increase = document.createElement("button");
+        increase.type = "button"; increase.className = "increase-one";
+        increase.dataset.action = "plus"; increase.setAttribute("aria-label", `${product.name}の個数を1個増やす`);
+        increase.textContent = "＋";
+        article.append(minus, plus, quantity, increase);
         return article;
     }
 
@@ -124,7 +129,7 @@
             document.getElementById("catalog-observation").textContent =
                 `◷ 保存済み商品情報（${prepared.issued_at}）を使用しています。`;
             state.textContent = "✓ 端末内レジを開きました。";
-            const script = document.createElement("script"); script.src = "/static/register.js";
+            const script = document.createElement("script"); script.src = "/static/register.js?v=cash-pad-2";
             window.addEventListener("online", revalidate);
             window.addEventListener("focus", revalidate);
             document.head.append(script);

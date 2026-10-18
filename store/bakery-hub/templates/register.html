@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ '' if offline_shell|default(false) else csrf_token() }}">
     <title>{{ 'レジ操作デモ' if demo|default(false) else 'レジ会計（開発プレビュー）' }} | Bakery Hub</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='register.css') }}">
-    <script src="{{ url_for('static', filename='register_core.js') }}" defer></script>
-    <script src="{{ url_for('static', filename='register_pager.js') }}" defer></script>
-    {% if offline_shell|default(false) or offline_enabled|default(false) %}<script src="{{ url_for('static', filename='register_offline_store.js') }}" defer></script>{% endif %}
-    <script src="{{ url_for('static', filename='register_offline_boot.js' if offline_shell|default(false) else ('register_demo.js' if demo|default(false) else 'register.js')) }}" defer></script>
-    {% if offline_enabled|default(false) and not offline_shell|default(false) %}<script src="{{ url_for('static', filename='register_offline_setup.js') }}" defer></script>{% endif %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='register.css', v='cash-pad-2') }}">
+    <script src="{{ url_for('static', filename='register_core.js', v='cash-pad-2') }}" defer></script>
+    <script src="{{ url_for('static', filename='register_pager.js', v='cash-pad-2') }}" defer></script>
+    <script src="{{ url_for('static', filename='register_cash_pad.js', v='cash-pad-2') }}" defer></script>
+    {% if offline_shell|default(false) or offline_enabled|default(false) %}<script src="{{ url_for('static', filename='register_offline_store.js', v='cash-pad-2') }}" defer></script>{% endif %}
+    <script src="{{ url_for('static', filename='register_offline_boot.js' if offline_shell|default(false) else ('register_demo.js' if demo|default(false) else 'register.js'), v='cash-pad-2') }}" defer></script>
+    {% if offline_enabled|default(false) and not offline_shell|default(false) %}<script src="{{ url_for('static', filename='register_offline_setup.js', v='cash-pad-2') }}" defer></script>{% endif %}
 </head>
 <body>
     <main class="register-shell" id="register-root">
@@ -24,17 +25,15 @@
         {% else %}
         <p class="preview-note" role="note">{% if production|default(false) %}正式レジの会計です。端末内に保存した会計はサーバーへの反映状況を確認してください。{% else %}開発中のレジです。本番の売上記録には使用できません。{% endif %}{% if not save_enabled and not offline_shell|default(false) %}会計保存は停止中です。{% endif %}</p>
         {% endif %}
-        {% if offline_shell|default(false) %}<form id="offline-unlock" class="register-status-check"><h2>端末内レジを開く</h2><label>端末用PIN <input id="offline-pin" type="password" autocomplete="off" minlength="8" required></label><button type="submit">確認して開く</button><p id="offline-unlock-state" role="status"></p></form>{% elif offline_enabled|default(false) %}<form id="offline-setup" class="register-status-check"><h2>この端末をオフライン利用に準備</h2><label>端末用PIN（8文字以上）<input id="offline-setup-pin" type="password" autocomplete="new-password" minlength="8" required></label><label><input id="offline-next-day" type="checkbox">翌営業日も事前承認する</label><button type="submit">商品と端末許可を保存</button><p id="offline-setup-state" role="status"></p></form>{% endif %}
         <p id="recovery-list" class="recovery-list" role="status" aria-live="polite" hidden></p>
-        {% if offline_enabled|default(false) or offline_shell|default(false) %}<p id="catalog-observation" role="status">{% if not offline_shell|default(false) %}商品情報のサーバー取得日時：{{ catalog_fetched_at }}。通信が切れた後は、この画面に表示された商品情報を使用します。{% endif %}</p>{% endif %}
-        {% if not demo|default(false) %}<div class="register-status-check"><button id="check-register-status" type="button" disabled>端末内会計の保存状況を確認</button><p id="status-check-result" role="status" aria-live="polite">通信できない場合、端末の記録を残します。</p>{% if recovery_enabled %}<p><a href="{{ url_for('register_recovery.index') }}">管理者：保全済みの復旧案件</a></p>{% endif %}</div>{% endif %}
         <p id="register-message" class="register-message" role="alert" hidden></p>
         {% if not demo|default(false) %}<p id="checkout-result" role="status" aria-live="polite"></p>{% endif %}
+        {% if offline_shell|default(false) %}<form id="offline-unlock" class="register-status-check"><h2>端末内レジを開く</h2><label>端末用PIN <input id="offline-pin" type="password" autocomplete="off" minlength="8" required></label><button type="submit">確認して開く</button><p id="offline-unlock-state" role="status"></p></form>{% endif %}
         <div class="register-layout">
             <section class="catalog" aria-labelledby="catalog-title">
                 <div class="section-heading"><h2 id="catalog-title">商品を選ぶ</h2><p>写真を押すと1個追加します</p></div>
-                <p id="products-swipe-hint">左右にスワイプして次の商品へ（1ページ最大12商品）。上下の操作でページをスクロールできます。</p>
-                <div class="product-grid" id="product-grid" tabindex="0" aria-label="商品ページ" aria-describedby="products-swipe-hint">
+                <p id="products-swipe-hint">左右にスクロールして商品を探せます。上下の操作で画面をスクロールできます。</p>
+                <div class="product-grid" id="product-grid" tabindex="0" aria-label="商品一覧（横スクロール）" aria-describedby="products-swipe-hint">
                     {% for product in products %}
                     <article class="product-tile" data-product-id="{{ product.id }}">
                         <button type="button" class="remove-one" data-action="minus" aria-label="{{ product.name }}を1個減らす">−</button>
@@ -48,28 +47,43 @@
                         <label class="quantity-label">個数
                             <input class="quantity-input" inputmode="numeric" type="number" min="-50" max="50" step="1" value="0" data-action="quantity" aria-label="{{ product.name }}の個数">
                         </label>
+                        <button type="button" class="increase-one" data-action="plus" aria-label="{{ product.name }}の個数を1個増やす">＋</button>
                     </article>
                     {% endfor %}
                 </div>
                 <div class="product-page-controls"><button type="button" id="products-previous" aria-controls="product-grid">← 前へ</button>
-                <div class="product-page-status"><p id="products-dots" aria-hidden="true"></p><p id="products-position" role="status" aria-live="polite"></p></div>
+                <div class="product-page-status"><progress id="products-progress" max="100" value="0" aria-label="商品一覧の位置"></progress><p id="products-position" role="status" aria-live="polite"></p></div>
                 <button type="button" id="products-next" aria-controls="product-grid">次へ →</button></div>
             </section>
             <section class="checkout" aria-labelledby="checkout-title">
                 <div class="section-heading"><h2 id="checkout-title">今回の会計</h2><p id="checkout-kind">商品を選択してください</p></div>
                 <ul id="cart-lines" class="cart-lines" aria-live="polite"></ul>
+                <div class="checkout-payment">
                 <div class="total-row"><span id="total-label">合計</span><strong id="total-yen">0円</strong></div>
                 <div id="cash-area" class="cash-area">
-                    <label for="received-yen">お預かり</label>
-                    <div class="cash-input"><input id="received-yen" type="text" inputmode="numeric" autocomplete="off" placeholder="金額を入力" aria-describedby="cash-hint"><span>円</span></div>
-                    <p id="cash-hint">お預かり金額を入力してください</p>
+                    <span id="received-label" class="received-label">お預かり</span>
+                    <input id="received-yen" type="hidden" value="">
+                    <div class="cash-display"><output id="received-display" aria-labelledby="received-label" aria-live="polite">—</output><span>円</span></div>
+                    <div id="cash-keypad" class="cash-keypad" role="group" tabindex="0" aria-label="お預かり金額キーパッド" aria-describedby="cash-hint cash-keypad-notice">
+                        {% for key in ['7','8','9','4','5','6','1','2','3','0','00','backspace','clear'] %}
+                        <button type="button" data-cash-key="{{ key }}" {% if key == 'backspace' %}aria-label="1桁削除"{% elif key == 'clear' %}aria-label="お預かり金額をクリア"{% endif %}>{{ '⌫' if key == 'backspace' else ('C · クリア' if key == 'clear' else key) }}</button>
+                        {% endfor %}
+                    </div>
+                    <p id="cash-keypad-notice" role="status"></p>
+                    <p id="cash-hint">数字ボタンでお預かり金額を入力してください</p>
                     <div class="change-row"><span>お釣り</span><strong id="change-yen">—</strong></div>
                 </div>
                 <button type="button" id="complete-checkout" class="complete-button" {% if not save_enabled and not demo|default(false) %}disabled{% endif %}>{{ '練習会計を完了' if demo|default(false) else '会計完了' }}</button>
                 <p class="checkout-help">{% if demo|default(false) %}この操作で売上や端末内の会計キューには保存されません。{% else %}端末内への保存後、すぐ次の会計に進めます。同期状況は右上に表示します。{% endif %}</p>
+                </div>
                 {% if demo|default(false) %}<p id="demo-result" class="demo-result" role="status" aria-live="polite" hidden></p><button type="button" id="demo-next" class="complete-button" hidden>次の練習会計へ</button>{% endif %}
             </section>
         </div>
+        {% if not demo|default(false) %}<details class="register-tools" {% if offline_shell|default(false) %}open{% endif %}><summary>端末の準備・保存状況</summary>
+        {% if offline_enabled|default(false) and not offline_shell|default(false) %}<form id="offline-setup" class="register-status-check"><h2>この端末をオフライン利用に準備</h2><label>端末用PIN（8文字以上）<input id="offline-setup-pin" type="password" autocomplete="new-password" minlength="8" required></label><label><input id="offline-next-day" type="checkbox">翌営業日も事前承認する</label><button type="submit">商品と端末許可を保存</button><p id="offline-setup-state" role="status"></p></form>{% endif %}
+        {% if offline_enabled|default(false) or offline_shell|default(false) %}<p id="catalog-observation" role="status">{% if not offline_shell|default(false) %}商品情報のサーバー取得日時：{{ catalog_fetched_at }}。通信が切れた後は、この画面に表示された商品情報を使用します。{% endif %}</p>{% endif %}
+        {% if not demo|default(false) %}<div class="register-status-check"><button id="check-register-status" type="button" disabled>端末内会計の保存状況を確認</button><p id="status-check-result" role="status" aria-live="polite">通信できない場合、端末の記録を残します。</p>{% if recovery_enabled %}<p><a href="{{ url_for('register_recovery.index') }}">管理者：保全済みの復旧案件</a></p>{% endif %}</div>{% endif %}
+        </details>{% endif %}
         <button id="jump-checkout" type="button" class="mobile-checkout-link" aria-label="今回の会計を確認する">合計 0円 · 会計を確認</button>
         {% if not demo|default(false) %}<p class="register-footnote">※ 実店舗でレジ専用運用する際は、「戻る」ボタンは表示されません。</p>{% endif %}
     </main>

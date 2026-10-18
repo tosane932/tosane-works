@@ -69,7 +69,7 @@ test('Service Workerは専用シェルと資産だけをキャッシュし、API
     events.install({ waitUntil: promise => { installation = promise; } });
     await installation;
     assert.ok(items.has('/register/offline'));
-    assert.ok(items.has('/static/register_offline_boot.js'));
+    assert.ok(items.has('/static/register_offline_boot.js?v=cash-pad-2'));
     assert.ok(!items.has('/register/preview'));
     assert.ok(!items.has('/api/register/offline/session'));
     let handled = false;
@@ -116,7 +116,7 @@ test('通信断の再起動シェルはPINとDataset・期限を検査して商�
     assert.equal(node('offline-unlock').hidden, true);
     assert.equal(node('product-grid').children.length, 1);
     assert.equal(JSON.parse(node('register-config').textContent).products[0].id, 7);
-    assert.deepEqual(scripts, ['/static/register.js']);
+    assert.deepEqual(scripts, ['/static/register.js?v=cash-pad-2']);
     assert.equal(globals.RegisterOfflineAuth, 'offline');
 });
 
@@ -165,4 +165,60 @@ test('PIN解除直後の通信復旧イベントを取り逃がさず、古い�
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(globals.RegisterOfflineAuth, 'ready');
     assert.equal(node('csrf').content, 'fresh');
+});
+
+test('旧キャッシュを残してもv2のシェル・キーパッド資産だけを復元する', async () => {
+    const events = {};
+    const wanted = new Map([
+        ['/register/offline', 'v2-shell'],
+        ['https://bakery.test/static/register_cash_pad.js?v=cash-pad-2', 'v2-keypad'],
+    ]);
+    const opened = [];
+    vm.runInNewContext(source('register_offline_sw.js'), {
+        self: { location:{origin:'https://bakery.test'}, addEventListener:(name,fn)=>events[name]=fn },
+        URL, Promise,
+        caches: { open:async version => {
+            opened.push(version);
+            return {match:async request=>wanted.get(typeof request==='string' ? request : request.url)};
+        }, match:()=>{throw Error('must not search old cache versions');} },
+        fetch:async()=>{throw Error('offline');},
+    });
+    for(const [url,mode,expected] of [
+        ['https://bakery.test/register/preview','navigate','v2-shell'],
+        ['https://bakery.test/static/register_cash_pad.js?v=cash-pad-2','same-origin','v2-keypad'],
+    ]) {
+        let response;
+        events.fetch({request:{method:'GET',url,mode},respondWith:promise=>response=promise});
+        assert.equal(await response,expected);
+    }
+    assert.ok(opened.every(version=>version==='register-offline-v2-cash-pad'));
+});
+
+test('旧Workerが有効で更新待ちなら準備完了とせず、PIN商品版・元会計を保持する', async () => {
+    const nodes=new Map();
+    const node=id=>{
+        if(!nodes.has(id)) { nodes.set(id,{value:'',textContent:'',disabled:false,
+            addEventListener(type,handler){this[type]=handler;},querySelector:()=>node('button'),
+            replaceChildren(){throw Error('must not display ready link');}}); }
+        return nodes.get(id);
+    };
+    node('register-config').textContent=JSON.stringify({scope:'dataset:admin',offlinePrepareUrl:'/prepare'});
+    node('offline-setup-pin').value='long-enough-pin';
+    let saves=0, updates=0;
+    const registration={active:{postMessage(){throw Error('must not cache through old worker');}},
+        waiting:{},update:async()=>{updates++;}};
+    vm.runInNewContext(source('register_offline_setup.js'),{
+        document:{getElementById:node,querySelector:()=>({content:'csrf'})},
+        RegisterOfflineStore:{save:async()=>{saves++;}},
+        navigator:{onLine:true,serviceWorker:{register:async()=>registration,ready:Promise.resolve(registration)}},
+        crypto:{subtle:{},randomUUID:()=> 'device'}, indexedDB:{}, caches:{},
+        fetch:async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({scope:'dataset:admin',token:'permit'})}),
+        Error,Promise,
+    });
+    await node('offline-setup').submit({preventDefault(){}});
+    assert.equal(updates,1);
+    assert.equal(saves,0);
+    assert.match(node('offline-setup-state').textContent,/すべてのレジタブを閉じて開き直し/);
+    assert.match(node('offline-setup-state').textContent,/準備は完了していません/);
+    assert.equal(node('button').disabled,false);
 });

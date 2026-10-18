@@ -1,6 +1,7 @@
 """Loopback-only, throwaway Bakery Hub for Chromium E2E. Never use a real DB."""
 import datetime
 import json
+import logging
 import os
 import secrets
 import sys
@@ -143,5 +144,6 @@ def e2e_pager_catalog():
 
 
 if __name__ == "__main__":
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
     app.run(host="127.0.0.1", port=int(os.environ.get("E2E_PORT", "8765")),
             use_reloader=False, threaded=True)

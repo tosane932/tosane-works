@@ -74,8 +74,8 @@ def test_demo_admin_only_and_nonwriting(flask_app, authenticated_client, admin_d
     assert len(config_data["products"]) == len(PRODUCT_IMAGE_OPTIONS) == 18
     assert len(page.select(".product-tile")) == 18
     assert all(item["image"].endswith(".webp") for item in config_data["products"])
-    assert page.select_one('script[src$="register_demo.js"]')
-    assert not page.select_one('script[src$="register.js"]')
+    assert page.select_one('script[src="/static/register_demo.js?v=cash-pad-2"]')
+    assert not page.select_one('script[src="/static/register.js?v=cash-pad-2"]')
     assert "練習用の画面です" in response.get_data(as_text=True)
     g.pop("_login_user", None)
     home = authenticated_client.get("/home")

@@ -11,6 +11,7 @@
     const message = $("register-message");
     const checkoutButton = $("complete-checkout");
     const receivedInput = $("received-yen");
+    const cashPad = globalThis.RegisterCashPad?.mount(receivedInput);
     const formatter = new Intl.NumberFormat("ja-JP");
     const yen = number => `${formatter.format(number)}円`;
     let cart = core.createCart(products);
@@ -206,6 +207,7 @@
     }
 
     function render() {
+        cashPad?.refresh(busy);
         const result = core.calculation(cart, receivedInput.value);
         for (const tile of $("product-grid").querySelectorAll(".product-tile")) {
             const quantity = cart.quantities.get(Number(tile.dataset.productId)) || 0;
@@ -236,12 +238,13 @@
         $("jump-checkout").textContent = `${result.kind === "refund" ? "返金" : "合計"} ${yen(Math.abs(result.total))} · 会計を確認`;
         $("cash-area").hidden = result.kind === "refund" && result.lines.length > 0;
         $("change-yen").textContent = result.change === null ? "—" : yen(result.change);
-        $("cash-hint").textContent = result.error && result.lines.length ? result.error : "お預かり金額を入力してください";
+        $("cash-hint").textContent = result.error && result.lines.length ? result.error : "数字ボタンでお預かり金額を入力してください";
         $("cash-hint").classList.toggle("error", Boolean(result.error && result.lines.length));
         checkoutButton.disabled = !config.saveEnabled || !database || busy || !result.valid
             || ["denied", "checking"].includes(globalThis.RegisterOfflineAuth);
     }
     function change(id, value, approved = false) {
+        if (busy) { return; }
         try {
             core.setQuantity(cart, id, value, approved);
             clearError(); render(); scheduleDraft();

@@ -1,9 +1,10 @@
 /* Dedicated shell only. Never cache authenticated register HTML, cookies or API responses. */
-const VERSION = "register-offline-v1";
+const VERSION = "register-offline-v2-cash-pad";
 const SHELL = "/register/offline";
-const ASSETS = [SHELL, "/static/register.css", "/static/register_core.js",
-                "/static/register.js", "/static/register_pager.js", "/static/register_offline_store.js",
+const ASSET_PATHS = [ "/static/register.css", "/static/register_core.js",
+                "/static/register.js", "/static/register_cash_pad.js", "/static/register_pager.js", "/static/register_offline_store.js",
                 "/static/register_offline_boot.js"];
+const ASSETS = ASSET_PATHS.map(path => `${path}?v=cash-pad-2`);
 
 self.addEventListener("install", event => {
     event.waitUntil((async () => {
@@ -12,7 +13,7 @@ self.addEventListener("install", event => {
             throw Error("Admin shell was not authorized");
         }
         const cache = await caches.open(VERSION);
-        await cache.addAll(ASSETS.slice(1));
+        await cache.addAll(ASSETS);
         await cache.put(SHELL, shell);
     })());
 });
@@ -26,11 +27,11 @@ self.addEventListener("fetch", event => {
     if ((url.pathname === SHELL || url.pathname === "/register/preview")
         && event.request.mode === "navigate") {
         event.respondWith(fetch(event.request).then(response =>
-            response.status >= 500 ? caches.match(SHELL) : response)
-            .catch(() => caches.match(SHELL)));
-    } else if (ASSETS.includes(url.pathname) || url.pathname.startsWith("/static/register_images/")
+            response.status >= 500 ? caches.open(VERSION).then(cache => cache.match(SHELL)) : response)
+            .catch(() => caches.open(VERSION).then(cache => cache.match(SHELL))));
+    } else if (ASSET_PATHS.includes(url.pathname) || url.pathname.startsWith("/static/register_images/")
                || url.pathname.startsWith("/static/product_images/")) {
-        event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request)));
+        event.respondWith(caches.open(VERSION).then(cache => cache.match(event.request)).then(cached => cached || fetch(event.request)));
     }
     // Other navigations, status queries, CSRF and write APIs are never cached.
 });

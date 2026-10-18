@@ -1,3 +1,4 @@
+const { enterCash, openTools } = require('./register_helpers.cjs');
 const { test, expect, chromium, devices } = require('playwright/test');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -37,15 +38,17 @@ async function login(page) {
 }
 async function prepare(page) {
     await page.goto(`${base}/register/preview`);
+    await openTools(page);
     await expect(page.locator('#offline-setup')).toBeVisible();
     await page.locator('#offline-next-day').check();
+    await openTools(page);
     await page.locator('#offline-setup-pin').fill('e2e-pin-not-a-secret');
     await page.locator('#offline-setup button[type=submit]').click();
     await expect(page.locator('#offline-setup-state')).toContainText('端末を準備しました');
     const registration = await page.evaluate(async () => {
         const sw = await navigator.serviceWorker.ready;
         const keys = await caches.keys();
-        const cache = await caches.open('register-offline-v1');
+        const cache = await caches.open('register-offline-v2-cash-pad');
         return { scope: sw.scope, shell: Boolean(await cache.match('/register/offline')),
                  preview: Boolean(await cache.match('/register/preview')),
                  keys };
@@ -73,7 +76,7 @@ async function sale(page, bread = false) {
     await tile.locator('.add-one').click({ clickCount: 2 });
     if (bread) { await page.locator('.product-tile', { hasText: '検証食パン' }).locator('.add-one').click(); }
     await expect(page.locator('#total-yen')).toHaveText(bread ? '540円' : '240円');
-    await page.locator('#received-yen').fill('1000');
+    await enterCash(page, '1000');
     await expect(page.locator('#change-yen')).toHaveText(bread ? '460円' : '760円');
     await page.locator('#complete-checkout').click();
     await expect(page.locator('#checkout-result')).toContainText('端末に記録済み');
@@ -146,6 +149,7 @@ test('Chromium: 通信断の連続会計、再読み込み、プロファイル�
         await unlock(page);
         await expect.poll(async () => (await (await control(request, 'state')).json()).length,
                           { timeout: 30000 }).toBe(5);
+        await openTools(page);
         await page.locator('#check-register-status').click();
         await expect.poll(async () => (await records(page)).filter(item => item.status === 'synced').length,
                           { timeout: 30000 }).toBe(5);
@@ -174,12 +178,13 @@ for (const [name, viewport] of [['smartphone', devices['iPhone 13'].viewport],
                 const first = tiles[0].getBoundingClientRect();
                 const second = tiles[1].getBoundingClientRect();
                 const targets = [...document.querySelectorAll(
-                    '.product-tile .add-one, .product-tile .remove-one, .product-tile .quantity-input'
+                    '.product-tile .add-one, .product-tile .remove-one, .product-tile .increase-one, .product-tile .quantity-input'
                 )].map(element => element.getBoundingClientRect());
                 return {
                     scrollWidth: document.documentElement.scrollWidth,
                     viewportWidth: document.documentElement.clientWidth,
                     sameRow: Math.abs(first.top - second.top) < 4,
+                    sameColumn: Math.abs(first.left - second.left) < 4,
                     minTargetWidth: Math.min(...targets.map(box => box.width)),
                     minTargetHeight: Math.min(...targets.map(box => box.height)),
                     imageWidth: (tiles[0].querySelector('img') || tiles[0].querySelector('.no-image'))?.getBoundingClientRect().width,
@@ -192,7 +197,8 @@ for (const [name, viewport] of [['smartphone', devices['iPhone 13'].viewport],
                 expect(layout.sameRow).toBe(false);
                 expect(layout.imageWidth).toBeGreaterThanOrEqual(90);
             } else {
-                expect(layout.sameRow).toBe(true);
+                expect(layout.sameRow).toBe(false);
+                expect(layout.sameColumn).toBe(true);
             }
             await context.setOffline(true);
             await sale(page);
@@ -235,7 +241,7 @@ test('Chromium: IndexedDBへの会計書込失敗ではカートを維持', asyn
         await prepare(page);
         await context.setOffline(true);
         await page.locator('.product-tile', { hasText: '検証クロワッサン' }).locator('.add-one').click();
-        await page.locator('#received-yen').fill('500');
+        await enterCash(page, '500');
         await page.evaluate(() => {
             const original = IDBDatabase.prototype.transaction;
             IDBDatabase.prototype.transaction = function (names, mode, ...args) {

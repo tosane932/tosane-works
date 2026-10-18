@@ -31,7 +31,22 @@
             }
             const registration = await navigator.serviceWorker.register("/register/offline-sw.js",
                                                                          { scope: "/register/" });
-            await navigator.serviceWorker.ready; // install caches shell, CSS and JS atomically.
+            // An existing worker must not claim a v2 shell is ready while still serving v1 assets.
+            // Do not force activation while another tab may be completing a receipt.
+            if (registration.active) { await registration.update(); }
+            const installing = registration.installing;
+            if (installing && !["installed", "activated", "redundant"].includes(installing.state)) {
+                await new Promise((resolve, reject) => {
+                    installing.addEventListener("statechange", () => {
+                        if (["installed", "activated"].includes(installing.state)) { resolve(); }
+                        if (installing.state === "redundant") { reject(Error("更新用の画面を保存できませんでした。")); }
+                    });
+                });
+            }
+            await navigator.serviceWorker.ready; // First install may briefly be waiting before activation.
+            if (registration.waiting) {
+                throw Error("レジ画面の更新が必要です。すべてのレジタブを閉じて開き直し、端末をもう一度準備してください。端末内の会計記録は保持しています");
+            }
             if (!registration.active) { throw Error("オフライン用の画面を保存できませんでした。"); }
             // Images are optional. Missing images render as text tiles.
             registration.active.postMessage({ type: "CACHE_REGISTER_IMAGES",

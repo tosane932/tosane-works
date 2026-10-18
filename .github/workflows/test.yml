@@ -2,7 +2,7 @@ name: Bakery Hub Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/v3-unified-product-management ]
     paths:
       - "store/bakery-hub/**"
       - ".github/workflows/test.yml"
@@ -60,7 +60,7 @@ jobs:
 
       - name: JavaScriptテストを実行
         run: |
-          node --test tests_js/register_core.test.cjs tests_js/register_ui.test.cjs tests_js/register_demo.test.cjs tests_js/register_offline.test.cjs tests_js/register_pager.test.cjs
+          node --test tests_js/register_core.test.cjs tests_js/register_ui.test.cjs tests_js/register_demo.test.cjs tests_js/register_offline.test.cjs tests_js/register_pager.test.cjs tests_js/register_cash_pad.test.cjs
 
       - name: pytestを実行
         run: |
