@@ -2,6 +2,8 @@
 
 最終更新：2026-10-18。**現時点の判定は NO-GO。本書はPhase 7で管理者が実施する作業の準備であり、Phase 6で本番DB・Render・切替日は変更しない。** 正式レジの初期利用者はAdminのみ。Guest Demo、Admin非保存デモ、旧日次売上履歴を残す。
 
+**最新のPhase 7読取記録：** [2026-10-20再監査・公開ブロッカー判定](v3-register-phase7-audit-20261020.md)。以下のPhase 6初期判定票・2026-10-18の件数は過去の証拠として保存し、現在の結果として流用しない。PR #130のタブレット全画面UIはユーザー報告で合格。正式保存・通信断・再起動・再同期の実機試験は別の未完了Gateである。
+
 ## 商品管理統合・端末別レジ表示（2026-10-20更新）
 
 正式レジの本番切替は引き続き **NO-GO**。この変更は作業ブランチの実装であり、本番DB・Render設定・機能フラグは変更しない。以下を現行仕様とし、後述のPhase別記録に残る「500円上限」「18品必須」「独自商品別枠」「画像アップロードなし」は当時の実装記録として読む。
@@ -94,13 +96,13 @@ Phase 5C終了時の記録は全pytest 1,329 passed / 44 skipped、JavaScript 30
 3. **本番とは別の空の隔離DB**を承認した管理者が作成し、ネットワークと権限を隔離する。対象が空であることを確認後、`pg_restore --dbname='service=approved_restore_target' --no-owner --no-acl --exit-on-error /protected/backup/precutover.dump` を実行する。**本番を復元先に指定しない。** 終了コード、revision、全関連テーブル件数、代表日の合計・FK/UNIQUE/CHECK、認可境界を照合する。復元DBを公開アプリに接続しない。
 4. ロールバック練習は復元先と検証データで行い、復元を本番で行う条件・責任者・作業停止窓を別途決める。新会計が一件でも発生した後、切替前のダンプを本番に上書きしてはいけない。復元以降の確定会計と端末キューの照合なしには売上を復元できない。
 
-対象表には `datasets`、`products`、`daily_sales`、`register_products`、`register_price_history`、`register_prep_links`、`register_cutovers`、`register_cutover_approvals`、`register_transactions`、`register_transaction_lines`、`register_recovery_cases`、`register_recovery_lines`、`register_recovery_events`、`register_offline_permits` と `alembic_version` を含める（全DBバックアップなので他の関連表も含まれる）。現行mainの**単一headは `a3c9d7e5f102`**。Phase 5C区間は `da5c1e7f9042` → `eb6c2f8a4130` → `f5a17b3e2c09` → `a3c9d7e5f102`。本番の出発revisionは未確認であり、途中のrevisionを推測して飛ばさない。旧売上・既存会計を保全するupgradeと、データがあるときのdowngrade拒否を隔離DBで確認する。複合Dataset FK、一意キー、金額・返金CHECK、監査追記制約と行数を検証する。**データありのdown migrationを復旧手段にしない。**
+対象表には `datasets`、`products`、`daily_sales`、`register_products`、`register_price_history`、`register_prep_links`、`register_cutovers`、`register_cutover_approvals`、`register_transactions`、`register_transaction_lines`、`register_recovery_cases`、`register_recovery_lines`、`register_recovery_events`、`register_offline_permits` と `alembic_version` を含める（全DBバックアップなので他の関連表も含まれる）。現行mainの**単一headは `b6d2e9f4a107`**、親は `a3c9d7e5f102`。Phase 5C区間は `da5c1e7f9042` → `eb6c2f8a4130` → `f5a17b3e2c09` → `a3c9d7e5f102`。今回接続したDBのrevisionは最新記録を参照し、Webの実効接続先との照合なしに本番確定としない。途中のrevisionを推測して飛ばさない。旧売上・既存会計を保全するupgradeと、データがあるときのdowngrade拒否を隔離DBで確認する。複合Dataset FK、一意キー、金額・返金CHECK、監査追記制約と行数を検証する。**データありのdown migrationを復旧手段にしない。**
 
 `Dockerfile` のCMDには `flask db upgrade && python seed_demo.py && gunicorn ...` がある。実デプロイでこのCMDが使用されるか、別の開始コマンドか、複数ワーカーが同時にmigrationを試みるかはPhase 7で確認する。バックアップ検証後、単一の承認済みmigration実行経路を決め、新機能をOFFのままupgradeとrevision・旧件数を照合する。旧版がまだ旧日次POSTを処理できる間は**切替日を確定しない**。
 
 ### 読取監査の記録欄
 
-本番の読取権限だけで、接続先識別子、`alembic_version`、旧商品/旧売上件数と旧売上最終日、レジ商品/価格履歴、切替日/承認、新会計/明細、復旧案件/イベント、端末許可、仕込み対応の各件数を記録する。Datasetをログイン主体のAdmin IDと照合する。管理者用 `/register/readiness?date=YYYY-MM-DD` の監査結果、同日重複、ヘッダー・明細不一致、旧新境界、標準商品18品と価格、未解決案件、review項目と対応理由を証拠として保存する。監査画面は端末キューを数えられない。商品別・日/月/年・返金・0円と未記録・ホーム・AI入力・仕込み参考の出力も切替前後で照合する。実Gemini APIはこの監査では呼ばない。
+本番の読取権限だけで、接続先識別子、`alembic_version`、旧商品/旧売上件数と旧売上最終日、レジ商品/価格履歴、切替日/承認、新会計/明細、復旧案件/イベント、端末許可、仕込み対応の各件数を記録する。Datasetをログイン主体のAdmin IDと照合する。管理者用 `/register/readiness?date=YYYY-MM-DD` の監査結果、同日重複、ヘッダー・明細不一致、旧新境界、実際に販売する商品と価格、未解決案件、review項目と対応理由を証拠として保存する。標準18品は任意候補であり、全品必須ではない。監査画面は端末キューを数えられない。商品別・日/月/年・返金・0円と未記録・ホーム・AI入力・仕込み参考の出力も切替前後で照合する。実Gemini APIはこの監査では呼ばない。
 
 ## 機能フラグ台帳（現在のコード上の既定値は全てfalse）
 
