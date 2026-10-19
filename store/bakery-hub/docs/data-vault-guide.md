@@ -21,6 +21,8 @@
 
 元／先それぞれのDB識別子・Admin Dataset UUIDを管理者が確認してください。復元先はスキーマ準備済みの**空のAdmin Dataset**。旧商品・会計・履歴・予定・スタッフ等、対象Adminの業務行が1件でもあればdry-runから拒否します。他Datasetへの紐づけや同名商品との自動統合はしません。Dataset UUIDは接続先ごとに異なって構いません。
 
+**新DBの通常起動は、別途の移行承認まで止めます。** 現行DockerのCMDは `flask db upgrade && python seed_demo.py && gunicorn ...`。`seed_demo.py` は旧Product／DailySalesの有無で投入を判断し、新RegisterProduct／PrepRecipeだけの復元を検知しません。したがって本CLIで設定だけを戻したDBを、そのまま現行Docker起動へ接続すると旧形式のデモ商品・売上が投入され得ます。復元試験は独立CLIと隔離DBだけで実施し、接続先切替前に旧売上の別途移行とseed方針を管理者が承認・検証する必要があります。今回Docker／seed処理を変更せず、既存データを削除して空にする手段も用意しません。
+
 以下は**承認済み隔離環境用の例**です。今回、本番の書き出し・取得・移行を実行する許可ではありません。`SOURCE_ADMIN_UUID`／`TARGET_ADMIN_UUID`は確認したUUIDに置き換えます。保存先は既存でないフォルダを、公開リポジトリの外に指定します。既存バックアップは上書きしません。
 
 ## 保存 → 内容検証
