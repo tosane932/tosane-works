@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>仕込み管理 | Bakery Hub</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='production_prep.css') }}">
-<script src="{{ url_for('static', filename='production_prep.js') }}" defer></script></head>
+<script src="{{ url_for('static', filename='production_prep.js') }}" defer></script>{% include "_pwa_head.html" %}
+</head>
 <body class="app-shell-page prep-page">{% include '_app_navigation.html' %}
 <main class="prep-shell prep-workspace">
   {% include '_flash_notices.html' %}

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Bakery Hub</title>
+  <desc>店舗ホームの茶色と、共通ナビゲーション・ひだまりバナーの麦を基にした専用アイコン。麦は中心の安全領域内。</desc>
+  <rect width="512" height="512" fill="#72583b"/>
+  <g fill="#f4c46b">
+    <ellipse cx="256" cy="141" rx="22" ry="42"/>
+    <ellipse cx="216" cy="194" rx="21" ry="40" transform="rotate(-40 216 194)"/>
+    <ellipse cx="296" cy="194" rx="21" ry="40" transform="rotate(40 296 194)"/>
+    <ellipse cx="212" cy="254" rx="21" ry="40" transform="rotate(-45 212 254)"/>
+    <ellipse cx="300" cy="254" rx="21" ry="40" transform="rotate(45 300 254)"/>
+    <ellipse cx="212" cy="314" rx="21" ry="40" transform="rotate(-45 212 314)"/>
+    <ellipse cx="300" cy="314" rx="21" ry="40" transform="rotate(45 300 314)"/>
+  </g>
+  <path d="M256 183v212m0-174-28-28m28 28 28-28m-28 90-30-30m30 30 30-30m-30 90-30-30m30 30 30-30" fill="none" stroke="#fff8ec" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

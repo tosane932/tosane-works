@@ -12,6 +12,7 @@
     {% if offline_shell|default(false) or offline_enabled|default(false) %}<script src="{{ url_for('static', filename='register_offline_store.js', v='product-tile-3') }}" defer></script>{% endif %}
     <script src="{{ url_for('static', filename='register_offline_boot.js' if offline_shell|default(false) else ('register_demo.js' if demo|default(false) else 'register.js'), v='product-tile-3') }}" defer></script>
     {% if offline_enabled|default(false) and not offline_shell|default(false) %}<script src="{{ url_for('static', filename='register_offline_setup.js', v='product-tile-3') }}" defer></script>{% endif %}
+{% include "_pwa_head.html" %}
 </head>
 <body>
     <main class="register-shell" id="register-root">

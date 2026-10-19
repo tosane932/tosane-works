@@ -2,7 +2,8 @@
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>商品一覧 | Bakery Hub</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='register_products.css') }}"></head>
+<link rel="stylesheet" href="{{ url_for('static', filename='register_products.css') }}">{% include "_pwa_head.html" %}
+</head>
 <body class="app-shell-page">{% include "_app_navigation.html" %}
 <main class="container register-product-page">
 <h1>商品一覧</h1>
