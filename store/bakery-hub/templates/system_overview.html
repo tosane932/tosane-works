@@ -109,6 +109,7 @@
             <li><strong>ブラウザで表示・操作</strong><span>HTMLとCSSで画面を表示。JavaScriptは入力欄の操作やAIボタンなど、画面上の動きを担当します。</span></li>
         </ol>
         <p class="overview-note">本番用DBはPostgreSQL、通常のpytestはSQLiteのメモリ内DBです。Dashboardやホームの予定更新などではJSONを返し、JavaScriptが画面を更新します。このシステム概要自体は、業務データを取得せず説明を表示します。</p>
+        <p class="overview-note">商品設定の退避には、画面とは独立したPython CLIの<code>data_vault.py</code>を用意しています。SQLAlchemyでAdminの商品・写真・レシピ・材料・対応表だけを読み、CSVと写真、件数・SHA-256を記録したManifestへ出力します。復元は空のAdmin Datasetに限り、既定のdry-runで検査し、明示確認後に一つのtransactionで追加・読み戻し照合を行います。失敗時はrollbackし、商品IDは新しい番号へ対応づけます。pytestでは隔離DBへの保存→復元を検証します。CSVは実売上・会計・価格監査履歴・認証・未同期会計を含まず、DB全量バックアップの代わりにはなりません。PrivateのGitHub保管庫への保存と、本番DBの接続先切替は別の管理作業です。</p>
     </section>
 
     <section class="overview-section" id="walkthrough" data-overview-chapter="2">

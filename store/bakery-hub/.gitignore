@@ -1,0 +1,3 @@
+# Settings exports contain store data. Keep real backups outside this public repo.
+/vault-backups/
+/backup_*/

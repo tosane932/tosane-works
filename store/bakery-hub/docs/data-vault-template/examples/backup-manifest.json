@@ -1,0 +1,40 @@
+{
+  "format": "bakeryhub-settings",
+  "version": 1,
+  "backup_id": "1a76ba19-34f4-4f70-acff-64aca6e1b56b",
+  "created_at": "2026-10-19T22:54:56.487626+00:00",
+  "source_dataset": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "kind": "admin"
+  },
+  "tables": [
+    "register_products",
+    "prep_recipes",
+    "prep_ingredients",
+    "register_prep_links"
+  ],
+  "counts": {
+    "products.csv": 2,
+    "recipes.csv": 1,
+    "ingredients.csv": 2,
+    "product_recipe_links.csv": 1
+  },
+  "files": {
+    "ingredients.csv": {
+      "sha256": "1a72fd1eab3267c4a2c54e3c198dba438215fbdf9cbb621f2f4186614b05c6fa",
+      "bytes": 131
+    },
+    "product_recipe_links.csv": {
+      "sha256": "60b1e55ff934a4bd046b37085213a4d1ad12e488f1aeb16b55f9979104569b67",
+      "bytes": 39
+    },
+    "products.csv": {
+      "sha256": "1870b13f4305a9ef27cabf108c3790a9baf2a5b318e3f3ef434024ba9e541947",
+      "bytes": 270
+    },
+    "recipes.csv": {
+      "sha256": "d2667f57aa986fbe1c467cb14eece9784fe773692a78aa7e08d9cfc1cf54c043",
+      "bytes": 210
+    }
+  }
+}

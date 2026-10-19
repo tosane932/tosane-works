@@ -106,6 +106,9 @@ jobs:
         run: |
           pytest tests/test_migrations_postgresql.py tests/test_register_postgresql.py tests/test_register_products_postgresql.py tests/test_register_service_postgresql.py tests/test_register_sales_aggregation_postgresql.py tests/test_register_cutover_postgresql.py tests/test_unified_products_postgresql.py -v
 
+      - name: 商品設定CSVを別の空PostgreSQLへ復元して照合
+        run: pytest tests/test_data_vault_postgresql.py -v
+
       - name: PostgreSQL実並行処理を検証
         run: |
           pytest \
