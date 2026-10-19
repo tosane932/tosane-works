@@ -15,7 +15,9 @@
         const minus = document.createElement("button");
         minus.type = "button"; minus.className = "remove-one";
         minus.dataset.action = "minus"; minus.setAttribute("aria-label", `${product.name}を1個減らす`);
-        minus.textContent = "−";
+        const minusLabel = document.createElement("span");
+        minusLabel.setAttribute("aria-hidden", "true"); minusLabel.textContent = "−";
+        minus.append(minusLabel);
         const plus = document.createElement("button");
         plus.type = "button"; plus.className = "add-one";
         plus.dataset.action = "plus"; plus.setAttribute("aria-label", `${product.name}を1個追加`);
@@ -24,27 +26,26 @@
         if (product.image && (/^\/static\/(register_images|product_images)\/[\w./-]+$/.test(product.image)
                 || (/^data:image\/webp;base64,[A-Za-z0-9+/=]+$/.test(product.image) && product.image.length <= 683000))) {
             const img = document.createElement("img");
-            img.src = product.image; img.alt = ""; img.width = 160; img.height = 160;
+            img.src = product.image; img.alt = ""; img.width = 160; img.height = 160; img.draggable = false;
             img.addEventListener("error", () => { img.hidden = true; fallback.hidden = false; });
             fallback.hidden = true; plus.append(img);
         }
         const label = document.createElement("span"); label.className = "product-label";
         label.textContent = product.name;
-        const price = document.createElement("strong"); price.className = "product-price";
+        const price = document.createElement("strong");
+        price.className = product.price >= 100000 ? "product-price product-price-long" : "product-price";
         price.textContent = `${product.price}円`;
         plus.append(fallback, label, price);
         const quantity = document.createElement("label"); quantity.className = "quantity-label";
-        quantity.append("個数 ");
+        const caption = document.createElement("span"); caption.className = "quantity-caption";
+        caption.setAttribute("aria-hidden", "true"); caption.textContent = "個数";
+        quantity.append(caption);
         const input = document.createElement("input"); input.className = "quantity-input";
         input.type = "number"; input.inputMode = "numeric"; input.min = "-50"; input.max = "50";
         input.step = "1"; input.value = "0"; input.dataset.action = "quantity";
         input.setAttribute("aria-label", `${product.name}の個数`);
         quantity.append(input);
-        const increase = document.createElement("button");
-        increase.type = "button"; increase.className = "increase-one";
-        increase.dataset.action = "plus"; increase.setAttribute("aria-label", `${product.name}の個数を1個増やす`);
-        increase.textContent = "＋";
-        article.append(minus, plus, quantity, increase);
+        article.append(minus, plus, quantity);
         return article;
     }
 
@@ -129,7 +130,7 @@
             document.getElementById("catalog-observation").textContent =
                 `◷ 保存済み商品情報（${prepared.issued_at}）を使用しています。`;
             state.textContent = "✓ 端末内レジを開きました。";
-            const script = document.createElement("script"); script.src = "/static/register.js?v=cash-pad-2";
+            const script = document.createElement("script"); script.src = "/static/register.js?v=product-tile-3";
             window.addEventListener("online", revalidate);
             window.addEventListener("focus", revalidate);
             document.head.append(script);

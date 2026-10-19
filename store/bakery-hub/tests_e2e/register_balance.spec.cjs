@@ -46,7 +46,7 @@ for (const viewport of [{width:1280,height:800},{width:1024,height:768},{width:1
             expect(right.width / viewport.width).toBeLessThan(.36);
         }
         expect(await grid.evaluate(node=>getComputedStyle(node).scrollSnapType)).toBe('none');
-        await page.locator('.increase-one').first().click();
+        await page.locator('.add-one').first().click();
         await enterCash(page,'2000');
         await expect(page.locator('#received-display')).toHaveText('2,000');
         await expect(page.locator('#change-yen')).toHaveText('1,000円');
@@ -65,7 +65,7 @@ for (const viewport of [{width:1280,height:800},{width:1024,height:768},{width:1
         const before=await grid.evaluate(node=> {node.scrollLeft=137;return node.scrollLeft;});
         await page.waitForTimeout(200);
         expect(await grid.evaluate(node=>node.scrollLeft)).toBeCloseTo(before,0);
-        await page.locator('.product-tile').nth(15).locator('.increase-one').click();
+        await page.locator('.product-tile').nth(15).locator('.add-one').click();
         const offset=await grid.evaluate(node=>node.scrollLeft);
         await enterCash(page,'5000');
         expect(await grid.evaluate(node=>node.scrollLeft)).toBeCloseTo(offset,0);
@@ -84,7 +84,7 @@ for (const viewport of [{width:1280,height:800},{width:1024,height:768},{width:1
             expect(Math.abs(stopped / await grid.evaluate(node=>node.clientWidth)-Math.round(stopped / await grid.evaluate(node=>node.clientWidth)))).toBeGreaterThan(.02);
             // All 30 lines: only the list scrolls; payment controls stay visible.
             for(let i=0;i<30;i++) {
-                if(i!==0 && i!==15) { await page.locator('.product-tile').nth(i).locator('.increase-one').click(); }
+                if(i!==0 && i!==15) { await page.locator('.product-tile').nth(i).locator('.add-one').click(); }
             }
             await enterCash(page,'50000');
             await expect(page.locator('#total-yen')).toHaveText('30,000円');
@@ -115,7 +115,7 @@ test('Chromium: 実写真・2行の商品名・デモ完了後の無効化と次
     await expect.poll(()=>images.first().evaluate(img=>img.complete && img.naturalWidth>0)).toBe(true);
     expect(await images.first().evaluate(img=>getComputedStyle(img).objectFit)).toBe('contain');
     expect(await page.locator('.product-label').first().evaluate(node=>getComputedStyle(node).webkitLineClamp)).toBe('2');
-    await page.locator('.increase-one').first().click();
+    await page.locator('.add-one').first().click();
     await enterCash(page,'1000');
     expect(await page.locator('#complete-checkout').evaluate(node=>node.getBoundingClientRect().bottom)).toBeLessThanOrEqual(800);
     await page.screenshot({path:testInfo.outputPath('tablet-photos.png'),fullPage:true});

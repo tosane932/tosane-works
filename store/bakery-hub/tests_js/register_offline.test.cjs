@@ -69,7 +69,7 @@ test('Service Workerは専用シェルと資産だけをキャッシュし、API
     events.install({ waitUntil: promise => { installation = promise; } });
     await installation;
     assert.ok(items.has('/register/offline'));
-    assert.ok(items.has('/static/register_offline_boot.js?v=cash-pad-2'));
+    assert.ok(items.has('/static/register_offline_boot.js?v=product-tile-3'));
     assert.ok(!items.has('/register/preview'));
     assert.ok(!items.has('/api/register/offline/session'));
     let handled = false;
@@ -100,7 +100,7 @@ test('通信断の再起動シェルはPINとDataset・期限を検査して商�
         business_date: today, next_business_date: null,
         issued_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 3600000).toISOString(),
-        products: [{ id: 7, name: 'パン', price: 120, image: null, is_active: true }] };
+        products: [{ id: 7, name: 'パン', price: 100000, image: null, is_active: true }] };
     node('offline-pin').value = 'secure-pin';
     const scripts = [];
     const document = { getElementById: node, createElement: () => node(`node-${nodes.size}`),
@@ -115,8 +115,13 @@ test('通信断の再起動シェルはPINとDataset・期限を検査して商�
     await node('offline-unlock').submit({ preventDefault() {} });
     assert.equal(node('offline-unlock').hidden, true);
     assert.equal(node('product-grid').children.length, 1);
+    const tile=node('product-grid').children[0];
+    assert.deepEqual(Array.from(tile.children, child=>child.className), ['remove-one','add-one','quantity-label']);
+    assert.equal(tile.children[0].children[0].textContent,'−');
+    assert.ok(tile.children[1].children.some(child=>child.className==='product-price product-price-long'));
+    assert.equal(tile.children[2].children[0].className,'quantity-caption');
     assert.equal(JSON.parse(node('register-config').textContent).products[0].id, 7);
-    assert.deepEqual(scripts, ['/static/register.js?v=cash-pad-2']);
+    assert.deepEqual(scripts, ['/static/register.js?v=product-tile-3']);
     assert.equal(globals.RegisterOfflineAuth, 'offline');
 });
 
@@ -167,11 +172,11 @@ test('PIN解除直後の通信復旧イベントを取り逃がさず、古い�
     assert.equal(node('csrf').content, 'fresh');
 });
 
-test('旧キャッシュを残してもv2のシェル・キーパッド資産だけを復元する', async () => {
+test('旧キャッシュを残してもv3のシェル・キーパッド資産だけを復元する', async () => {
     const events = {};
     const wanted = new Map([
-        ['/register/offline', 'v2-shell'],
-        ['https://bakery.test/static/register_cash_pad.js?v=cash-pad-2', 'v2-keypad'],
+        ['/register/offline', 'v3-shell'],
+        ['https://bakery.test/static/register_cash_pad.js?v=product-tile-3', 'v3-keypad'],
     ]);
     const opened = [];
     vm.runInNewContext(source('register_offline_sw.js'), {
@@ -184,14 +189,14 @@ test('旧キャッシュを残してもv2のシェル・キーパッド資産だ
         fetch:async()=>{throw Error('offline');},
     });
     for(const [url,mode,expected] of [
-        ['https://bakery.test/register/preview','navigate','v2-shell'],
-        ['https://bakery.test/static/register_cash_pad.js?v=cash-pad-2','same-origin','v2-keypad'],
+        ['https://bakery.test/register/preview','navigate','v3-shell'],
+        ['https://bakery.test/static/register_cash_pad.js?v=product-tile-3','same-origin','v3-keypad'],
     ]) {
         let response;
         events.fetch({request:{method:'GET',url,mode},respondWith:promise=>response=promise});
         assert.equal(await response,expected);
     }
-    assert.ok(opened.every(version=>version==='register-offline-v2-cash-pad'));
+    assert.ok(opened.every(version=>version==='register-offline-v3-product-tile'));
 });
 
 test('旧Workerが有効で更新待ちなら準備完了とせず、PIN商品版・元会計を保持する', async () => {

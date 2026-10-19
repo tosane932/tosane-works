@@ -48,7 +48,7 @@ async function prepare(page) {
     const registration = await page.evaluate(async () => {
         const sw = await navigator.serviceWorker.ready;
         const keys = await caches.keys();
-        const cache = await caches.open('register-offline-v2-cash-pad');
+        const cache = await caches.open('register-offline-v3-product-tile');
         return { scope: sw.scope, shell: Boolean(await cache.match('/register/offline')),
                  preview: Boolean(await cache.match('/register/preview')),
                  keys };
@@ -70,6 +70,8 @@ async function unlock(page) {
     await expect(page.locator('.product-tile', { hasText: '検証クロワッサン' })).toHaveCount(1);
     await expect(page.locator('.product-tile', { hasText: '検証食パン' })).toHaveCount(1);
     await expect(page.locator('#complete-checkout')).toBeDisabled();
+    await expect(page.locator('.increase-one')).toHaveCount(0);
+    await expect(page.locator('.product-tile button[data-action=plus]')).toHaveCount(2);
 }
 async function sale(page, bread = false) {
     const tile = page.locator('.product-tile', { hasText: '検証クロワッサン' });
@@ -178,7 +180,7 @@ for (const [name, viewport] of [['smartphone', devices['iPhone 13'].viewport],
                 const first = tiles[0].getBoundingClientRect();
                 const second = tiles[1].getBoundingClientRect();
                 const targets = [...document.querySelectorAll(
-                    '.product-tile .add-one, .product-tile .remove-one, .product-tile .increase-one, .product-tile .quantity-input'
+                    '.product-tile .add-one, .product-tile .remove-one, .product-tile .quantity-input'
                 )].map(element => element.getBoundingClientRect());
                 return {
                     scrollWidth: document.documentElement.scrollWidth,

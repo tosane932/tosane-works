@@ -73,9 +73,15 @@ def test_demo_admin_only_and_nonwriting(flask_app, authenticated_client, admin_d
     assert set(config_data) == {"products", "demo"} and config_data["demo"] is True
     assert len(config_data["products"]) == len(PRODUCT_IMAGE_OPTIONS) == 18
     assert len(page.select(".product-tile")) == 18
+    assert not page.select(".increase-one")
+    for tile in page.select(".product-tile"):
+        assert len(tile.select("button[data-action=plus]")) == 1
+        assert tile.select_one(".remove-one").parent is tile
+        assert tile.select_one(".quantity-label").parent is tile
+        assert not tile.select("button button, button input, button label")
     assert all(item["image"].endswith(".webp") for item in config_data["products"])
-    assert page.select_one('script[src="/static/register_demo.js?v=cash-pad-2"]')
-    assert not page.select_one('script[src="/static/register.js?v=cash-pad-2"]')
+    assert page.select_one('script[src="/static/register_demo.js?v=product-tile-3"]')
+    assert not page.select_one('script[src="/static/register.js?v=product-tile-3"]')
     assert "練習用の画面です" in response.get_data(as_text=True)
     g.pop("_login_user", None)
     home = authenticated_client.get("/home")
