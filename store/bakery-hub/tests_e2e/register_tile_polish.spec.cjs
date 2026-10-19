@@ -29,7 +29,8 @@ for(const viewport of [{width:1024,height:768},{width:1280,height:800},{width:39
             expect(Math.abs(metrics.width-metrics.height)).toBeLessThan(2);
             expect(metrics.imageHeight/metrics.height).toBeGreaterThan(.43);
         } else {
-            expect(metrics.width).toBeGreaterThan(metrics.height*1.4);
+            expect(metrics.height).toBeGreaterThanOrEqual(222);
+            expect(metrics.imageHeight/metrics.height).toBeGreaterThan(.35);
             expect(metrics.imageWidth/metrics.width).toBeGreaterThan(.38);
         }
         await page.screenshot({path:testInfo.outputPath(`tile-${viewport.width}.png`),fullPage:true});
@@ -71,21 +72,26 @@ for(const viewport of [{width:1024,height:768},{width:1280,height:800},{width:39
         await quantity.fill('-50');await quantity.press('Tab');
         await minus.tap(); await expect(quantity).toHaveValue('-50');
         await quantity.fill('0');await quantity.press('Tab');
-        // Start a native horizontal gesture inside the minus hit target.
+        // Native gesture starts inside minus: vertical on phone, horizontal on tablet.
         const grid=page.locator('#product-grid');
-        const dragMinus=page.locator('.remove-one').nth(viewport.width>850 ? 6 : 0);
+        const dragMinus=page.locator('.remove-one').nth(viewport.width>850 ? 6 : 2);
         await dragMinus.scrollIntoViewIfNeeded();
         const buttonBox=await dragMinus.boundingBox();
         const gesture=await page.context().newCDPSession(page);
         const start={x:buttonBox.x+24,y:buttonBox.y+24};
+        const beforeY=await page.evaluate(()=>scrollY);
         await gesture.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[start]});
         for(let i=1;i<=10;i++) {
-            await gesture.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:start.x-i*16,y:start.y}]});
+            await gesture.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:start.x-(viewport.width>850?i*16:0),y:start.y-(viewport.width>850?0:i*16)}]});
             await page.waitForTimeout(20);
         }
         await gesture.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
         await gesture.detach();
-        await expect.poll(()=>grid.evaluate(node=>node.scrollLeft)).toBeGreaterThan(10);
+        if(viewport.width>850) await expect.poll(()=>grid.evaluate(node=>node.scrollLeft)).toBeGreaterThan(10);
+        else {
+            await expect.poll(()=>page.evaluate(()=>scrollY)).toBeGreaterThan(beforeY);
+            expect(await grid.evaluate(node=>node.scrollLeft)).toBe(0);
+        }
         await expect(page.locator('#refund-dialog')).not.toBeVisible();
         await expect(page.locator('#total-yen')).toHaveText('0円');
         await expect(quantity).toHaveValue('0');

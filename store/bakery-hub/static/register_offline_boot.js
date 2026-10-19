@@ -130,7 +130,7 @@
             document.getElementById("catalog-observation").textContent =
                 `◷ 保存済み商品情報（${prepared.issued_at}）を使用しています。`;
             state.textContent = "✓ 端末内レジを開きました。";
-            const script = document.createElement("script"); script.src = "/static/register.js?v=product-tile-3";
+            const script = document.createElement("script"); script.src = "/static/register.js?v=responsive-4";
             window.addEventListener("online", revalidate);
             window.addEventListener("focus", revalidate);
             document.head.append(script);
