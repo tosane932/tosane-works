@@ -64,23 +64,27 @@ for (const [device, viewport] of [['smartphone', {width:390,height:844}], ['tabl
         await login(page); await page.goto('/register/preview');
         const grid = page.locator('#product-grid');
         await grid.scrollIntoViewIfNeeded();
-        const tile = page.locator('.product-page').first().locator('.add-one').first();
+        const tile = page.locator('.add-one').first();
         await tile.scrollIntoViewIfNeeded();
         const box = await grid.boundingBox();
         const first = await tile.boundingBox();
         const y = Math.max(60, Math.min(viewport.height - 90, first.y + first.height / 2));
         await drag(page, { x:box.x + box.width * .85,y }, {x:box.x + box.width * .15,y});
-        await expect.poll(() => grid.evaluate(node => node.scrollLeft)).toBeGreaterThan(30);
+        if (device === 'tablet') {
+            await expect.poll(() => grid.evaluate(node => node.scrollLeft)).toBeGreaterThan(30);
+        } else { expect(await grid.evaluate(node=>node.scrollLeft)).toBe(0); }
         await expect(page.locator('#total-yen')).toHaveText('0円');
         await drag(page, { x:box.x + box.width * .15,y }, {x:box.x + box.width * .85,y});
-        await expect(page.locator('#products-position')).toContainText('/ 30商品');
+        await expect(page.locator('#products-position')).toContainText(device === 'tablet' ? '/ 30商品' : '全30商品');
         await expect(page.locator('#total-yen')).toHaveText('0円');
         await tile.click();
         await expect(page.locator('#total-yen')).toHaveText('1,000円');
         const before = await page.evaluate(() => window.scrollY);
         await drag(page, {x:box.x + box.width * .5,y:Math.min(viewport.height - 100,y + 150)},
                         {x:box.x + box.width * .5,y:80});
-        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+        if (device === 'smartphone') {
+            await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+        } else { expect(await page.evaluate(()=>window.scrollY)).toBe(0); }
         await expect(page.locator('#total-yen')).toHaveText('1,000円');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
         await context.close();

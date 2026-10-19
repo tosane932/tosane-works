@@ -3,6 +3,8 @@ async function enterCash(page, value) {
     for (const digit of value) { await page.locator(`[data-cash-key="${digit}"]`).click(); }
 }
 async function openTools(page) {
+    const dialog = page.locator("#register-tools-dialog");
+    if (!await dialog.evaluate(node => node.open)) { await page.locator("#show-register-tools").click(); }
     const tools = page.locator('.register-tools');
     if (!await tools.evaluate(node => node.open)) { await tools.locator('summary').click(); }
 }

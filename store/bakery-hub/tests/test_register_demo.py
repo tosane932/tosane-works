@@ -80,8 +80,11 @@ def test_demo_admin_only_and_nonwriting(flask_app, authenticated_client, admin_d
         assert tile.select_one(".quantity-label").parent is tile
         assert not tile.select("button button, button input, button label")
     assert all(item["image"].endswith(".webp") for item in config_data["products"])
-    assert page.select_one('script[src="/static/register_demo.js?v=product-tile-3"]')
-    assert not page.select_one('script[src="/static/register.js?v=product-tile-3"]')
+    assert page.select_one('script[src="/static/register_demo.js?v=responsive-4"]')
+    assert page.select_one('script[src="/static/register_layout.js?v=responsive-4"]')
+    assert page.select_one('#checkout-payment #return-products')
+    assert page.select_one('#register-layout-notice[hidden]')
+    assert not page.select_one('script[src="/static/register.js?v=responsive-4"]')
     assert "練習用の画面です" in response.get_data(as_text=True)
     g.pop("_login_user", None)
     home = authenticated_client.get("/home")

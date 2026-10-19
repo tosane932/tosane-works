@@ -18,3 +18,10 @@ for (const [count, pages] of [[0,0],[8,1],[12,1],[13,2],[18,2],[24,2],[30,3],[50
         }
     });
 }
+for (const [count, missing] of [[0,0],[1,11],[6,6],[12,0],[13,11],[18,6],[24,0],[25,11],[50,10]]) {
+    test(`${count}商品では末尾だけ${missing}枠を補い、空のグループを増やさない`, () => {
+        assert.equal(pager.emptySlots(count), missing);
+        assert.ok(missing >= 0 && missing < 12);
+        if (count) { assert.equal((count + missing) % 12, 0); }
+    });
+}

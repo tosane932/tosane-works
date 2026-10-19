@@ -54,7 +54,7 @@
             : calculation.kind === "refund" ? "返金の練習 / 完了前に返金額を確認" : "販売の練習";
         $("total-label").textContent = calculation.kind === "refund" ? "返金額" : "合計";
         $("total-yen").textContent = yen(Math.abs(calculation.total));
-        $("jump-checkout").textContent = `${calculation.kind === "refund" ? "返金" : "合計"} ${yen(Math.abs(calculation.total))} · 会計を確認`;
+        $("jump-checkout").textContent = `${calculation.kind === "refund" ? "返金" : "合計"} ${yen(Math.abs(calculation.total))} · 会計へ →`;
         $("cash-area").hidden = calculation.kind === "refund" && calculation.lines.length > 0;
         $("change-yen").textContent = calculation.change === null ? "—" : yen(calculation.change);
         $("cash-hint").textContent = calculation.error && calculation.lines.length
@@ -129,7 +129,6 @@
         render();
         $("catalog-title").scrollIntoView({ block: "start" });
     });
-    $("jump-checkout").addEventListener("click", () => $("checkout-title").scrollIntoView({ block: "start" }));
     const back = $("register-back");
     back.addEventListener("click", event => {
         if (completed || (!cart.quantities.size && !received.value)) { return; }

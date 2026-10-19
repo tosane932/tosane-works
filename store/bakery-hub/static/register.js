@@ -235,7 +235,7 @@
             : result.kind === "refund" ? "返金会計 / 会計完了前に返金額を確認" : "販売会計";
         $("total-label").textContent = result.kind === "refund" ? "返金額" : "合計";
         $("total-yen").textContent = yen(result.kind === "refund" ? -result.total : result.total);
-        $("jump-checkout").textContent = `${result.kind === "refund" ? "返金" : "合計"} ${yen(Math.abs(result.total))} · 会計を確認`;
+        $("jump-checkout").textContent = `${result.kind === "refund" ? "返金" : "合計"} ${yen(Math.abs(result.total))} · 会計へ →`;
         $("cash-area").hidden = result.kind === "refund" && result.lines.length > 0;
         $("change-yen").textContent = result.change === null ? "—" : yen(result.change);
         $("cash-hint").textContent = result.error && result.lines.length ? result.error : "数字ボタンでお預かり金額を入力してください";
@@ -319,7 +319,6 @@
         } finally { busy = false; render(); }
     }
     checkoutButton.addEventListener("click", complete);
-    $("jump-checkout").addEventListener("click", () => $("checkout-title").scrollIntoView({ block: "start" }));
 
     const back = $("register-back");
     back.addEventListener("click", event => {
