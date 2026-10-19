@@ -63,7 +63,7 @@
             container.classList.toggle("product-pages", !phoneMode);
             container.setAttribute("aria-label", phoneMode ? "商品一覧（2列・縦スクロール）" : "商品一覧（横スクロール）");
             controls.hidden = phoneMode;
-            hint.textContent = phoneMode ? "タップで1個追加・下へスクロール" : "タップで1個追加・左右にスクロール";
+            hint.textContent = phoneMode ? "タップで1個追加・下へスクロール" : "タップで1個・横スクロール";
             if (!tiles.length) {
                 const empty = document.createElement("p");
                 empty.textContent = "販売中の商品はありません。商品一覧で登録・販売再開してください。";

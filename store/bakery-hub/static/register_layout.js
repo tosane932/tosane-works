@@ -7,6 +7,7 @@
     const catalog = shell.querySelector(".catalog");
     const checkout = shell.querySelector(".checkout");
     const payment = document.getElementById("checkout-payment");
+    const cart = document.getElementById("cart-lines");
     const grid = document.getElementById("product-grid");
     const jump = document.getElementById("jump-checkout");
     const back = document.getElementById("return-products");
@@ -46,14 +47,20 @@
         const room = viewport - edges(shell) - outside.reduce((sum, node) => sum + outer(node), 0)
             - number(getComputedStyle(shell).rowGap) * outside.length;
         // Intrinsic children only: never measure stretched grid/cart heights to decide fit.
-        const checkoutNeed = () => edges(checkout) + 44 + number(getComputedStyle(document.getElementById("cart-lines")).marginBottom) + Array.from(checkout.children)
-            .filter(node => node.id !== "cart-lines").reduce((sum, node) => sum + outer(node), 0);
+        // Empty-cart guidance already lives in the heading. Otherwise reserve one
+        // actual (possibly wrapped) line, not a blank, expanding 44px block.
+        const cartMinimum = visible(cart) && cart.firstElementChild ? Math.max(28, outer(cart.firstElementChild)) : 0;
+        const cartCSS = getComputedStyle(cart);
+        const cartMargin = visible(cart) ? number(cartCSS.marginTop) + number(cartCSS.marginBottom) : 0;
+        const checkoutNeed = () => edges(checkout) + cartMinimum + cartMargin + Array.from(checkout.children)
+            .filter(node => node !== cart).reduce((sum, node) => sum + outer(node), 0);
         setSize("--cash-key-height", "60px");
         const preferredNeed = checkoutNeed();
         const keyHeight = Math.max(52, Math.min(60, Math.floor(60 - (preferredNeed - room + 2) / 4)));
         setSize("--cash-key-height", `${keyHeight}px`);
         const catalogCSS = getComputedStyle(catalog);
-        const overhead = edges(catalog) + edges(grid) + 12 + number(catalogCSS.rowGap)
+        const scrollbar = Math.max(8, grid.offsetHeight - grid.clientHeight);
+        const overhead = edges(catalog) + edges(grid) + scrollbar + number(catalogCSS.rowGap)
             + Math.max(outer(catalog.querySelector(".section-heading")), outer(catalog.querySelector(".product-page-controls")));
         const gap = 10;
         const available = Math.max(0, room - overhead - 4);
@@ -69,7 +76,12 @@
         setSize("--product-rows", String(rows));
         window.RegisterPager?.setRows(grid, rows);
         const catalogNeed = grid.querySelector(".product-tile") ? overhead + tileSize * rows + gap * (rows - 1) : overhead + 44;
-        const fit = room >= Math.max(catalogNeed, checkoutNeed()) + 2;
+        const needed = checkoutNeed();
+        setSize("--cart-min-height", `${cartMinimum}px`);
+        setSize("--cart-limit", `${Math.max(cartMinimum, Math.floor(room - needed + cartMinimum - 2))}px`);
+        // Compare rounded physical bounds. An extra fixed 2px rejected a
+        // 500px viewport even though all measured controls fit inside it.
+        const fit = Math.floor(room) >= Math.ceil(Math.max(catalogNeed, needed));
         setSize("--register-height", `${viewport}px`);
         document.body.classList.toggle("register-fit", fit);
         if (notice.hidden !== fit) { notice.hidden = fit; }

@@ -92,6 +92,7 @@ def test_preview_auth_and_eighteen_plus_custom_text_tiles(flask_app, authenticat
     assert all(row["image"].endswith(".webp") for row in config["products"] if row["id"] != custom.id)
     assert page.select_one("#complete-checkout").has_attr("disabled")
     assert "本番の売上記録には使用できません" in response.get_data(as_text=True)
+    assert page.select_one(".register-mode-note").get_text(strip=True) == "開発用・未公開・保存停止"
     assert preview(authenticated_client).status_code == 200
     assert RegisterProduct.query.filter_by(dataset_id=admin_dataset.id).count() == 19
     assert preview(flask_app.test_client()).status_code == 302
