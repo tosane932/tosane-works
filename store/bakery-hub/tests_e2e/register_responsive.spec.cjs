@@ -80,7 +80,7 @@ test('tablet: 0/1/6/12/13/18/24/25 products, only final group padded and one-scr
         const page=await context.newPage();await login(page);await page.goto('/register/preview');
         await expect(page.locator('.product-tile')).toHaveCount(count);
         await expect(page.locator('.product-page')).toHaveCount(Math.ceil(count/12));
-        const missing=count?(12-count%12)%12:0;
+        const missing=count?(2-count%2)%2:0;
         await expect(page.locator('.product-placeholder')).toHaveCount(missing);
         if(missing) {
             const dummy=page.locator('.product-placeholder').last();
@@ -96,7 +96,7 @@ test('tablet: 0/1/6/12/13/18/24/25 products, only final group padded and one-scr
             const boxes=await page.locator('.product-page').first().evaluate(el=>Array.from(el.children).map(n=>{
                 const b=n.getBoundingClientRect();return {y:b.y,w:b.width,h:b.height};
             }));
-            expect(new Set(boxes.map(b=>b.y)).size).toBe(3);
+            expect(new Set(boxes.map(b=>b.y)).size).toBe(Math.min(2,count+missing));
             expect(boxes.every(b=>Math.abs(b.w-b.h)<2)).toBe(true);
         } else await expect(page.locator('#product-grid')).toContainText('販売中の商品はありません');
         await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollHeight-innerHeight)).toBeLessThanOrEqual(1);
@@ -142,7 +142,7 @@ test('rotation retains DOM identity, cart and cash; low height and large text ke
     await page.evaluate(()=>{
         document.documentElement.style.fontSize='16px';
         const warning=document.querySelector('#register-message');
-        warning.hidden=false;warning.textContent='端末に保存できません。入力中の会計を保持しています。'.repeat(20);
+        warning.hidden=false;warning.textContent='端末に保存できません。入力中の会計を保持しています。'.repeat(60);
     });
     await expect(page.locator('#register-layout-notice')).toBeVisible();
     await expect(page.locator('#register-message')).toBeVisible();

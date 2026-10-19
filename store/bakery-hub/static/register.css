@@ -104,8 +104,8 @@ dialog h2{font-size:1.2rem;margin:0 0 12px}
 }
 /* Groups retain the 12-item data boundary, with no snapping or inert offscreen cards. */
 .product-pages{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:none;overscroll-behavior-x:contain;overscroll-behavior-y:auto;touch-action:auto;scrollbar-width:thin;min-width:0;padding:3px}
-.product-page{flex:0 0 auto;min-width:0;display:grid;gap:10px;align-content:start;grid-auto-flow:column;grid-template-columns:none;grid-template-rows:repeat(3,var(--tile-size));grid-auto-columns:var(--tile-size)}
-.catalog{--tile-size:clamp(168px,min(calc((100vw - 430px)/4),calc((100dvh - 275px)/3)),220px);min-width:0}
+.product-page{flex:0 0 auto;min-width:0;display:grid;gap:10px;align-content:start;grid-auto-flow:column;grid-template-columns:none;grid-template-rows:repeat(var(--product-rows,2),var(--tile-size));grid-auto-columns:var(--tile-size)}
+.catalog{min-width:0}
 /* The add button fills the tile. The two sibling controls own their full hit areas. */
 .product-tile{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);min-height:0;border:1px solid #ddd4c7}
 .product-tile.selected{border:1px solid #7b5634;box-shadow:inset 0 0 0 2px #7b5634}
@@ -248,4 +248,26 @@ dialog h2{font-size:1.2rem;margin:0 0 12px}
  .cash-keypad button{min-height:48px}.cash-keypad button[data-cash-key="clear"]{min-height:44px}
  .change-row strong{font-size:1.35rem}.checkout-help{line-height:1.35}
  .mobile-checkout-link{display:block;position:fixed;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom,0px));min-height:54px;margin:0}
+}
+
+/* Adaptive v5: four keypad rows reclaim height without shrinking touch targets.
+   Only wide layouts change; phone grid, cash pad and navigation stay as before. */
+@media(min-width:851px){
+ .register-shell{--tile-size:168px;--product-rows:2;--cash-key-height:52px}
+ .checkout{padding:8px 10px}
+ .checkout>.section-heading{gap:2px 8px;margin-bottom:2px;line-height:1.2}
+ .checkout .section-heading h2{line-height:1.2}
+ .total-row{padding:3px 0}.total-row strong{font-size:1.55rem;line-height:1.15}
+ .received-label{display:block;font-size:.8rem;line-height:1.2}
+ .cash-display{margin:2px 0 4px;padding:2px 8px}.cash-display output{font-size:1.45rem;line-height:1.2}
+ .cash-keypad{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+ .cash-keypad button{min-height:var(--cash-key-height);font-size:1.3rem;padding:3px}
+ .cash-keypad button[data-cash-key="backspace"]{grid-column:4;grid-row:1}
+ .cash-keypad button[data-cash-key="clear"]{grid-column:4;grid-row:2;min-height:var(--cash-key-height);font-size:.75rem}
+ .cash-keypad button[data-cash-key="00"]{grid-column:4;grid-row:3/5}
+ .cash-keypad button[data-cash-key="0"]{grid-column:1/4;grid-row:4}
+ #cash-hint{display:none}
+ .change-row{padding:3px 0}.change-row strong{font-size:1.4rem;line-height:1.15}
+ .complete-button{min-height:56px;margin-top:6px}
+ .cart-lines{margin-bottom:5px}
 }

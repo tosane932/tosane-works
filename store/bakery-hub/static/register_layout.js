@@ -26,6 +26,9 @@
         const css = getComputedStyle(node);
         return number(css.paddingTop) + number(css.paddingBottom) + number(css.borderTopWidth) + number(css.borderBottomWidth);
     }
+    function setSize(name, value) {
+        if (shell.style.getPropertyValue(name) !== value) { shell.style.setProperty(name, value); }
+    }
     function update() {
         frame = null;
         const viewport = Math.min(innerHeight, window.visualViewport?.height || innerHeight);
@@ -42,18 +45,32 @@
             node !== layout && node !== jump && node !== notice && visible(node));
         const room = viewport - edges(shell) - outside.reduce((sum, node) => sum + outer(node), 0)
             - number(getComputedStyle(shell).rowGap) * outside.length;
-        const firstPage = grid.querySelector(".product-page");
-        const tile = grid.querySelector(".product-tile");
-        const gridHeight = firstPage && tile ? tile.getBoundingClientRect().height * 3
-            + number(getComputedStyle(firstPage).rowGap) * 2 + edges(grid)
-            + Math.max(8, grid.offsetHeight - grid.clientHeight) : 44;
-        const catalogNeed = edges(catalog) + gridHeight + number(getComputedStyle(catalog).rowGap)
-            + Math.max(outer(catalog.querySelector(".section-heading")), outer(catalog.querySelector(".product-page-controls")));
-        const checkoutNeed = edges(checkout) + 52 + Array.from(checkout.children)
+        // Intrinsic children only: never measure stretched grid/cart heights to decide fit.
+        const checkoutNeed = () => edges(checkout) + 44 + number(getComputedStyle(document.getElementById("cart-lines")).marginBottom) + Array.from(checkout.children)
             .filter(node => node.id !== "cart-lines").reduce((sum, node) => sum + outer(node), 0);
-        const fit = room >= Math.max(catalogNeed, checkoutNeed) + 2;
-        const height = `${viewport}px`;
-        if (shell.style.getPropertyValue("--register-height") !== height) { shell.style.setProperty("--register-height", height); }
+        setSize("--cash-key-height", "60px");
+        const preferredNeed = checkoutNeed();
+        const keyHeight = Math.max(52, Math.min(60, Math.floor(60 - (preferredNeed - room + 2) / 4)));
+        setSize("--cash-key-height", `${keyHeight}px`);
+        const catalogCSS = getComputedStyle(catalog);
+        const overhead = edges(catalog) + edges(grid) + 12 + number(catalogCSS.rowGap)
+            + Math.max(outer(catalog.querySelector(".section-heading")), outer(catalog.querySelector(".product-page-controls")));
+        const gap = 10;
+        const available = Math.max(0, room - overhead - 4);
+        // Touch tablets favour photos and two rows. Fine pointers can use 3–4 rows
+        // only when the actual available height can keep every tile readable.
+        const minTile = Math.max(168, number(getComputedStyle(document.documentElement).fontSize) * 10.5);
+        const touch = matchMedia("(pointer: coarse)").matches;
+        const rows = touch ? 2 : Math.max(2, Math.min(4, Math.floor((available + gap) / (minTile + gap))));
+        const columns = touch ? 2 : 3;
+        const width = Math.max(minTile, (grid.clientWidth - 6 - gap * (columns - 1)) / columns);
+        const tileSize = Math.max(minTile, Math.floor(Math.min((available - gap * (rows - 1)) / rows, width)));
+        setSize("--tile-size", `${tileSize}px`);
+        setSize("--product-rows", String(rows));
+        window.RegisterPager?.setRows(grid, rows);
+        const catalogNeed = grid.querySelector(".product-tile") ? overhead + tileSize * rows + gap * (rows - 1) : overhead + 44;
+        const fit = room >= Math.max(catalogNeed, checkoutNeed()) + 2;
+        setSize("--register-height", `${viewport}px`);
         document.body.classList.toggle("register-fit", fit);
         if (notice.hidden !== fit) { notice.hidden = fit; }
     }
@@ -86,6 +103,7 @@
     new MutationObserver(schedule).observe(shell, {subtree: true, childList: true, characterData: true,
         attributes: true, attributeFilter: ["hidden"]});
     window.addEventListener("resize", schedule);
+    matchMedia("(pointer: coarse)").addEventListener("change", schedule);
     window.visualViewport?.addEventListener("resize", schedule);
     window.addEventListener("scroll", schedule, {passive: true});
     window.addEventListener("register-catalog-layout", schedule);
