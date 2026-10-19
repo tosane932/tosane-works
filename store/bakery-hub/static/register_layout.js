@@ -79,7 +79,9 @@
         const needed = checkoutNeed();
         setSize("--cart-min-height", `${cartMinimum}px`);
         setSize("--cart-limit", `${Math.max(cartMinimum, Math.floor(room - needed + cartMinimum - 2))}px`);
-        const fit = room >= Math.max(catalogNeed, needed) + 2;
+        // Compare rounded physical bounds. An extra fixed 2px rejected a
+        // 500px viewport even though all measured controls fit inside it.
+        const fit = Math.floor(room) >= Math.ceil(Math.max(catalogNeed, needed));
         setSize("--register-height", `${viewport}px`);
         document.body.classList.toggle("register-fit", fit);
         if (notice.hidden !== fit) { notice.hidden = fit; }

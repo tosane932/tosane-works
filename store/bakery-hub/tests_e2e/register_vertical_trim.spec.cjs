@@ -27,7 +27,7 @@ async function paymentVisible(page,height) {
         },height)).toBe(true);
     }
 }
-for(const viewport of [{width:1024,height:533},{width:1024,height:540},{width:1280,height:552},{width:1280,height:600}]) {
+for(const viewport of [{width:1024,height:500},{width:1024,height:533},{width:1024,height:540},{width:1280,height:552},{width:1280,height:600}]) {
     for(const route of ['/register/demo','/register/preview']) {
         test(`${route} ${viewport.width}x${viewport.height}: trim decoration, preserve photos and payment`,async({browser},info)=>{
             const context=await browser.newContext({viewport,hasTouch:true});const page=await context.newPage();
