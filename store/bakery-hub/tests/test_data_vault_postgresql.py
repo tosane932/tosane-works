@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from data_vault import VaultError, export_bundle, import_bundle
 from models import Dataset, RegisterProduct, RegisterPriceHistory, PrepRecipe, PrepIngredient, db
 from postgresql_test_utils import get_isolated_postgresql_test_url
-from tests.test_data_vault import sample, business_snapshot, STATIC
+from tests.test_data_vault import sample, business_snapshot, STATIC, assert_existing_transaction_protected
 
 TEST_URL = get_isolated_postgresql_test_url()
 pytestmark = pytest.mark.skipif(not TEST_URL, reason='隔離PostgreSQLの設定なし')
@@ -97,3 +97,7 @@ def test_postgresql_restore_failure_rolls_back_and_can_retry(pg_pair, tmp_path):
             assert not s.scalars(select(model)).all()
     import_bundle(target, dst, folder, static_folder=STATIC, apply=True, confirm_dataset=str(dst))
     assert business_snapshot(source, src) == business_snapshot(target, dst)
+
+
+def test_postgresql_existing_accounting_is_never_overwritten(pg_pair, tmp_path):
+    assert_existing_transaction_protected(*pg_pair, tmp_path/'existing-accounting')

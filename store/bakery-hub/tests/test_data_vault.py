@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 
 from models import (Dataset, Product, RegisterProduct, PrepRecipe, PrepIngredient,
-                    RegisterPrepLink, RegisterPriceHistory, db)
+                    RegisterPrepLink, RegisterPriceHistory, RegisterTransaction, db)
 from data_vault import VaultError, export_bundle, import_bundle, load_bundle, main
 
 STATIC = Path(__file__).resolve().parents[1] / "static"
@@ -337,3 +337,23 @@ def test_published_examples_are_fictional_and_restore(pair):
     import_bundle(target, dst, folder, static_folder=STATIC, apply=True, confirm_dataset=str(dst))
     with Session(target) as s:
         assert len(s.scalars(select(RegisterProduct)).all()) == 2
+
+
+def assert_existing_transaction_protected(source, src, target, dst, folder):
+    key = uuid.uuid4()
+    with Session(target) as s, s.begin():
+        s.add(RegisterTransaction(dataset_id=dst, submission_key=key, request_digest='a'*64,
+            business_date=datetime.date(2026,10,20), kind='sale', total_yen=280,
+            received_yen=500, change_yen=220))
+    export_bundle(source, src, folder, static_folder=STATIC)
+    for apply in (False, True):
+        with pytest.raises(VaultError, match='既存データ'):
+            import_bundle(target, dst, folder, static_folder=STATIC, apply=apply, confirm_dataset=str(dst))
+    with Session(target) as s:
+        t = s.scalar(select(RegisterTransaction))
+        assert (t.submission_key,t.total_yen,t.received_yen,t.change_yen) == (key,280,500,220)
+        assert not s.scalars(select(RegisterProduct)).all()
+
+
+def test_existing_accounting_blocks_even_an_empty_backup(pair, tmp_path):
+    assert_existing_transaction_protected(*pair, tmp_path/'existing-accounting')
