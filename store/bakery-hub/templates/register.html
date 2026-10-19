@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ '' if offline_shell|default(false) else csrf_token() }}">
     <title>{{ 'レジ操作デモ' if demo|default(false) else 'レジ会計（開発プレビュー）' }} | Bakery Hub</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='register.css', v='responsive-4') }}">
-    <script src="{{ url_for('static', filename='register_core.js', v='responsive-4') }}" defer></script>
-    <script src="{{ url_for('static', filename='register_pager.js', v='responsive-4') }}" defer></script>
-    <script src="{{ url_for('static', filename='register_cash_pad.js', v='responsive-4') }}" defer></script>
-    <script src="{{ url_for('static', filename='register_layout.js', v='responsive-4') }}" defer></script>
-    {% if offline_shell|default(false) or offline_enabled|default(false) %}<script src="{{ url_for('static', filename='register_offline_store.js', v='responsive-4') }}" defer></script>{% endif %}
-    <script src="{{ url_for('static', filename='register_offline_boot.js' if offline_shell|default(false) else ('register_demo.js' if demo|default(false) else 'register.js'), v='responsive-4') }}" defer></script>
-    {% if offline_enabled|default(false) and not offline_shell|default(false) %}<script src="{{ url_for('static', filename='register_offline_setup.js', v='responsive-4') }}" defer></script>{% endif %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='register.css', v='adaptive-5') }}">
+    <script src="{{ url_for('static', filename='register_core.js', v='adaptive-5') }}" defer></script>
+    <script src="{{ url_for('static', filename='register_pager.js', v='adaptive-5') }}" defer></script>
+    <script src="{{ url_for('static', filename='register_cash_pad.js', v='adaptive-5') }}" defer></script>
+    <script src="{{ url_for('static', filename='register_layout.js', v='adaptive-5') }}" defer></script>
+    {% if offline_shell|default(false) or offline_enabled|default(false) %}<script src="{{ url_for('static', filename='register_offline_store.js', v='adaptive-5') }}" defer></script>{% endif %}
+    <script src="{{ url_for('static', filename='register_offline_boot.js' if offline_shell|default(false) else ('register_demo.js' if demo|default(false) else 'register.js'), v='adaptive-5') }}" defer></script>
+    {% if offline_enabled|default(false) and not offline_shell|default(false) %}<script src="{{ url_for('static', filename='register_offline_setup.js', v='adaptive-5') }}" defer></script>{% endif %}
 {% include "_pwa_head.html" %}
 </head>
 <body>

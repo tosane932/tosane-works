@@ -1,4 +1,4 @@
-/* Phone: one vertical list. Tablet: continuous groups of 12. Neither owns checkout state. */
+/* Phone: one vertical list. Tablet/PC: continuous groups of up to 12. Neither owns checkout state. */
 (function (root) {
     "use strict";
     const PAGE_SIZE = 12;
@@ -7,7 +7,7 @@
         for (let i = 0; i < items.length; i += PAGE_SIZE) { pages.push(items.slice(i, i + PAGE_SIZE)); }
         return pages;
     }
-    function emptySlots(count) { return count ? (PAGE_SIZE - count % PAGE_SIZE) % PAGE_SIZE : 0; }
+    function emptySlots(count, rows = 2) { return count ? (rows - count % rows) % rows : 0; }
     const mounted = new WeakMap();
     function mount(container) {
         if (!container) { return; }
@@ -20,6 +20,7 @@
         const hint = document.getElementById("products-swipe-hint");
         const phone = root.matchMedia("(max-width: 850px)");
         let phoneMode;
+        let rowCount = 2;
         let desktopLeft = 0;
         let pages = [];
         let tiles = [];
@@ -47,7 +48,7 @@
                 node.setAttribute("aria-label", `商品グループ ${index + 1}`);
                 node.append(...items);
                 if (index === all.length - 1) {
-                    for (let i = 0; i < emptySlots(items.length); i++) {
+                    for (let i = 0; i < emptySlots(items.length, rowCount); i++) {
                         const empty = document.createElement("div");
                         empty.className = "product-placeholder";
                         empty.setAttribute("aria-hidden", "true");
@@ -106,10 +107,28 @@
             new ResizeObserver(display).observe(container);
         }
         phone.addEventListener("change", refresh);
-        mounted.set(container, { refresh });
+        function setRows(rows) {
+            if (rows === rowCount) { return; }
+            rowCount = rows;
+            if (phoneMode) { return; }
+            // Only decorative slots change. Real product nodes, focus and scroll stay put.
+            const last = pages[pages.length - 1];
+            if (!last) { return; }
+            last.querySelectorAll(".product-placeholder").forEach(node => node.remove());
+            const count = last.querySelectorAll(".product-tile").length;
+            for (let i = 0; i < emptySlots(count, rows); i++) {
+                const empty = document.createElement("div");
+                empty.className = "product-placeholder";
+                empty.setAttribute("aria-hidden", "true");
+                empty.textContent = "未登録";
+                last.append(empty);
+            }
+            display();
+        }
+        mounted.set(container, { refresh, setRows });
         refresh();
     }
-    const api = { PAGE_SIZE, group, emptySlots, mount };
+    const api = { PAGE_SIZE, group, emptySlots, mount, setRows: (container, rows) => mounted.get(container)?.setRows(rows) };
     if (typeof module !== "undefined" && module.exports) { module.exports = api; }
     else {
         root.RegisterPager = api;

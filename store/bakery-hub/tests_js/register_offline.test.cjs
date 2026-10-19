@@ -69,8 +69,8 @@ test('Service Workerは専用シェルと資産だけをキャッシュし、API
     events.install({ waitUntil: promise => { installation = promise; } });
     await installation;
     assert.ok(items.has('/register/offline'));
-    assert.ok(items.has('/static/register_offline_boot.js?v=responsive-4'));
-    assert.ok(items.has('/static/register_layout.js?v=responsive-4'));
+    assert.ok(items.has('/static/register_offline_boot.js?v=adaptive-5'));
+    assert.ok(items.has('/static/register_layout.js?v=adaptive-5'));
     assert.ok(!items.has('/register/preview'));
     assert.ok(!items.has('/api/register/offline/session'));
     let handled = false;
@@ -122,7 +122,7 @@ test('通信断の再起動シェルはPINとDataset・期限を検査して商�
     assert.ok(tile.children[1].children.some(child=>child.className==='product-price product-price-long'));
     assert.equal(tile.children[2].children[0].className,'quantity-caption');
     assert.equal(JSON.parse(node('register-config').textContent).products[0].id, 7);
-    assert.deepEqual(scripts, ['/static/register.js?v=responsive-4']);
+    assert.deepEqual(scripts, ['/static/register.js?v=adaptive-5']);
     assert.equal(globals.RegisterOfflineAuth, 'offline');
 });
 
@@ -173,11 +173,11 @@ test('PIN解除直後の通信復旧イベントを取り逃がさず、古い�
     assert.equal(node('csrf').content, 'fresh');
 });
 
-test('旧キャッシュを残してもv4のシェル・表示制御・キーパッド資産だけを復元する', async () => {
+test('旧キャッシュを残してもv5のシェル・表示制御・キーパッド資産だけを復元する', async () => {
     const events = {};
     const wanted = new Map([
-        ['/register/offline', 'v4-shell'],
-        ['https://bakery.test/static/register_cash_pad.js?v=responsive-4', 'v4-keypad'],
+        ['/register/offline', 'v5-shell'],
+        ['https://bakery.test/static/register_cash_pad.js?v=adaptive-5', 'v5-keypad'],
     ]);
     const opened = [];
     vm.runInNewContext(source('register_offline_sw.js'), {
@@ -190,14 +190,14 @@ test('旧キャッシュを残してもv4のシェル・表示制御・キーパ
         fetch:async()=>{throw Error('offline');},
     });
     for(const [url,mode,expected] of [
-        ['https://bakery.test/register/preview','navigate','v4-shell'],
-        ['https://bakery.test/static/register_cash_pad.js?v=responsive-4','same-origin','v4-keypad'],
+        ['https://bakery.test/register/preview','navigate','v5-shell'],
+        ['https://bakery.test/static/register_cash_pad.js?v=adaptive-5','same-origin','v5-keypad'],
     ]) {
         let response;
         events.fetch({request:{method:'GET',url,mode},respondWith:promise=>response=promise});
         assert.equal(await response,expected);
     }
-    assert.ok(opened.every(version=>version==='register-offline-v4-responsive'));
+    assert.ok(opened.every(version=>version==='register-offline-v5-adaptive'));
 });
 
 test('旧Workerが有効で更新待ちなら準備完了とせず、PIN商品版・元会計を保持する', async () => {

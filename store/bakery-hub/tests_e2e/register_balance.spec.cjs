@@ -38,7 +38,7 @@ for (const viewport of [{width:1280,height:800},{width:1024,height:768},{width:1
             const box=node.getBoundingClientRect();return {x:box.x,y:box.y,w:box.width,h:box.height};
         }));
         if (viewport.width>850) {
-            expect(new Set(layout.map(box=>box.y)).size).toBe(3);
+            expect(new Set(layout.map(box=>box.y)).size).toBe(2);
             expect(layout.every(box=>Math.abs(box.w-box.h)<2)).toBe(true);
             expect(await page.locator('#complete-checkout').evaluate(node=>node.getBoundingClientRect().bottom)).toBeLessThanOrEqual(viewport.height);
             const left=await grid.boundingBox(), right=await checkout.boundingBox();

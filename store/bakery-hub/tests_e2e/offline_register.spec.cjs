@@ -48,7 +48,7 @@ async function prepare(page) {
     const registration = await page.evaluate(async () => {
         const sw = await navigator.serviceWorker.ready;
         const keys = await caches.keys();
-        const cache = await caches.open('register-offline-v4-responsive');
+        const cache = await caches.open('register-offline-v5-adaptive');
         return { scope: sw.scope, shell: Boolean(await cache.match('/register/offline')),
                  preview: Boolean(await cache.match('/register/preview')),
                  keys };
@@ -174,7 +174,7 @@ for (const [name, viewport] of [['smartphone', devices['iPhone 13'].viewport],
             await login(page);
             await prepare(page);
             // Layout contract: no horizontal overflow or crowded touch targets.
-            // A phone uses two vertical columns; tablet retains three horizontal rows.
+            // A phone uses two vertical columns; tablet uses two horizontal rows.
             const layout = await page.evaluate(() => {
                 const tiles = [...document.querySelectorAll('.product-tile')];
                 const first = tiles[0].getBoundingClientRect();
