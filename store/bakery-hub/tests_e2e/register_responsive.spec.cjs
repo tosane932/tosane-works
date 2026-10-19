@@ -33,6 +33,8 @@ for(const width of [360,375,390,430]) {
         const page=await context.newPage();
         await login(page);await page.goto('/register/preview');
         await expect(page.locator('.product-tile')).toHaveCount(25);
+        await expect(page.locator('.preview-note')).toBeVisible();
+        await expect(page.locator('.register-mode-note')).toBeHidden();
         await expect(page.locator('.product-page,.product-placeholder')).toHaveCount(0);
         await expect(page.locator('.product-page-controls')).not.toBeVisible();
         const layout=await page.locator('.product-tile').evaluateAll(nodes=>nodes.slice(0,3).map(el=>{
@@ -129,7 +131,7 @@ test('rotation retains DOM identity, cart and cash; low height and large text ke
             }
         } else await expect(page.locator('.product-page,.product-placeholder')).toHaveCount(0);
     }
-    await page.setViewportSize({width:1024,height:500});
+    await page.setViewportSize({width:1024,height:420});
     await expect(page.locator('#register-layout-notice')).toBeVisible();
     await page.locator('#complete-checkout').scrollIntoViewIfNeeded();
     await expect(page.locator('#complete-checkout')).toBeInViewport({ratio:1});

@@ -48,7 +48,7 @@ async function prepare(page) {
     const registration = await page.evaluate(async () => {
         const sw = await navigator.serviceWorker.ready;
         const keys = await caches.keys();
-        const cache = await caches.open('register-offline-v5-adaptive');
+        const cache = await caches.open('register-offline-v6-trim');
         return { scope: sw.scope, shell: Boolean(await cache.match('/register/offline')),
                  preview: Boolean(await cache.match('/register/preview')),
                  keys };
@@ -166,7 +166,8 @@ test('Chromium: 通信断の連続会計、再読み込み、プロファイル�
 });
 
 for (const [name, viewport] of [['smartphone', devices['iPhone 13'].viewport],
-                                 ['landscape tablet', { width: 1024, height: 768 }]]) {
+                                 ['landscape tablet', { width: 1024, height: 768 }],
+                                 ['short landscape tablet', { width: 1024, height: 552 }]]) {
     test(`Chromium ${name}: prepared catalog, touch targets and local completion`, async ({ browser }) => {
         const context = await browser.newContext({ viewport, isMobile: name === 'smartphone', hasTouch: true });
         try {
@@ -203,8 +204,23 @@ for (const [name, viewport] of [['smartphone', devices['iPhone 13'].viewport],
                 expect(layout.sameRow).toBe(false);
                 expect(layout.sameColumn).toBe(true);
             }
+            if(name !== 'smartphone') {
+                await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollHeight-innerHeight)).toBe(0);
+                await expect(page.locator('#complete-checkout')).toBeInViewport({ratio:1});
+                await expect(page.locator('.register-mode-note')).toHaveText('端末内レジ');
+            }
             await context.setOffline(true);
             await sale(page);
+            if(name !== 'smartphone') {
+                console.log('OFFLINE VIEWPORT',JSON.stringify(await page.evaluate(()=>({viewport:[innerWidth,innerHeight,visualViewport.height],fit:document.body.className,
+                    nodes:[...document.querySelector('#register-root').children].map(n=>[n.id||n.className,n.getBoundingClientRect().height,getComputedStyle(n).display]),
+                    key:document.querySelector('[data-cash-key="7"]').getBoundingClientRect().height,
+                    tile:document.querySelector('.product-tile').getBoundingClientRect().height}))));
+                await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollHeight-innerHeight)).toBe(0);
+                for(const selector of ['#cash-keypad','#received-display','#change-yen','#complete-checkout']) {
+                    await expect(page.locator(selector)).toBeInViewport({ratio:1});
+                }
+            }
             expect((await records(page))[0].status).toBe('pending');
             await expect(page.locator('#sync-state')).toContainText('1件');
         } finally { await context.close(); }
