@@ -42,6 +42,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='system_overview.js') }}" defer></script>
     <script src="{{ url_for('static', filename='system_overview_scrubber.js') }}" defer></script>
+{% include "_pwa_head.html" %}
 </head>
 <body class="system-overview-page app-shell-page">
 {% include "_app_navigation.html" %}
@@ -180,11 +181,25 @@
         <h2 tabindex="-1">3. メニュー・機能別の仕組み</h2>
         <p>役割を確認してから詳細を開くと、Python・DB・画面・テストのつながりを追えます。ファイル名のリンクはGitHubのmainを開きます。</p>
         <nav class="overview-contents" aria-label="機能別の目次">
-            {% for id, label in [('home', '店舗運営ホーム'), ('schedule', 'スケジュール'), ('staff-shifts', 'スタッフ・シフト管理'), ('prep', '仕込み管理'), ('products', '商品登録'), ('product-catalog', '商品一覧'), ('sales', '売上入力'), ('dashboard', '売上分析'), ('materials', '材料発注'), ('memos', '店舗メモ'), ('tasks', 'タスク'), ('guest', 'Guest Demo'), ('auth', 'ログイン'), ('ai', 'AI')] %}
+            {% for id, label in [('home', '店舗運営ホーム'), ('pwa', 'ホーム画面から起動'), ('schedule', 'スケジュール'), ('staff-shifts', 'スタッフ・シフト管理'), ('prep', '仕込み管理'), ('products', '商品登録'), ('product-catalog', '商品一覧'), ('sales', '売上入力'), ('dashboard', '売上分析'), ('materials', '材料発注'), ('memos', '店舗メモ'), ('tasks', 'タスク'), ('guest', 'Guest Demo'), ('auth', 'ログイン'), ('ai', 'AI')] %}
             <a href="#feature-{{ id }}">{{ label }}</a>
             {% endfor %}
         </nav>
         <div class="overview-feature-grid">
+        {% call feature('pwa', 'ホーム画面から起動するPWA', 'Bakery Hub全体をホーム画面へ追加し、アプリのように開くための設定です。インストールと全機能のオフライン対応は別です。', 'GET /static/manifest.webmanifest → GET /home → 未ログインなら /login') %}
+            <dt>Python / Flask</dt>
+            <dd>PWA（Progressive Web App）は、Web技術で作った画面をホーム画面などから起動する仕組みです。ネイティブアプリのように端末専用の実行ファイルを配布せず、既存のFlask画面をブラウザの仕組みで表示します。起動先の<code>/home</code>は既存の認証を使い、インストールだけではログインやAdmin権限を与えません。HTTPSは通信を暗号化し、インストールなどの前提になる安全な接続です（開発時のlocalhostは例外）。</dd>
+            <dt>Database</dt>
+            <dd>DB構造・Dataset境界・Cookieは変更しません。Manifestやアイコンに認証情報を含めません。未同期会計が入るIndexedDBと、画面資産を保存するCache Storageは別の保存先です。今回どちらも初期化・削除しません。</dd>
+            <dt>Frontend</dt>
+            <dd>Web App Manifestは、アプリ名・アイコン・起動URL・アプリ内として扱うURL範囲（scope）・表示方法を伝えるJSONです。共通<code>_pwa_head.html</code>をログイン・主要画面・レジに含め、同じアプリとして扱います。<code>standalone</code>は通常のURLバーやタブを省く表示で、Androidのシステム操作を隠すfullscreenではありません。画面の縦横方向を固定せず、戻る操作やリンクも既存ブラウザに任せます。</dd>
+            <dd>Service Workerは画面の裏で通信を扱えるJavaScriptで、Manifestとは役割が異なります。今回は新しいService Workerは登録しません。既存のレジ専用Workerだけが<code>/register/</code>を担当し、Cache Storageへ情報を含まない専用シェルと許可された資産を保存します。ホーム・認証画面・売上APIをオフライン表示するキャッシュは追加しません。未準備端末では通信断後にホームからレジへ進める保証もありません。準備済みレジの既存URLからの復帰とPIN・端末許可・再同期を維持します。</dd>
+            <dt>pytest</dt>
+            <dd>公開Manifestと画像サイズ、主要画面の共通設定、認証・ログアウト、HTMLのno-storeを確認します。Chromium E2EでManifestの解析、遷移・戻る・更新、Worker登録範囲、通信断時の非キャッシュ、未同期会計保持を確認します。自動テストは実Androidへのインストール成功を意味しません。svitoo P10・Androidスマホ・iOSは実機確認が必要です。</dd>
+            <dt>確認するコード</dt>
+            <dd>{{ source_links(['static/manifest.webmanifest', 'static/pwa/icon-source.svg', 'templates/_pwa_head.html', 'app.py', 'static/register_offline_sw.js', 'tests/test_pwa.py', 'tests_e2e/pwa.spec.cjs', 'README.md']) }}</dd>
+        {% endcall %}
+
         {% call feature('home', '店舗運営ホーム', 'パン工房 ひだまりの今日の予定・予報・売上を確認します。Adminは出勤予定も見られます。', 'GET /home・GET /api/home/schedule・GET /api/home/weather・GET /api/bakery-news') %}
             <dt>Python / Flask</dt>
             <dd><code>home()</code>が認証済みDatasetの当日予定を返します。Adminだけは<code>business_today()</code>のJST業務日を使い、<code>planned_work_for_day()</code>で同日の出勤・終日予定を読みます。GETはスタッフ情報を変更しません。現在の天気は設定済みの地点について別APIで取得し、失敗時は理由を表示します。Open-Meteoの現在モデル推定と、MET Norwayの直近予報を設定で選択できます。MET NorwayのExpiresまでキャッシュし、過去天気の確定記録を現在の天気として流用しません。正常なMET Norway予報の取得後はCSRF付きPOSTがサーバー側の予報を再確認し、Datasetごとに日本時間の当日最初の予報だけを<code>DailyForecast</code>へ保存します。これは観測結果ではありません。ホームを開かなかった日は保存されず、保存失敗時もホーム画面は閲覧できます。</dd>

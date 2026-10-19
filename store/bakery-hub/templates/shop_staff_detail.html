@@ -2,7 +2,8 @@
 <html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>スタッフ詳細 | Bakery Hub</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}"></head>
+<link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}">{% include "_pwa_head.html" %}
+</head>
 <body class="app-shell-page staff-shifts-page">{% include "_app_navigation.html" %}
 <main class="staff-shifts-shell"><a href="{{ url_for('.index') }}#staff">← スタッフ一覧へ戻る</a>
 {% include "_flash_notices.html" %}

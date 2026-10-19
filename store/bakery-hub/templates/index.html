@@ -17,6 +17,7 @@
        ]
      }
      </script>
+{% include "_pwa_head.html" %}
 </head>
 {% macro image_selector(selected_key=none) %}
 {% set image_option = product_image_assets.get(selected_key) if selected_key else none %}

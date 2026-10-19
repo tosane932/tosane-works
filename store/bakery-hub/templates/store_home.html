@@ -7,6 +7,7 @@
     <title>ホーム | Bakery Hub</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='store_home.js') }}" defer></script>
+{% include "_pwa_head.html" %}
 </head>
 <body class="app-shell-page operations-page">
 {% include "_app_navigation.html" %}

@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>お店の健康診断書（売上ランキング）</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% include "_pwa_head.html" %}
 </head>
 <body class="dashboard-page app-shell-page">
 {% include "_app_navigation.html" %}

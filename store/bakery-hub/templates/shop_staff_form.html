@@ -6,6 +6,7 @@
     <title>{{ 'スタッフ編集' if editing else 'スタッフ登録' }} | Bakery Hub</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='shop_staff_shifts.css') }}">
+{% include "_pwa_head.html" %}
 </head>
 <body class="app-shell-page staff-shifts-page">
 {% include "_app_navigation.html" %}

@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>日次売上入力</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% include "_pwa_head.html" %}
 </head>
 <body class="input-page app-shell-page">
 {% include "_app_navigation.html" %}
