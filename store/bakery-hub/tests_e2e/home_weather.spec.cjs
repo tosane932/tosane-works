@@ -3,18 +3,18 @@ const {test, expect} = require('playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 const auth = () => JSON.parse(fs.readFileSync(path.join(process.env.E2E_STATE_DIR, 'auth.json')));
-function fixture(probability = null) {
+function fixture(probability = 20) {
     const date = auth().day;
     const days = Array.from({length:7}, (_, i) => {
         const d = new Date(date+'T00:00:00+09:00'); d.setUTCDate(d.getUTCDate()+i);
         const day = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
-        return {date:day, weather_code:[2,61,0,3,71,95,2][i], temperature_max:24+i%3, temperature_min:15+i%2,
-            precipitation_probability:i===0?probability:null, probability_basis:'日内最大', complete:i>0&&i<3,
-            temperature_basis:'時刻別予報の取得分', from_at:day+'T'+(i===0?'12':'00')+':00+09:00',
-            to_at:day+'T'+(i>2?'18':'23')+':00+09:00', representative_at:day+'T12:00+09:00'};
+        return {date:day, weather_code:null, weather_label:['晴れ時々曇り','雨','晴れ','曇り','雪','雨で雷を伴う','晴れ時々曇り'][i],
+            weather_icon:['partly','rain','sun','cloud','snow','storm','partly'][i], location:i<2?'広島県南部':'広島県',
+            temperature_max:null, temperature_min:null, precipitation_probability:i===0?probability:20+i*10,
+            probability_basis:i<2?'12〜18時':'当日', complete:false};
     });
-    return {available:true, weather:'晴れ・曇り', weather_code:2, location:'広島市周辺（合成データ）',
-        source:'MET Norway 予報', credit_url:'https://creativecommons.org/licenses/by/4.0/',
+    return {available:true, weather:'晴れ時々曇り', weather_label:'晴れ時々曇り', weather_icon:'partly', weather_code:null, location:'広島県南部',
+        source:'気象庁 府県天気予報', credit_url:'https://www.jma.go.jp/bosai/forecast/data/forecast/340000.json',
         valid_at:date+'T12:00+09:00', fetched_at:date+'T12:05+09:00', forecast_days:days};
 }
 async function setup(page, context, guest=false) {
@@ -30,7 +30,7 @@ async function setup(page, context, guest=false) {
         await page.locator('#admin-login-form button[type=submit]').click();
     }
     await expect(page).toHaveURL(/\/home/);
-    await expect(page.locator('#operations-weather-status')).toHaveText('晴れ・曇り');
+    await expect(page.locator('#operations-weather-status')).toHaveText('晴れ時々曇り');
 }
 async function blankClick(page, id) {
     const card=page.locator(id); await card.scrollIntoViewIfNeeded();
@@ -40,20 +40,26 @@ for (const size of [{width:390,height:844,name:'phone'}, {width:1280,height:800,
     test(`${size.name}: weather page, home links, news and screenshots`, async ({page,context})=>{
         await page.setViewportSize(size);
         await setup(page,context);
-        await expect(page.locator('#operations-weather-probability')).toContainText('未提供'); // MET does not provide probability.
+        await expect(page.locator('#operations-weather-probability')).toHaveText('降水確率 20%（12〜18時）');
         await expect(page.locator('#weather summary')).toHaveCount(0);
         await expect(page.locator('#puoppo')).toHaveCount(0);
         await page.screenshot({path:test.info().outputPath(`${size.name}-home.png`),fullPage:true});
         if(size.name==='phone') {
+            await page.locator('#weather').screenshot({path:test.info().outputPath('phone-weather-card.png')});
             await page.locator('.operations-links').screenshot({path:test.info().outputPath('phone-work-links.png')});
         }
         await blankClick(page,'#weather'); await expect(page).toHaveURL(/\/weather$/);
         await expect(page.locator('#operations-weather-week li')).toHaveCount(7);
-        await expect(page.locator('#operations-weather-today')).toContainText('取得分最高 24℃');
-        await expect(page.locator('#operations-weather-today')).toContainText('降水確率 未提供');
+        await expect(page.locator('#operations-weather-today')).toContainText('降水確率 20%（12〜18時）');
+        await expect(page.locator('#operations-weather-today')).not.toContainText('取得分最高');
+        await expect(page.locator('#operations-weather-week li').nth(2)).toContainText('広島県');
+        await expect(page.locator('#operations-weather-week li').nth(2)).toContainText('当日');
         await expect(page.locator('#operations-weather-time')).toContainText('JST');
         await expect(page.locator('#weather')).toHaveAttribute('data-condition','partly');
         await expect(page.locator('#weather [data-weather-icon="partly"]')).toBeVisible();
+        expect(await page.locator('#weather [data-weather-icon="partly"] circle').first().evaluate(el => getComputedStyle(el).fill)).toBe('rgb(255, 211, 91)');
+        expect(await page.locator('#operations-weather-week li:nth-child(2) svg path:last-child').evaluate(el => getComputedStyle(el).stroke)).toBe('rgb(23, 103, 160)');
+        await expect(page.locator('#operations-weather-credit')).toContainText('気象庁ホームページ');
         expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
         if(size.name!=='pc') await page.screenshot({path:test.info().outputPath(`${size.name}-weather.png`),fullPage:true});
         await page.locator('.weather-back').first().click(); await expect(page).toHaveURL(/\/home$/);
@@ -89,5 +95,5 @@ test('guest and failure paths stay usable; work buttons navigate across full wid
 test('home probability is shown only when supplied', async ({page,context})=>{
     await setup(page,context);
     await page.route('**/api/home/weather',r=>r.fulfill({json:fixture(0)}));
-    await page.reload(); await expect(page.locator('#operations-weather-probability')).toHaveText('今日の最大降水確率：0%');
+    await page.reload(); await expect(page.locator('#operations-weather-probability')).toHaveText('降水確率 0%（12〜18時）');
 });

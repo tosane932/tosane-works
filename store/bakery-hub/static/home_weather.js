@@ -26,15 +26,15 @@
     }
     function day(row) {
         const date = new Date(row.date + 'T00:00:00+09:00');
-        const high = number(row.temperature_max) ? row.temperature_max + '℃' : '未提供';
-        const low = number(row.temperature_min) ? row.temperature_min + '℃' : '未提供';
+        const high = number(row.temperature_max) ? row.temperature_max + '℃' : null;
+        const low = number(row.temperature_min) ? row.temperature_min + '℃' : null;
         return {
-            weather: row.transition_label || condition(row.weather_code),
+            weather: row.weather_label || row.transition_label || condition(row.weather_code),
+            icon: row.weather_icon || icon(row.weather_code),
+            location: row.location || '',
             date: Number.isNaN(date.valueOf()) ? '日付未提供' : dates.format(date),
-            temperature: (row.complete ? '予想最高 ' : '取得分最高 ') + high + ' ／ ' + (row.complete ? '最低 ' : '取得分最低 ') + low,
-            probability: '降水確率 ' + (number(row.precipitation_probability) ? row.precipitation_probability + '%（' + (row.probability_basis || '提供元の日別予報') + '）' : '未提供'),
-            coverage: row.from_at && row.to_at ? '気温対象 ' + row.from_at.slice(11,16) + '〜' + row.to_at.slice(11,16) + (row.complete ? '' : '・時間帯限定') : '気温対象時刻：未提供',
-            basis: row.temperature_basis || '予報',
+            temperature: row.complete && high !== null && low !== null ? '最高 ' + high + ' ／ 最低 ' + low : '',
+            probability: '降水確率 ' + (number(row.precipitation_probability) ? row.precipitation_probability + '%' : '—') + (row.probability_basis ? '（' + row.probability_basis + '）' : ''),
         };
     }
     const api = {icon, condition, timestamp, day};
