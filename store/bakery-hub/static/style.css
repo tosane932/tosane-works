@@ -9298,6 +9298,7 @@ body.shop-task-reorder-lock .shop-task-card {
 .weather-page { max-width: 960px; }
 .weather-back { display: inline-flex; align-items: center; min-height: 48px; margin: 5px 0 16px; color: #493d34; font-weight: 700; }
 .weather-detail-card { margin: 0 0 20px; }
+.weather-detail-card .operations-weather-icon { display: inline-flex; flex: none; }
 #operations-weather-credit[hidden] { display: none; }
 .weather-detail-card #operations-weather-today { margin-top: 15px; border-top: 1px solid #d8d1c8; }
 .weather-detail-card #operations-weather-today h3 { margin: 15px 0 8px; }

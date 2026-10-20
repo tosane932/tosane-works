@@ -53,6 +53,7 @@ for (const size of [{width:390,height:844,name:'phone'}, {width:1280,height:800,
         await expect(page.locator('#operations-weather-today')).toContainText('降水確率 未提供');
         await expect(page.locator('#operations-weather-time')).toContainText('JST');
         await expect(page.locator('#weather')).toHaveAttribute('data-condition','partly');
+        await expect(page.locator('#weather [data-weather-icon="partly"]')).toBeVisible();
         expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
         if(size.name!=='pc') await page.screenshot({path:test.info().outputPath(`${size.name}-weather.png`),fullPage:true});
         await page.locator('.weather-back').first().click(); await expect(page).toHaveURL(/\/home$/);
