@@ -43,6 +43,18 @@ def test_met_horizon_sparse_invalid_and_missing_units():
     assert met_daily([{'time': '2026-10-20T00:00:00', 'data': {}}], {}, TODAY, lambda _: 0) == []
 
 
+def test_met_transition_requires_dense_unambiguous_morning_and_afternoon():
+    series = [point(TODAY, h, symbol='clearsky_day' if h < 12 else 'rain')
+              for h in list(range(6, 12)) + list(range(13, 19))]
+    codes = lambda symbol: 0 if symbol == 'clearsky_day' else 61
+    assert met_daily(series, {'air_temperature': 'celsius'}, TODAY, codes)[0]['transition_label'] == '晴れのち雨'
+    assert met_daily(series[::3], {'air_temperature': 'celsius'}, TODAY, codes)[0]['transition_label'] is None
+    ambiguous = series + [point(TODAY, 9, symbol='partlycloudy_day')]
+    assert met_daily(ambiguous, {'air_temperature': 'celsius'}, TODAY,
+                     lambda symbol: 2 if symbol == 'partlycloudy_day' else codes(symbol))[0]['transition_label'] is None
+    assert open_daily(open_payload(), TODAY)[0]['transition_label'] is None
+
+
 def open_payload():
     return {'timezone': 'Asia/Tokyo', 'utc_offset_seconds': 32400,
             'daily_units': {'temperature_2m_max': '°C', 'temperature_2m_min': '°C',

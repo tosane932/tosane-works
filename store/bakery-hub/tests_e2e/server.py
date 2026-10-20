@@ -28,7 +28,18 @@ import register_offline_service  # noqa: E402
 import register_service  # noqa: E402
 
 # Navigation fixtures are synthetic; E2E must not fetch an external feed.
-app_module.get_news = lambda limit=3: []
+def synthetic_news(limit=3):
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return [dict(title=title, url=f"https://shokuhin.net/synthetic-{index}/",
+                 published=now, source="食品新聞（合成）", topic=topic)
+            for index, (title, topic) in enumerate((
+                ("合成：ベーグルの話題", "人気・トレンド"),
+                ("合成：パンの購買調査", "消費者動向"),
+                ("合成：小麦価格", "材料・価格"),
+            ))][:limit]
+
+
+app_module.get_news = synthetic_news
 
 
 username = "e2e-admin"

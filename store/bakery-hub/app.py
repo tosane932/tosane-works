@@ -1496,6 +1496,13 @@ def home_weather():
     return jsonify(current_weather(app.config))
 
 
+@app.get("/weather")
+@admin_or_guest_required
+def weather_page():
+    require_current_dataset()
+    return render_template("weather_detail.html", today=business_today())
+
+
 @app.post("/api/home/weather/record")
 @admin_or_guest_required
 def record_home_weather():

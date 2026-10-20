@@ -46,6 +46,7 @@ def test_home_requires_identity_and_dataset(client, authenticated_client, admin_
     assert urlparse(client.get("/home").headers["Location"]).path == "/login"
     g.pop("_login_user", None)
     assert urlparse(client.get("/api/home/weather").headers["Location"]).path == "/login"
+    assert urlparse(client.get("/weather").headers["Location"]).path == "/login"
     g.pop("_login_user", None)
     assert authenticated_client.get("/home").status_code == 200
     guest, _ = guest_client(flask_app)
@@ -64,12 +65,30 @@ def test_home_is_separate_from_product_form(authenticated_client, admin_dataset)
     assert home_control["aria-expanded"] == "false"
     assert document.select_one("#app-home-submenu").has_attr("hidden")
     assert document.select_one("#staff") is None
-    assert document.select_one("#weather summary") is not None
-    assert document.select_one("#puoppo form") is None
-    assert "AI分析連携は現在利用できません" in document.select_one("#puoppo").get_text()
+    assert document.select_one("a#weather[href='/weather']") is not None
+    assert document.select_one("#weather summary") is None
+    assert document.select_one("#puoppo") is None
     assert document.select_one('#operations-schedule-list li').get_text(strip=True) == "今日の予定はありません。"
     assert authenticated_client.get("/").status_code == 200
     assert "商品・メニュー登録" in authenticated_client.get("/").get_data(as_text=True)
+
+
+def test_weather_detail_and_home_work_links_are_reachable(authenticated_client, admin_dataset, flask_app, monkeypatch):
+    document = BeautifulSoup(authenticated_client.get('/home').get_data(as_text=True), 'html.parser')
+    assert not document.select_one('#operations-weather-week')
+    assert not document.select_one('#puoppo')
+    assert [a['href'] for a in document.select('.operations-work-link')] == ['/products', '/input', '/material-orders']
+    assert document.select_one('#weather')['href'] == '/weather'
+    detail = BeautifulSoup(authenticated_client.get('/weather').get_data(as_text=True), 'html.parser')
+    assert len(detail.select('.weather-back[href="/home"]')) == 2
+    assert detail.select_one('#operations-weather-week')
+    assert detail.select_one('script[src*="weather_detail.js"]')
+    guest, _ = guest_client(flask_app)
+    g.pop('_login_user', None)
+    assert guest.get('/weather').status_code == 200
+    guest_page = BeautifulSoup(guest.get('/home').get_data(as_text=True), 'html.parser')
+    assert guest_page.select_one('.operations-work-products')['href'] == '/products'
+    assert not guest_page.select_one('#puoppo')
 
 
 def test_home_today_sales_distinguishes_missing_zero_and_other_dataset(
@@ -93,7 +112,7 @@ def test_home_today_sales_distinguishes_missing_zero_and_other_dataset(
     assert document.select_one("#today-sales")["href"] == "/dashboard"
     assert document.select_one(".operations-next + .operations-weather") is not None
     assert document.select_one("#schedule + #today-sales") is not None
-    assert document.select_one("#bakery-news + #puoppo") is not None
+    assert document.select_one("#bakery-news + .operations-links") is not None
 
     db.session.add(DailySales(product_id=admin_product.id, date=today, quantity=0))
     db.session.commit()
@@ -121,14 +140,15 @@ def test_puoppo_handoff_is_admin_only_and_get_has_no_ai_side_effect(
 ):
     flask_app.config["PUOPPO_INTEGRATION_ENABLED"] = True
     try:
-        document = BeautifulSoup(authenticated_client.get("/home").get_data(as_text=True), "html.parser")
+        document = BeautifulSoup(authenticated_client.get("/bakery-news").get_data(as_text=True), "html.parser")
+        assert BeautifulSoup(authenticated_client.get("/home").get_data(as_text=True), "html.parser").select_one("#puoppo") is None
         form = document.select_one("#puoppo form")
         assert form["method"].lower() == "get"
         assert form["action"] == "https://puoppo.onrender.com/"
         assert form.select_one('input[name="keyword"]')["maxlength"] == "100"
         guest, _ = guest_client(flask_app)
         g.pop("_login_user", None)
-        guest_document = BeautifulSoup(guest.get("/home").get_data(as_text=True), "html.parser")
+        guest_document = BeautifulSoup(guest.get("/bakery-news").get_data(as_text=True), "html.parser")
         assert guest_document.select_one("#puoppo form") is None
     finally:
         flask_app.config["PUOPPO_INTEGRATION_ENABLED"] = False

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>詳しい天気・週間予報 | Bakery Hub</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='home-weather-20261021') }}">
+    <script src="{{ url_for('static', filename='home_weather.js', v='20261021') }}" defer></script>
+    <script src="{{ url_for('static', filename='weather_detail.js', v='20261021') }}" defer></script>
+{% include "_pwa_head.html" %}
+</head>
+<body class="app-shell-page operations-page">
+{% include "_app_navigation.html" %}
+<main class="operations-shell weather-page">
+    <a class="weather-back" href="{{ url_for('home') }}">← ホームへ戻る</a>
+    <header class="operations-heading"><h1>詳しい天気・週間予報</h1><time datetime="{{ today.isoformat() }}">{{ today.strftime('%Y年%m月%d日') }}</time></header>
+    <section class="operations-card operations-weather weather-detail-card" id="weather" aria-label="今日の天気と週間予報">
+        <span id="operations-weather-location"></span>
+        <div class="operations-weather-main">{% include "_weather_icons.html" %}<strong id="operations-weather-status" role="status">天気を確認中です。</strong></div>
+        <div id="operations-weather-today"></div>
+        <h2>週間予報 <small>最大7日間</small></h2>
+        <p id="operations-weather-forecast-status" role="status">予報を確認中です。</p>
+        <ul id="operations-weather-week" class="operations-weather-week"></ul>
+        <small id="operations-weather-source">過去の天気記録とは別の情報です。</small>
+        <small id="operations-weather-time"></small>
+        <a id="operations-weather-credit" href="https://www.met.no/en" target="_blank" rel="noopener noreferrer" hidden>気象データの出典</a>
+    </section>
+    <a class="weather-back" href="{{ url_for('home') }}">← ホームへ戻る</a>
+</main>
+</body></html>
