@@ -1,0 +1,14 @@
+.env*
+*credentials*
+*connection*
+*.dump
+*.sql
+*.db
+*.sqlite*
+*.key
+*.pem
+.pgpass
+*.log
+*.zip
+__pycache__/
+.DS_Store
