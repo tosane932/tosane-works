@@ -70,14 +70,16 @@
                 credit.textContent = data.source.startsWith("MET Norway") ? "気象データ：MET Norway（天気区分・気温を集計・CC BY 4.0）" : "気象データ：Open-Meteo";
             }
             document.getElementById("weather").dataset.condition = data.available ? (HomeWeather.icon(data.weather_code) || "unknown") : "unknown";
-            document.querySelectorAll("[data-weather-icon]").forEach(element => element.hidden = !data.available || element.dataset.weatherIcon !== HomeWeather.icon(data.weather_code));
+            document.querySelectorAll("[data-weather-icon]").forEach(element => {
+                element.toggleAttribute("hidden", !data.available || element.dataset.weatherIcon !== HomeWeather.icon(data.weather_code));
+            });
         } catch {
             status.textContent = "現在の天気を取得できませんでした。";
             renderForecast({available:false});
             for (const id of ["location", "source", "time"]) document.getElementById("operations-weather-" + id).textContent = "";
             document.getElementById("operations-weather-credit").hidden = true;
             document.getElementById("weather").dataset.condition = "unknown";
-            document.querySelectorAll("[data-weather-icon]").forEach(element => element.hidden = true);
+            document.querySelectorAll("[data-weather-icon]").forEach(element => element.setAttribute("hidden", ""));
         }
     }
     refreshWeather();
