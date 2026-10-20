@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>ホーム | Bakery Hub</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="{{ url_for('static', filename='store_home.js') }}" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='home-weather-20261020') }}">
+    <script src="{{ url_for('static', filename='home_weather.js', v='20261020') }}" defer></script>
+    <script src="{{ url_for('static', filename='store_home.js', v='20261020') }}" defer></script>
 {% include "_pwa_head.html" %}
 </head>
 <body class="app-shell-page operations-page">
@@ -22,12 +23,12 @@
     </header>
 
     <div class="operations-grid">
-        <section class="operations-card operations-next" id="next" aria-labelledby="next-heading">
+        <section class="operations-card operations-next operations-card-linked" id="next" aria-labelledby="next-heading">
             <h2 id="next-heading">現在・次の予定</h2>
             <p id="operations-clock" aria-live="off">現在時刻を確認中</p>
             <div id="operations-current"></div>
             <div id="operations-upcoming" aria-live="polite">予定を確認中です。</div>
-            <a class="operations-next-link" href="{{ url_for('shop_schedules.list_schedules') }}">予定を見る ›</a>
+            <a class="operations-next-link operations-card-primary" href="{{ url_for('shop_schedules.list_schedules') }}">予定を見る ›</a>
         </section>
 
         <details class="operations-card operations-weather" id="weather">
@@ -44,16 +45,20 @@
             </span>
             <span id="operations-weather-status" role="status">天気を確認中です。</span>
             </span>
-            <span class="operations-weather-more">対象時刻・出典を見る</span>
+            <span class="operations-weather-more">当日詳細・週間予報を見る</span>
             </summary>
             <div class="operations-weather-details">
+            <div id="operations-weather-today"></div>
+            <h3>週間予報 <small>最大7日間</small></h3>
+            <p id="operations-weather-forecast-status" role="status">予報を確認中です。</p>
+            <ul id="operations-weather-week" class="operations-weather-week"></ul>
             <small id="operations-weather-source">過去の天気記録とは別の情報です。</small>
             <small id="operations-weather-time"></small>
             <a id="operations-weather-credit" href="https://www.met.no/en" target="_blank" rel="noopener noreferrer" hidden>気象データの出典</a>
             </div>
         </details>
 
-        <section class="operations-card" id="schedule" aria-labelledby="schedule-heading">
+        <section class="operations-card operations-card-linked" id="schedule" aria-labelledby="schedule-heading">
             <div class="operations-card-heading">
                 <h2 id="schedule-heading">今日のスケジュール</h2>
                 <a href="{{ url_for('shop_schedules.create') }}">予定を登録</a>
@@ -65,7 +70,7 @@
                 <li>今日の予定はありません。</li>
                 {% endfor %}
             </ol>
-            <a href="{{ url_for('shop_schedules.list_schedules') }}">予定一覧・別の日を見る</a>
+            <a class="operations-card-primary" href="{{ url_for('shop_schedules.list_schedules') }}">予定一覧・別の日を見る</a>
         </section>
 
         <a class="operations-card operations-sales" id="today-sales" href="{{ url_for('dashboard') }}" aria-label="本日の売上{% if has_today_sales %} {{ '{:,}'.format(today_sales) }}円{% else %} 未入力{% endif %}。売上分析を見る">
@@ -75,7 +80,7 @@
         </a>
 
         {% if staff_state %}
-        <section class="operations-card operations-staff" id="today-staff" aria-labelledby="today-staff-heading">
+        <section class="operations-card operations-staff operations-card-linked" id="today-staff" aria-labelledby="today-staff-heading">
             <h2 id="today-staff-heading">
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                 今日の出勤予定
@@ -105,14 +110,14 @@
             </ul>
             {% if remaining_staff %}<p class="operations-staff-more">ほか{{ remaining_staff }}人。全員の予定はシフト表で確認できます。</p>{% endif %}
             {% endif %}
-            <a class="operations-staff-link" href="{{ url_for('shop_staff_shifts.index') }}">シフト表を見る ›</a>
+            <a class="operations-staff-link operations-card-primary" href="{{ url_for('shop_staff_shifts.index') }}">シフト表を見る ›</a>
         </section>
         {% endif %}
 
-        <section class="operations-card operations-news" id="bakery-news" aria-labelledby="bakery-news-heading">
+        <section class="operations-card operations-news operations-card-linked" id="bakery-news" aria-labelledby="bakery-news-heading">
             <div class="operations-card-heading">
                 <h2 id="bakery-news-heading">BakeryNews</h2>
-                <a href="{{ url_for('bakery_news_list') }}">記事一覧</a>
+                <a class="operations-card-primary" href="{{ url_for('bakery_news_list') }}">ニュース・AI分析へ ›</a>
             </div>
             <p id="bakery-news-status" role="status">記事を確認中です。</p>
             <ul id="bakery-news-list"></ul>

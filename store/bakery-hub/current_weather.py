@@ -1,5 +1,6 @@
 """設定済みの地点で現在モデル推定または直近予報を取得する。ERA5記録とは別。"""
 import datetime
+from copy import deepcopy
 import gzip
 import json
 import logging
@@ -12,6 +13,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
+from home_forecast import met_daily, open_daily
 from weather_history import PAID_URL, WeatherHistoryError, _settings, weather_category
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,8 @@ def _read_weather(config):
         "latitude": lat,
         "longitude": lon,
         "current": "weather_code",
+        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+        "forecast_days": 7,
         "timezone": "Asia/Tokyo",
     }
     if api_key:
@@ -59,6 +63,7 @@ def _read_weather(config):
         "location": (config.get("WEATHER_LOCATION_NAME") or "").strip()[:80] or f"北緯{lat:g}°・東経{lon:g}°",
         "source": "Open-Meteo 現在のモデル推定",
         "credit_url": "https://open-meteo.com/",
+        "forecast_days": open_daily(data, now.date()),
     }
 
 
@@ -146,6 +151,7 @@ def _read_met_weather(config, last_modified=None):
                 "location": (config.get("WEATHER_LOCATION_NAME") or "").strip()[:80] or f"北緯{lat:g}°・東経{lon:g}°",
                 "source": "MET Norway 予報",
                 "credit_url": "https://creativecommons.org/licenses/by/4.0/",
+                "forecast_days": met_daily(candidates, properties["meta"].get("units", {}), now.astimezone(JST).date(), _met_code),
             }
             return result, expires_at, last_modified
     raise ValueError("No current forecast")
@@ -173,7 +179,7 @@ def current_weather(config):
     with _cache_lock:
         cached = _cache.get(key)
         if cached and cached[0] > now:
-            result = cached[1].copy()
+            result = deepcopy(cached[1])
             if result["available"]:
                 target = datetime.datetime.fromisoformat(result["valid_at"])
                 japan_now = now.astimezone(JST)
@@ -189,7 +195,7 @@ def current_weather(config):
                 except HTTPError as exc:
                     if exc.code != 304 or not cached or not cached[1]["available"]:
                         raise
-                    result = cached[1].copy()
+                    result = deepcopy(cached[1])
                     expires_at = _response_expiry(exc.headers)
                     last_modified = cached[2]
             else:
@@ -206,4 +212,4 @@ def current_weather(config):
             japan_now = now.astimezone(JST)
             if target.date() != japan_now.date() or target < japan_now - datetime.timedelta(hours=2):
                 return {"available": False, "reason": UNAVAILABLE}
-        return result.copy()
+        return deepcopy(result)
