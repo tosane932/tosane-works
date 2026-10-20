@@ -42,6 +42,9 @@ test('one app manifest across login, business links, demo, back, reload and logo
         if (target.startsWith('/shop-tools/')) {
             await page.locator('a[href="/material-orders"]:visible').first().click();
         }
+        if (target === '/register/demo') {
+            await page.locator('#app-register-management summary').click();
+        }
         const previous = page.url();
         await page.locator(`a[href="${target}"]:visible`).first().click();
         await expect(page).toHaveURL(new RegExp(`${target}$`));

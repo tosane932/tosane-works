@@ -18,6 +18,7 @@ os.environ.pop("LOCAL_DEVELOPMENT", None)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import app  # noqa: E402  (database URL must precede app import)
+import app as app_module  # noqa: E402
 from flask import abort, jsonify, request  # noqa: E402
 from models import (Dataset, RegisterCutover, RegisterProduct, RegisterTransaction,
                     RegisterTransactionLine, db)  # noqa: E402
@@ -25,6 +26,9 @@ from register_products import update_register_product  # noqa: E402
 import register_catalog_proof  # noqa: E402
 import register_offline_service  # noqa: E402
 import register_service  # noqa: E402
+
+# Navigation fixtures are synthetic; E2E must not fetch an external feed.
+app_module.get_news = lambda limit=3: []
 
 
 username = "e2e-admin"
@@ -34,6 +38,9 @@ app.secret_key = secrets.token_urlsafe(32)
 app.config.update(
     TESTING=True, SESSION_COOKIE_SECURE=False,
     ADMIN_USERNAME=username, ADMIN_PASSWORD_HASH=generate_password_hash(password),
+    GUEST_CREATION_RATE_LIMIT_MAX_ATTEMPTS=100,
+    GUEST_CREATION_RATE_LIMIT_WINDOW_SECONDS=60,
+    GUEST_CREATION_RATE_LIMIT_TEST_CLIENT_IP="127.0.0.1",
     REGISTER_V3_PRODUCTS_PREVIEW_ENABLED=True, REGISTER_V3_PRODUCTS_WRITE_ENABLED=True,
     REGISTER_V3_PUBLIC_DEMO_ENABLED=True,
     REGISTER_V3_PRODUCTION_ENABLED=True, REGISTER_V3_PREVIEW_ENABLED=True,
