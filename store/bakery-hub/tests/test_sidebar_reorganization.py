@@ -68,6 +68,9 @@ def test_sales_entry_uses_existing_cutover_without_enabling_it(
     link = doc.select_one('.app-sidebar-link-sales')
     assert link['href'] == ('/register/preview' if active else '/input')
     assert link.get_text(strip=True) == ('レジモード' if active else '日次売上入力')
+    work_link = doc.select_one('.operations-work-sales')
+    assert work_link['href'] == link['href']
+    assert work_link.get_text(' ', strip=True).find('レジモード' if active else '日次売上入力') >= 0
     assert flask_app.config['REGISTER_V3_SAVE_ENABLED'] is False
     assert RegisterCutover.query.count() == int(active)
 
