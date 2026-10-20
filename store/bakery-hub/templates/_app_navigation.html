@@ -1,17 +1,14 @@
-{% set unified_products = current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED and (config.TESTING or config.LOCAL_DEVELOPMENT or config.REGISTER_V3_PRODUCTION_ENABLED) %}
 {% set current_endpoint = request.endpoint or '' %}
 {% if current_endpoint == 'home' %}
     {% set active_app_page = 'home' %}
 {% elif current_endpoint.startswith('shop_schedules.') %}
     {% set active_app_page = 'schedule' %}
 {% elif current_endpoint == 'index' %}
-    {% set active_app_page = 'products' %}
+    {% set active_app_page = 'product-catalog' %}
 {% elif current_endpoint == 'product_catalog' %}
     {% set active_app_page = 'product-catalog' %}
-{% elif current_endpoint.startswith('register_products.') and unified_products %}
-    {% set active_app_page = 'product-catalog' %}
 {% elif current_endpoint.startswith('register_products.') %}
-    {% set active_app_page = 'register-products' %}
+    {% set active_app_page = 'product-catalog' %}
 {% elif current_endpoint == 'register.demo' %}
     {% set active_app_page = 'register-demo' %}
 {% elif current_endpoint == 'register.preview' %}
@@ -28,6 +25,8 @@
     {% set active_app_page = 'staff-shifts' %}
 {% elif current_endpoint.startswith('production_prep.') %}
     {% set active_app_page = 'prep' %}
+{% elif current_endpoint == 'bakery_news_list' %}
+    {% set active_app_page = 'news' %}
 {% elif current_endpoint == 'system_overview' %}
     {% set active_app_page = 'system-overview' %}
 {% elif
@@ -144,34 +143,7 @@
             <a href="{{ url_for('shop_schedules.list_schedules') }}" {% if active_app_page == 'schedule' %}aria-current="page"{% endif %}>スケジュール</a>
             <a href="{{ url_for('home') }}#next">次の予定</a>
         </div>
-{% if not unified_products %}
-        <a
-            href="{{ url_for('index') }}"
-            data-page="products"
-            class="app-sidebar-link app-sidebar-link-products touch-control-no-select{% if active_app_page == 'products' %} app-sidebar-link-current{% endif %}"
-            {% if active_app_page == 'products' %}aria-current="page"{% endif %}>
-            <span class="app-sidebar-icon" aria-hidden="true">
-                <svg
-                    data-icon="package-plus"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    focusable="false"
-                    aria-hidden="true">
-                    <path d="M12 22V12"></path>
-                    <path d="M16 17h6"></path>
-                    <path d="M19 14v6"></path>
-                    <path d="M21 10.535V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.729l7 4a2 2 0 0 0 2 .001l1.675-.955"></path>
-                    <path d="M3.29 7 12 12l8.71-5"></path>
-                    <path d="m7.5 4.27 8.997 5.148"></path>
-                </svg>
-            </span>
-            <span>商品・メニュー登録</span>
-        </a>
-{% endif %}
+        <div class="app-sidebar-nav-divider" aria-hidden="true"></div>
         <a
             href="{{ url_for('product_catalog') }}"
             data-page="product-catalog"
@@ -185,36 +157,6 @@
             </span>
             <span>商品一覧</span>
         </a>
-        {% if not unified_products and config.REGISTER_V3_PRODUCTS_PREVIEW_ENABLED and (config.TESTING or config.LOCAL_DEVELOPMENT or register_nav_active) %}
-        <a href="{{ url_for('register_products.list_products') }}" data-page="register-products"
-           class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-products' %} app-sidebar-link-current{% endif %}"
-           {% if active_app_page == 'register-products' %}aria-current="page"{% endif %}>
-            <span class="app-sidebar-icon" aria-hidden="true">▣</span>
-            <span>{{ 'レジ商品管理' if register_nav_active else 'レジ商品管理（開発中）' }}</span>
-        </a>
-        {% endif %}
-        {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_PUBLIC_DEMO_ENABLED %}
-        <a href="{{ url_for('register.demo') }}" data-page="register-demo"
-           class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-demo' %} app-sidebar-link-current{% endif %}"
-           {% if active_app_page == 'register-demo' %}aria-current="page"{% endif %}>
-            <span class="app-sidebar-icon" aria-hidden="true">▣</span>
-            <span>レジ操作デモ（未保存）</span>
-        </a>
-        {% endif %}
-        {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_READINESS_ENABLED %}
-        <a href="{{ url_for('register_readiness.audit') }}" data-page="register-readiness"
-           class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-readiness' %} app-sidebar-link-current{% endif %}"
-           {% if active_app_page == 'register-readiness' %}aria-current="page"{% endif %}>
-            <span class="app-sidebar-icon" aria-hidden="true">▣</span><span>レジ切替前の監査</span>
-        </a>
-        {% endif %}
-        {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_RECOVERY_ENABLED %}
-        <a href="{{ url_for('register_recovery.index') }}" data-page="register-recovery"
-           class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-recovery' %} app-sidebar-link-current{% endif %}"
-           {% if active_app_page == 'register-recovery' %}aria-current="page"{% endif %}>
-            <span class="app-sidebar-icon" aria-hidden="true">▣</span><span>未同期会計の復旧案件</span>
-        </a>
-        {% endif %}
         <a
             href="{{ url_for('register.preview') if register_nav_active else url_for('input_sales') }}"
             data-page="{{ 'register' if register_nav_active else 'sales' }}"
@@ -288,6 +230,11 @@
             </span>
             <span>店舗メモツール</span>
         </a>
+        <div class="app-sidebar-submenu" id="app-tools-submenu" {% if active_app_page != 'shop-tools' %}hidden{% endif %}>
+            <a href="{{ url_for('material_orders.list_items') }}">材料発注リスト</a>
+            <a href="{{ url_for('shop_memos.list_memos') }}">店舗メモ</a>
+            <a href="{{ url_for('shop_tasks.list_tasks') }}">タスク管理</a>
+        </div>
         {% if current_user.is_authenticated and current_user.is_admin %}
         <a
             href="{{ url_for('shop_staff_shifts.index') }}"
@@ -317,6 +264,12 @@
         {% endif %}
         <div class="app-sidebar-nav-divider" aria-hidden="true"></div>
 
+        <a href="{{ url_for('bakery_news_list') }}" data-page="news"
+            class="app-sidebar-link app-sidebar-link-news touch-control-no-select{% if active_app_page == 'news' %} app-sidebar-link-current{% endif %}"
+            {% if active_app_page == 'news' %}aria-current="page"{% endif %}>
+            <span class="app-sidebar-icon" aria-hidden="true"><svg data-icon="newspaper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h4"/></svg></span>
+            <span>ニュース・AI分析</span>
+        </a>
         <a
             href="{{ url_for('system_overview') }}"
             data-page="system-overview"
@@ -330,6 +283,35 @@
             </span>
             <span>システム概要</span>
         </a>
+        {% if current_user.is_authenticated and current_user.is_admin and (config.REGISTER_V3_PUBLIC_DEMO_ENABLED or config.REGISTER_V3_READINESS_ENABLED or config.REGISTER_V3_RECOVERY_ENABLED) %}
+        <details id="app-register-management" class="app-sidebar-management">
+            <summary class="app-sidebar-management-toggle{% if active_app_page in ['register-demo', 'register-readiness', 'register-recovery'] %} app-sidebar-management-current{% endif %}" aria-expanded="false" aria-controls="app-register-management-links">レジ管理・検証</summary>
+            <div id="app-register-management-links" class="app-sidebar-submenu">
+                {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_PUBLIC_DEMO_ENABLED %}
+                <a href="{{ url_for('register.demo') }}" data-page="register-demo"
+                   class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-demo' %} app-sidebar-link-current{% endif %}"
+                   {% if active_app_page == 'register-demo' %}aria-current="page"{% endif %}>
+                    <span class="app-sidebar-icon" aria-hidden="true">▣</span>
+                    <span>レジ操作デモ（未保存）</span>
+                </a>
+                {% endif %}
+                {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_READINESS_ENABLED %}
+                <a href="{{ url_for('register_readiness.audit') }}" data-page="register-readiness"
+                   class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-readiness' %} app-sidebar-link-current{% endif %}"
+                   {% if active_app_page == 'register-readiness' %}aria-current="page"{% endif %}>
+                    <span class="app-sidebar-icon" aria-hidden="true">▣</span><span>レジ切替前の監査</span>
+                </a>
+                {% endif %}
+                {% if current_user.is_authenticated and current_user.is_admin and config.REGISTER_V3_RECOVERY_ENABLED %}
+                <a href="{{ url_for('register_recovery.index') }}" data-page="register-recovery"
+                   class="app-sidebar-link touch-control-no-select{% if active_app_page == 'register-recovery' %} app-sidebar-link-current{% endif %}"
+                   {% if active_app_page == 'register-recovery' %}aria-current="page"{% endif %}>
+                    <span class="app-sidebar-icon" aria-hidden="true">▣</span><span>未同期会計の復旧案件</span>
+                </a>
+                {% endif %}
+            </div>
+        </details>
+        {% endif %}
     </nav>
 
     <div class="app-sidebar-session">
@@ -409,7 +391,7 @@
         const closeButton = document.querySelector(".app-navigation-close-button");
         const overlay = document.querySelector(".app-navigation-overlay");
         const sidebar = document.getElementById("app-sidebar");
-        const homeToggle = sidebar?.querySelector(".app-sidebar-submenu-toggle");
+        const homeToggle = sidebar?.querySelector(".app-sidebar-home-row .app-sidebar-submenu-toggle");
         const homeSubmenu = document.getElementById("app-home-submenu");
         const mobileViewport = window.matchMedia("(max-width: 900px)");
         const reducedMotion = window.matchMedia(
@@ -434,6 +416,12 @@
             homeSubmenu.hidden = !willOpen;
             homeToggle.setAttribute("aria-expanded", String(willOpen));
             homeToggle.setAttribute("aria-label", `ホームの子メニューを${willOpen ? "閉じる" : "開く"}`);
+        });
+
+        sidebar.querySelectorAll("details.app-sidebar-management").forEach(details => {
+            details.addEventListener("toggle", () => {
+                details.querySelector("summary").setAttribute("aria-expanded", String(details.open));
+            });
         });
 
         function navigationIsOpen() {
@@ -603,10 +591,10 @@
                 return;
             }
 
-            const focusableElements = sidebar.querySelectorAll(
+            const focusableElements = Array.from(sidebar.querySelectorAll(
                 'a[href], button:not([disabled]), '
-                + 'input:not([type="hidden"]):not([disabled])'
-            );
+                + 'input:not([type="hidden"]):not([disabled]), summary'
+            )).filter(element => element.getClientRects().length > 0);
             const firstElement = focusableElements[0];
             const lastElement = focusableElements[focusableElements.length - 1];
 

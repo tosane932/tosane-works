@@ -93,7 +93,7 @@ def test_existing_pages_link_to_overview_without_losing_navigation(
     assert link.get_text(strip=True) == "システム概要"
     assert link.get("aria-current") is None
     assert [item["href"] for item in navigation.select("a[data-page]")] == [
-        "/home", "/", "/products", "/input", "/dashboard", "/material-orders", "/staff-shifts", "/prep", "/system-overview",
+        "/home", "/products", "/input", "/dashboard", "/material-orders", "/staff-shifts", "/prep", "/bakery-news", "/system-overview",
     ]
     assert navigation.select_one('a[href="/schedule"]') is not None
     assert len(navigation.select('a[aria-current="page"]')) == 1

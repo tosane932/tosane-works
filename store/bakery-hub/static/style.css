@@ -3126,17 +3126,47 @@ body.app-shell-page {
     min-height: 0;
     flex: 1 1 auto;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     overflow-y: auto;
+}
+
+.app-sidebar-nav-divider {
+    flex: 0 0 auto;
+    border-top: 1px solid #e5dccb;
+    margin: 3px 0;
+}
+
+.app-sidebar-nav > *, .app-sidebar-submenu > * {
+    flex-shrink: 0;
+}
+
+.app-sidebar-management-toggle {
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 12px 8px;
+    cursor: pointer;
+    color: #594732;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.app-sidebar-management-current {
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+.app-sidebar-management-toggle:focus-visible {
+    outline: 3px solid #2c5d3b;
+    outline-offset: -3px;
 }
 
 .app-sidebar-link {
     --app-menu-color: #786b60;
     display: flex;
-    min-height: 52px;
+    min-height: 48px;
     align-items: center;
     gap: 11px;
-    padding: 10px 12px;
+    padding: 8px 12px;
     box-sizing: border-box;
     color: #ffffff;
     background: var(--app-menu-color);
@@ -3146,7 +3176,18 @@ body.app-shell-page {
     font-weight: 600;
     line-height: 1.35;
     text-decoration: none;
+    overflow-wrap: anywhere;
     transition: transform 0.16s ease;
+}
+
+.app-sidebar-link-news {
+    --app-menu-color: var(--bakery-info-color);
+}
+
+.app-sidebar-management .app-sidebar-link {
+    min-height: 44px;
+    font-size: 13px;
+    margin-bottom: 6px;
 }
 
 :root {
@@ -5257,12 +5298,7 @@ body.app-shell-page {
 
 /* ===== sidebar main / tools divider ===== */
 
-.app-sidebar-nav-divider {
-    height: 1px;
-    margin: 10px 8px 12px;
 
-    background: #e6e1da;
-}
 
 
 /* ===== semantic SVG accent colors ===== */

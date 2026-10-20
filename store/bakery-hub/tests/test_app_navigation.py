@@ -20,17 +20,18 @@ APP_ROUTES = {
 
 APP_SIDEBAR_ITEMS = {
     "home": ("ホーム", "house"),
-    "products": ("商品・メニュー登録", "package-plus"),
     "product-catalog": ("商品一覧", "list"),
     "sales": ("日次売上入力", "clipboard-pen-line"),
     "dashboard": ("売上データ分析", "chart-column"),
     "shop-tools": ("店舗メモツール", "wrench"),
     "staff-shifts": ("スタッフ・シフト管理", "calendar-days"),
     "prep": ("仕込み管理", "wheat"),
+    "news": ("ニュース・AI分析", "newspaper"),
     "system-overview": ("システム概要", "book-open"),
 }
 
-SIDEBAR_ROUTES = {**APP_ROUTES, "system-overview": "/system-overview"}
+SIDEBAR_ROUTES = {**{key: value for key, value in APP_ROUTES.items() if key != "products"},
+                  "news": "/bakery-news", "system-overview": "/system-overview"}
 ADMIN_ONLY_ROUTES = {"staff-shifts": "/staff-shifts", "prep": "/prep"}
 
 
@@ -95,6 +96,7 @@ def _guest_client(flask_app):
 
 
 def _assert_app_navigation(document, active_page, user_label):
+    active_page = "product-catalog" if active_page == "products" else active_page
     sidebar = document.select_one("#app-sidebar")
     assert sidebar is not None
     navigation = sidebar.select_one('nav[aria-label="主要メニュー"]')
@@ -275,6 +277,7 @@ def test_sidebar_category_colors_use_contrasting_white_foreground():
         ".app-sidebar-link-sales": ("#477b59", "--bakery-sales-color"),
         ".app-sidebar-link-dashboard": ("#bc4848", "--bakery-dashboard-color"),
         ".app-sidebar-link-shop-tools": ("#48739c", "--bakery-info-color"),
+        ".app-sidebar-link-news": ("#48739c", "--bakery-info-color"),
     }
 
     link_rule = _css_rule_body(style_source, ".app-sidebar-link")
@@ -308,11 +311,12 @@ def test_catalog_navigation_uses_its_own_color_class(
     )
     registration = document.select_one('#app-sidebar a[data-page="products"]')
     catalog = document.select_one('#app-sidebar a[data-page="product-catalog"]')
-    assert "app-sidebar-link-products" in registration.get("class", [])
+    assert registration is None
+    assert document.select_one('main a[href="/"]') is not None
     assert "app-sidebar-link-catalog" in catalog.get("class", [])
     assert "app-sidebar-link-products" not in catalog.get("class", [])
     assert catalog.get("aria-current") == "page"
-    assert registration.get("aria-current") is None
+    assert len(document.select('#app-sidebar [data-page="product-catalog"]')) == 1
 
 
 def test_mobile_sidebar_links_restore_press_shift_with_overflow_room():

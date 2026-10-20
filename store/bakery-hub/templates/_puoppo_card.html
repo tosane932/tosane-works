@@ -1,0 +1,16 @@
+<section class="operations-card operations-puoppo" id="puoppo" aria-labelledby="puoppo-heading">
+    <h2 id="puoppo-heading">Puoppo｜見出しのAI分析</h2>
+    {% if config.PUOPPO_INTEGRATION_ENABLED and current_user.is_authenticated and current_user.is_admin %}
+    <form action="https://puoppo.onrender.com/" method="GET">
+        <label for="puoppo-keyword">調べたいキーワード</label>
+        <input id="puoppo-keyword" name="keyword" type="text" maxlength="100" placeholder="ベーカリー パン ベーグル 最新トレンド" required autocomplete="off">
+        <button type="submit">Puoppoで検索語を開く</button>
+    </form>
+    <small>Puoppoで許可アカウントへログイン後、内容を確認してから分析を実行します。画面表示や検索語の引き渡しだけでは分析を開始しません。</small>
+    {% elif current_user.is_guest %}
+    <p>ゲストデモではAI分析連携を利用できません。公式ニュースはこのまま閲覧できます。</p>
+    {% else %}
+    <p>AI分析連携は現在利用できません。Puoppo側のアクセス制御を確認してから有効化します。</p>
+    {% endif %}
+    <a href="https://puoppo.onrender.com/" target="_blank" rel="noopener noreferrer">Puoppoを開く</a>
+</section>
