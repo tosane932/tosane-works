@@ -202,21 +202,21 @@
         {% endcall %}
 
         <p>共通サイドメニューはホーム・販売業務・店舗運営・情報収集と学習の4群です。商品登録は商品一覧から進み、共通管理が無効な環境とGuestには旧月次登録の入口を残します。日次入力とレジモードは既存の公開状態・切替日で出し分けます。Admin専用のレジ管理・検証はフラグに従って表示し、初めは閉じています。Jinjaの表示条件は入口の整理であり、各URLの認可やDataset境界に置き換わるものではありません。</p>
-        {% call feature('home', '店舗運営ホーム', 'パン工房 ひだまりの今日の予定・予報・売上を確認します。Adminは出勤予定も見られます。', 'GET /home・GET /api/home/schedule・GET /api/home/weather・GET /api/bakery-news') %}
+        {% call feature('home', '店舗運営ホーム', 'パン工房 ひだまりの今日の予定・予報・売上を確認します。Adminは出勤予定も見られます。', 'GET /home・GET /weather・GET /api/home/weather・GET /bakery-news') %}
             <dt>Python / Flask</dt>
             <dd><code>home()</code>が認証済みDatasetの当日予定を返します。Adminだけは<code>business_today()</code>のJST業務日を使い、<code>planned_work_for_day()</code>で同日の出勤・終日予定を読みます。GETはスタッフ情報を変更しません。現在の天気は設定済みの地点について別APIで取得し、失敗時は理由を表示します。Open-Meteoの現在モデル推定と、MET Norwayの直近予報を設定で選択できます。MET NorwayのExpiresまでキャッシュし、過去天気の確定記録を現在の天気として流用しません。正常なMET Norway予報の取得後はCSRF付きPOSTがサーバー側の予報を再確認し、Datasetごとに日本時間の当日最初の予報だけを<code>DailyForecast</code>へ保存します。これは観測結果ではありません。ホームを開かなかった日は保存されず、保存失敗時もホーム画面は閲覧できます。</dd>
-            <dd>当日詳細・最大7日間の予報は同じ取得レスポンスから<code>home_forecast.py</code>で検証します。MET Norwayの時刻別気温はJSTで集計し、全24時間が揃わない日は「取得分・時間帯限定」と表示します。日本向けcompactの降水確率は未提供で、降水量を代用しません。Open-Meteoは既存の利用設定を維持し、日別気温と日内最大の降水確率だけを使用します。数値欠損は推測しません。週間予報は一時的な表示データで、既存の予報記録POSTや過去天気の保存対象を増やしません。</dd>
+            <dd>当日詳細・最大7日間の予報は同じ取得レスポンスから<code>home_forecast.py</code>で検証します。MET Norwayの時刻別気温はJSTで集計し、全24時間が揃わない日は「取得分・時間帯限定」と表示します。日本向けcompactの降水確率は未提供で、降水量を代用しません。Open-Meteoは既存の利用設定を維持し、日別気温と日内最大の降水確率だけを使用します。数値欠損は推測しません。MET Norwayの十分な朝・午後の時刻別予報がそれぞれ単一の区分で揃う場合に限って「のち」を表示し、Open-Meteoの日別コードだけからは変化を推測しません。週間予報は一時的な表示データで、既存の予報記録POSTや過去天気の保存対象を増やしません。</dd>
             <dt>Database</dt>
             <dd>店舗の予定は現在のDatasetの<code>ShopSchedule</code>だけを読みます。出勤予定カードはAdmin Datasetの<code>ShopStaff</code>・<code>ShopShift</code>を再利用し、Guestはスタッフ表への検索を行いません。予定の取得失敗時はrollbackして取得不可と示し、0人とは表示しません。当日売上はダッシュボードと同じ集計関数を使い、<code>DailySales</code>の行の有無で未入力と0円を区別します。<code>DailyForecast</code>は取得当時の予報を保存し、<code>DailyWeather</code>の過去の気象データと同じ日でも別々に表示します。DBの一意制約とON CONFLICTで同日の再保存・上書きを防ぎ、Guest期限切れ時は削除します。保存済み記録の閲覧では外部APIを呼びません。Render無料DB切り替え時はデータ移行が必要です。</dd>
             <dt>Frontend</dt>
             <dd><code>store_home.js</code>が日本時間の時計と現在・次の予定を更新し、1分ごとに当日の店舗予定を再取得します。バナーと見出しにはモデル店舗名を表示し、Bakery Hubのブランド名も維持します。スマホでは予定と天気を2列、スケジュールと売上を全幅で示します。Adminの出勤予定カードは売上の下に4人までをコンパクトに示し、人数超過時は残り人数とシフト表へのリンクを表示します。終日は時刻未指定、既存の翌日終了はその旨を明示します。勤務予定から実際の出勤・勤務中を断定しません。ホーム以外では親メニューからホームへ移動し、ホーム上では同じ行をボタンとして子メニューを開閉します。</dd>
-            <dd>主なホームカードは既存の主リンクの範囲をCSSで広げ、カード内の予定登録・スタッフ登録・記事リンクを優先します。リンクの入れ子や二重遷移を避け、TabとEnterで操作できます。Puoppoのフォームと複数の作業リンクは独立した操作のままです。天気はHTMLの<code>details / summary</code>で開閉し、開閉だけでは取得・保存を行いません。<code>home_weather.js</code>がJST日時や欠損値を整形し、JavaScriptはtextContentで表示します。</dd>
-            <dd><code>bakery_news.py</code>は農林水産省の公式RSSから、店に関連する最近14日以内の見出し・公開日時・記事リンクだけを選び、30分キャッシュします。ホームのJavaScriptは別APIを非同期で読み込むため、ニュース取得失敗はホーム閲覧を妨げません。AI分析や本文の転載は行いません。</dd>
-            <dd>「ニュース・AI分析」ではBakeryNewsの記事一覧とPuoppoへの入口を同じページにまとめます。ホームの両カードも維持します。Puoppoカードは独立したアプリへ検索語をGETで引き渡す準備です。初期状態では無効で、Guestは利用できません。Puoppoの認証・許可メール・回数制限を確認して有効化した後も、Bakery HubではGeminiを呼びません。分析はPuoppo側の明示操作でニュース見出しを元に行います。</dd>
+            <dd>主なホームカードは既存の主リンクの範囲をCSSで広げ、カード内の予定登録・スタッフ登録・記事リンクを優先します。リンクの入れ子や二重遷移を避け、TabとEnterで操作できます。ホームのPuoppo単独カードを除き、商品一覧・日次入力または公開済みレジ・店舗メモへは幅全体を押せるボタン型リンクで進みます。天気カード全体は専用の<code>GET /weather</code>へのリンクです。<code>home_weather.js</code>がJST日時や欠損値を整形し、<code>weather_detail.js</code>が週間予報をtextContentで表示します。</dd>
+            <dd><code>bakery_news.py</code>は農林水産省・食品新聞のパン分野・食品産業新聞社の公開RSSから、関連する最近30日以内の見出し・公開日時・出典・記事リンクを選び、情報源別に30分キャッシュします。失敗した情報源を分離し、古い記事や同じURLは除外します。ホームのJavaScriptは別APIを非同期で読み込むため、ニュース取得失敗はホーム閲覧を妨げません。AI分析や本文の転載は行いません。</dd>
+            <dd>「ニュース・AI分析」ではBakeryNewsの記事一覧とPuoppoへの入口を同じページにまとめます。ホームはBakeryNewsカードを入口とし、Puoppo単独カードは表示しません。Puoppoカードは独立したアプリへ検索語をGETで引き渡す準備です。初期状態では無効で、Guestは利用できません。Puoppoの認証・許可メール・回数制限を確認して有効化した後も、Bakery HubではGeminiを呼びません。分析はPuoppo側の明示操作でニュース見出しを元に行います。</dd>
             <dt>pytest</dt>
             <dd>未認証アクセス、CSRF、Dataset分離、出勤と終日・休みの区別、空状態・取得失敗・HTMLエスケープ・閲覧時に更新しないこと、当日売上の未入力と0円、同時保存の一意制約、日時の境界、Guest cleanup、migrationの往復、予報と観測記録の区別をpytestで確認します。</dd>
             <dt>確認するコード</dt>
-            <dd>{{ source_links(['app.py', 'shop_staff_shifts.py', 'current_weather.py', 'home_forecast.py', 'static/home_weather.js', 'tests/test_home_forecast.py', 'forecast_history.py', 'weather_history.py', 'models.py', 'templates/store_home.html', 'static/style.css', 'static/store_home.js', 'tests/test_home_staff.py', 'tests/test_forecast_history.py', 'tests/test_store_operations.py']) }}</dd>
+            <dd>{{ source_links(['app.py', 'shop_staff_shifts.py', 'current_weather.py', 'home_forecast.py', 'static/home_weather.js', 'tests/test_home_forecast.py', 'forecast_history.py', 'weather_history.py', 'models.py', 'templates/store_home.html', 'templates/weather_detail.html', 'static/weather_detail.js', 'bakery_news.py', 'static/style.css', 'static/store_home.js', 'tests/test_home_staff.py', 'tests/test_forecast_history.py', 'tests/test_store_operations.py']) }}</dd>
         {% endcall %}
 
         {% call feature('schedule', 'スケジュール', '店舗全体の予定を日付・時刻順に確認し、登録・詳細・編集・削除できます。', 'GET /schedule・POST /schedule/new・POST /schedule/<id>/edit・POST /schedule/<id>/delete') %}
@@ -457,7 +457,7 @@
                             meaning="変数は値に付ける名前です。=は右側の結果を左側の名前へ代入し、==による比較とは区別します。",
                             use="商品登録のindex()は、name.strip()の結果をnormalized_nameへ代入します。",
                             reason="受け取った入力と、検証・保存に使う整えた名前を区別して読めます。",
-                            locations=[["app.py", "index", 1515, "業務処理"]],
+                            locations=[["app.py", "index", 1522, "業務処理"]],
                             feature_id="products",
                             feature_label="商品・メニュー登録",
                             snippet="normalized_name = name.strip()"
@@ -479,7 +479,7 @@
                             meaning="< / <= / == / !=は比較、+ / - / * / %などは計算です。比較の結果や空でない値を条件判断に使います。",
                             use="index()は商品名の長さを範囲比較し、価格を%で割った余りから10円単位か判断します。",
                             reason="価格の大小だけでなく、許可した単位かも保存前に確認できます。%は割り算の余りです。",
-                            locations=[["app.py", "index", 1515, "業務処理"]],
+                            locations=[["app.py", "index", 1522, "業務処理"]],
                             feature_id="products",
                             feature_label="商品・メニュー登録",
                             snippet=""
@@ -509,7 +509,7 @@
                             meaning="isは同じオブジェクトかを確認します。値の一致を確認する==とは役割が違い、Noneの有無はis None / is not Noneで調べます。",
                             use="index()は既存商品を見つけられなければexisting_product is Noneで拒否。入力された商品IDがあるかも別に検証します。",
                             reason="見つからない商品を別の商品として更新しないためです。Noneと数量0・空文字は同じ状態ではありません。",
-                            locations=[["app.py", "index", 1515, "業務処理"]],
+                            locations=[["app.py", "index", 1522, "業務処理"]],
                             feature_id="products",
                             feature_label="商品・メニュー登録",
                             snippet=""
@@ -528,7 +528,7 @@
                             meaning="forは反復できるデータから要素を取り出し、順番に処理します。",
                             use="input_sales()は商品IDと数量の各組を確認し、検証済みの売上をまとめて保存します。",
                             reason="1行目だけでなく全商品を検証し、不正な行を含む送信を保存前に拒否するためです。",
-                            locations=[["app.py", "input_sales", 2278, "業務処理"]],
+                            locations=[["app.py", "input_sales", 2285, "業務処理"]],
                             feature_id="sales",
                             feature_label="日次売上入力",
                             snippet="for product_id, quantity in zip(product_ids, quantities):"
@@ -558,7 +558,7 @@
                             meaning="listは順番を持つ要素の集まり。dictはキーと値の対応です。get()はキーから値を取得し、items()はキーと値の組を取り出します。",
                             use="input_sales()は検証済み行をlistへ。dashboard()は商品名と数量のdictをitems()で取り出して並べ替えます。",
                             reason="複数行の順序と商品名から数量への対応を、それぞれに適した構造で表せます。dict.get()とFlaskのrequest.args.get()は同じライブラリの機能ではありません。",
-                            locations=[["app.py", "input_sales", 2278, "業務処理"], ["app.py", "dashboard", 2023, "業務処理"]],
+                            locations=[["app.py", "input_sales", 2285, "業務処理"], ["app.py", "dashboard", 2030, "業務処理"]],
                             feature_id="dashboard",
                             feature_label="売上データ分析",
                             snippet=""
@@ -569,7 +569,7 @@
                             meaning="setは同じ値を重複して持たない集合です。in / not inは要素が含まれるかを確認します。",
                             use="input_sales()のseen_product_idsで同じ商品IDの二重送信を拒否。商品一覧のproduct_catalog()でもsetで同名履歴の重複を避けます。",
                             reason="同じ売上を送信内で二度扱うことと、一覧の重複表示を防ぎます。目的により同名判定とID判定を使い分けます。",
-                            locations=[["app.py", "input_sales", 2278, "業務処理"], ["app.py", "product_catalog", 1906, "業務処理"]],
+                            locations=[["app.py", "input_sales", 2285, "業務処理"], ["app.py", "product_catalog", 1913, "業務処理"]],
                             feature_id="sales",
                             feature_label="日次売上入力",
                             snippet="seen_product_ids = set()"
@@ -599,7 +599,7 @@
                             meaning="defで処理を定義し、引数で必要な値を受け取り、returnで結果を返します。デフォルト引数は省略時の値です。helperは処理を分けた補助関数の呼び方です。",
                             use="dashboard()から_get_sales_from_db(current_dataset, target_year=None, target_month=None, *, row_limit=None)を呼び、集計dictを受け取ります。*の後の引数は名前付きで渡します。",
                             reason="画面処理とDB取得を分け、対象領域・期間・必要な上限を呼び出し側から明示できます。returnはその関数の処理を終了します。",
-                            locations=[["app.py", "_get_sales_from_db", 2550, "業務処理"], ["app.py", "dashboard", 2023, "業務処理"]],
+                            locations=[["app.py", "_get_sales_from_db", 2557, "業務処理"], ["app.py", "dashboard", 2030, "業務処理"]],
                             feature_id="dashboard",
                             feature_label="売上データ分析",
                             snippet=""
@@ -659,7 +659,7 @@
                             meaning="tryで処理を試し、指定した例外が起きるとexceptで対応します。rollbackはPython構文ではなく、SQLAlchemyの変更取消処理です。",
                             use="input_sales()は日付・商品IDの変換失敗を拒否し、DB保存中のSQLAlchemyErrorではdb.session.rollback()して失敗を返します。",
                             reason="エラー応答だけを返して一部の売上を残すことを避けます。Pythonの例外処理がDBのtransactionを守る呼び出しにつながります。",
-                            locations=[["app.py", "input_sales", 2278, "業務処理"]],
+                            locations=[["app.py", "input_sales", 2285, "業務処理"]],
                             feature_id="sales",
                             feature_label="日次売上入力",
                             snippet=""
@@ -700,7 +700,7 @@
                             meaning="enumerate()は番号と要素を取り出し、既定では0から番号を付けます。zip()は複数の並びから同じ位置の要素を組にします。",
                             use="reorder_tasks()は受信したID順にpositionを保存。input_sales()は商品IDと数量をzip()で対応付けます。",
                             reason="タスクの順番と商品ごとの数量を明示できます。zip()は短い方に合わせて止まるため、売上処理は先に件数一致を検証しています。",
-                            locations=[["shop_tasks.py", "create_shop_tasks_blueprint.reorder_tasks", 375, "業務処理"], ["app.py", "input_sales", 2278, "業務処理"]],
+                            locations=[["shop_tasks.py", "create_shop_tasks_blueprint.reorder_tasks", 375, "業務処理"], ["app.py", "input_sales", 2285, "業務処理"]],
                             feature_id="tasks",
                             feature_label="タスク並び替え",
                             snippet="for position, task_id in enumerate(task_ids):"
@@ -711,7 +711,7 @@
                             meaning="sorted()は新しい並びを作ります。keyは比較に使う値を取り出す関数、lambdaは短い無名関数、reverse=Trueは降順の指定です。",
                             use="dashboard()は商品名・数量の組について、item[1]の数量をkeyにして多い順へ並べます。",
                             reason="商品名順ではなく販売数量順のランキングを作ります。SQLの集計とPythonの表示順の整理は別の担当です。",
-                            locations=[["app.py", "dashboard", 2023, "業務処理"]],
+                            locations=[["app.py", "dashboard", 2030, "業務処理"]],
                             feature_id="dashboard",
                             feature_label="売上ランキング",
                             snippet="ranked_sales = sorted(sales_data.items(), key=lambda item: item[1], reverse=True)"
@@ -940,7 +940,7 @@
                             meaning="デコレータは関数等に別の処理を適用する書き方です。何をするかはデコレータごとに異なり、@があるだけで認証されるわけではありません。",
                             use="appの@app.route等はURLを登録し、Blueprintの@blueprint.get / postは店舗ツールのURLを登録。@admin_or_guest_requiredや@access_requiredが認証・認可を追加します。",
                             reason="URLと処理を結び、関数本体へ進む前に利用者を確認します。Pythonの書き方、Flaskの登録機能、認証の役割を分けて読みます。",
-                            locations=[["app.py", "dashboard", 2023, "業務処理"], ["app.py", "admin_or_guest_required", 504, "業務処理"], ["shop_tasks.py", "create_shop_tasks_blueprint.list_tasks", 141, "業務処理"]],
+                            locations=[["app.py", "dashboard", 2030, "業務処理"], ["app.py", "admin_or_guest_required", 504, "業務処理"], ["shop_tasks.py", "create_shop_tasks_blueprint.list_tasks", 141, "業務処理"]],
                             feature_id="tasks",
                             feature_label="タスク画面の取得",
                             snippet=""
@@ -970,7 +970,7 @@
                             meaning="datetimeは日時、dateは日付。ZoneInfoはタイムゾーンを表します。同じ瞬間でも地域によって日付が違います。",
                             use="business_today()はAsia/Tokyoの今日を返し、input_sales()はdate.fromisoformat()で送信された日付を変換します。",
                             reason="売上入力の今月と本日の金額を日本時間でそろえます。月や年をまたぐと対象商品が変わるため、境界をpytestで確認します。",
-                            locations=[["app.py", "business_today", 261, "業務処理"], ["app.py", "input_sales", 2278, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
+                            locations=[["app.py", "business_today", 261, "業務処理"], ["app.py", "input_sales", 2285, "業務処理"], ["tests/test_business_date.py", "test_business_today_uses_jst_at_utc_date_boundary", 47, "テスト"]],
                             feature_id="sales",
                             feature_label="日本時間の売上入力",
                             snippet="return datetime.datetime.now(BUSINESS_TIMEZONE).date()"

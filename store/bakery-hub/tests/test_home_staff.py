@@ -87,7 +87,7 @@ def test_admin_home_uses_only_today_work_and_all_day(authenticated_client, admin
     assert page.select_one(".operations-heading h1").get_text(strip=True) == "パン工房 ひだまり"
     assert page.select_one('.hidamari-banner img[alt="パン工房 ひだまり"]') is not None
     assert page.select_one("#weather") and page.select_one("#schedule")
-    assert page.select_one("#puoppo") and page.select_one("#today-sales")
+    assert not page.select_one("#puoppo") and page.select_one("#today-sales")
     assert "勤務中" not in card.get_text() and "出勤済み" not in card.get_text()
 
 
@@ -146,7 +146,7 @@ def test_guest_and_anonymous_never_read_staff(authenticated_client, admin_datase
     assert "非公開スタッフ" not in html and 'href="/staff-shifts"' not in html
     assert not statements
     assert page.select_one("#weather") and page.select_one("#today-sales")
-    assert page.select_one("#bakery-news") and page.select_one("#puoppo")
+    assert page.select_one("#bakery-news") and not page.select_one("#puoppo")
     g.pop("_login_user", None)
     assert client.get("/home").status_code == 302
     g.pop("_login_user", None)
@@ -172,4 +172,4 @@ def test_shift_read_failure_is_distinct_from_zero_and_keeps_home(authenticated_c
     assert "取得できません" in card.get_text()
     assert "出勤予定 0人" not in card.get_text()
     assert page.select_one("#today-sales") and page.select_one("#weather")
-    assert page.select_one("#bakery-news") and page.select_one("#puoppo")
+    assert page.select_one("#bakery-news") and not page.select_one("#puoppo")

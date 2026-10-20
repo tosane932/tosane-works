@@ -9277,3 +9277,34 @@ body.shop-task-reorder-lock .shop-task-card {
 
 .operations-grid:has(.operations-weather[open]) .operations-next { grid-column: 1 / -1; }
 @media (max-width: 600px) { .operations-weather { --weather-inset: 12px; --weather-inline: 10px; } }
+
+/* Phase 2B: the home forecast stays compact; the full forecast lives on /weather. */
+.operations-weather-link { display: block; text-decoration: none; color: #493d34; }
+.operations-weather-link:hover, .operations-weather-link:focus-visible { border-color: var(--bakery-home-color); }
+.operations-weather-link:focus-visible, .weather-back:focus-visible { outline: 3px solid #2c5d3b; outline-offset: 3px; }
+.operations-weather-link:active, .operations-work-link:active { transform: translateY(1px); }
+.operations-weather-link .operations-weather-icon { display: inline-flex; }
+.operations-weather-link #operations-weather-probability { display: block; margin-top: 8px; font-size: .8rem; }
+.operations-weather-link .operations-weather-more { font-weight: 600; }
+.operations-weather[data-condition="sun"] { --weather-tone: #f5df9a; }
+.operations-weather[data-condition="partly"] { --weather-tone: #dfe9ae; }
+.operations-weather[data-condition="cloud"] { --weather-tone: #d7d9dd; }
+.operations-weather[data-condition="rain"] { --weather-tone: #b8d6eb; }
+.operations-weather[data-condition="snow"] { --weather-tone: #c8e8ed; }
+.operations-weather[data-condition="storm"] { --weather-tone: #dcd0ee; }
+.operations-weather[data-condition="unknown"] { --weather-tone: #e2ded7; }
+.operations-weather[data-condition] { background: color-mix(in srgb, var(--weather-tone) 42%, white); border-color: var(--weather-tone); }
+.operations-weather[data-condition] .operations-weather-icon { color: #384b53; }
+.weather-page { max-width: 960px; }
+.weather-back { display: inline-flex; align-items: center; min-height: 48px; margin: 5px 0 16px; color: #493d34; font-weight: 700; }
+.weather-detail-card { margin: 0 0 20px; }
+#operations-weather-credit[hidden] { display: none; }
+.weather-detail-card #operations-weather-today { margin-top: 15px; border-top: 1px solid #d8d1c8; }
+.weather-detail-card #operations-weather-today h3 { margin: 15px 0 8px; }
+.weather-detail-card .operations-weather-week li { min-width: 0; }
+.operations-links .operations-work-link { --work-color: var(--bakery-products-color); display: flex; justify-content: space-between; align-items: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 52px; margin: 10px 0; padding: 11px 14px; border: 1px solid var(--work-color); border-radius: 10px; background: color-mix(in srgb, var(--work-color) 9%, white); color: #342d28; font-weight: 700; text-decoration: none; }
+.operations-links .operations-work-sales { --work-color: var(--bakery-sales-color); }
+.operations-links .operations-work-memo { --work-color: var(--bakery-info-color); }
+.operations-links .operations-work-link:hover { background: color-mix(in srgb, var(--work-color) 18%, white); text-decoration: none; }
+.operations-links .operations-work-link:focus-visible { outline: 3px solid var(--work-color); outline-offset: 3px; }
+.operations-links .operations-work-link span:last-child { color: var(--work-color); font-size: 1.25rem; }

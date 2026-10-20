@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {day, timestamp, icon} = require('../static/home_weather.js');
+const {day, timestamp, icon, condition} = require('../static/home_weather.js');
 test('partial forecasts never claim full-day extremes; missing probability is not zero', () => {
     const view = day({date:'2026-10-20', complete:false, temperature_max:24, temperature_min:NaN, precipitation_probability:null, from_at:'2026-10-20T12:00+09:00', to_at:'2026-10-20T18:00+09:00'});
     assert.match(view.temperature, /取得分最高 24℃.*取得分最低 未提供/);
@@ -20,4 +20,16 @@ test('JST rendering and genuine zero percent / zero degrees remain visible', () 
 test('unknown weather does not invent a cloud icon or a condition', () => {
     assert.equal(icon(4), null);
     assert.equal(day({date:'2026-10-20',weather_code:4}).weather, '天気未提供');
+});
+
+test('seven weather categories have matching icon and text; transitions require server evidence', () => {
+    for (const [code, expectedIcon, expectedText] of [
+        [0,'sun','晴れ'], [2,'partly','晴れ・曇り'], [3,'cloud','曇り'],
+        [61,'rain','雨'], [71,'snow','雪'], [95,'storm','雷雨']
+    ]) {
+        assert.equal(icon(code), expectedIcon);
+        assert.equal(condition(code), expectedText);
+        assert.equal(day({date:'2026-10-20',weather_code:code}).weather, expectedText);
+    }
+    assert.equal(day({date:'2026-10-20',weather_code:61,transition_label:'晴れのち雨'}).weather, '晴れのち雨');
 });

@@ -14,7 +14,25 @@ def _row(day):
     return dict(date=day.isoformat(), weather_code=None, temperature_max=None,
                 temperature_min=None, precipitation_probability=None,
                 probability_basis=None, complete=False, from_at=None, to_at=None,
-                representative_at=None, temperature_basis='時刻別予報の取得分')
+                representative_at=None, transition_label=None, temperature_basis='時刻別予報の取得分')
+
+
+def _transition(points):
+    """朝と午後の十分な時刻別予報で、それぞれ同一の単純な天気のときだけ表示。"""
+    labels = {0: '晴れ', 3: '曇り', 61: '雨', 71: '雪', 95: '雷雨'}
+    periods = []
+    for start, end in ((6, 11), (13, 18)):
+        if any(code not in labels for time, (_, code) in points.items() if start <= time.hour <= end):
+            return None
+        samples = sorted((time, labels[code]) for time, (_, code) in points.items()
+                         if start <= time.hour <= end and code in labels)
+        # 欠損や疎な予報を連続変化と読み替えない。
+        if (len(samples) < 3 or (samples[-1][0] - samples[0][0]) < dt.timedelta(hours=3)
+                or any((b[0] - a[0]) > dt.timedelta(hours=2) for a, b in zip(samples, samples[1:]))
+                or len({label for _, label in samples}) != 1):
+            return None
+        periods.append(samples[0][1])
+    return f'{periods[0]}のち{periods[1]}' if periods[0] != periods[1] else None
 
 
 def met_daily(series, units, today, symbol_to_code):
@@ -57,6 +75,7 @@ def met_daily(series, units, today, symbol_to_code):
         if symbols:
             target, code = min(symbols, key=lambda pair: abs((pair[0] - dt.datetime.combine(day, dt.time(12), JST)).total_seconds()))
             row.update(weather_code=code, representative_at=target.isoformat(timespec='minutes'))
+            row['transition_label'] = _transition(points)
         # compact/global の降水量は降水確率ではない。確率は常に未提供。
         result.append(row)
     return result
