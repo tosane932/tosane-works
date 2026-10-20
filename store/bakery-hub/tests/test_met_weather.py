@@ -160,3 +160,25 @@ def test_met_admin_and_guest_home_api(flask_app, authenticated_client, admin_dat
     guest, _ = guest_client(flask_app)
     assert guest.get("/home").status_code == 200
     assert guest.get("/api/home/weather").json["available"] is True
+
+
+def test_weekly_forecast_reuses_request_and_cache_isolation(monkeypatch):
+    weather._cache.clear()
+    now = datetime.datetime.now(JST)
+    data = payload()
+    data['properties']['meta']['units'] = {'air_temperature': 'celsius'}
+    for day_offset in range(7):
+        target = (now + datetime.timedelta(days=day_offset)).replace(hour=12, minute=0, second=0, microsecond=0)
+        data['properties']['timeseries'].append({'time': target.isoformat(), 'data': {
+            'instant': {'details': {'air_temperature': 20 + day_offset}},
+            'next_6_hours': {'summary': {'symbol_code': 'clearsky_day'}, 'details': {'precipitation_amount': 90}},
+        }})
+    calls = []
+    monkeypatch.setattr(weather, 'urlopen', lambda *a, **k: (calls.append(1), Response(data))[1])
+    result = weather.current_weather(settings())
+    assert len(result['forecast_days']) == 7
+    assert all(row['precipitation_probability'] is None for row in result['forecast_days'])
+    result['forecast_days'][0]['temperature_max'] = 999
+    cached = weather.current_weather(settings())
+    assert cached['forecast_days'][0]['temperature_max'] != 999
+    assert len(calls) == 1
