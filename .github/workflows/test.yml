@@ -18,7 +18,7 @@ defaults:
 
 jobs:
   register-browser-e2e:
-    if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup')
+    if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup' && github.head_ref != 'ops/v3-phase3c-restore-verification')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -50,7 +50,7 @@ jobs:
           retention-days: 3
 
   test:
-    if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup')
+    if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup' && github.head_ref != 'ops/v3-phase3c-restore-verification')
     runs-on: ubuntu-latest
 
     steps:
@@ -75,7 +75,7 @@ jobs:
           pytest -v
 
   postgres-integration:
-    if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup')
+    if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup' && github.head_ref != 'ops/v3-phase3c-restore-verification')
     runs-on: ubuntu-latest
 
     services:
@@ -174,7 +174,7 @@ jobs:
         run: pytest tests/test_production_backup_guard.py tests/test_register_backup_restore_postgresql.py -v
 
   encrypted-backup:
-    if: github.event_name == 'pull_request' && github.head_ref == 'ops/v3-g580-encrypted-db-backup'
+    if: github.event_name == 'pull_request' && (github.head_ref == 'ops/v3-g580-encrypted-db-backup' || github.head_ref == 'ops/v3-phase3c-restore-verification')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -228,3 +228,9 @@ jobs:
           age --version
       - name: Targeted age streaming and safety tests only
         run: pytest tests/test_production_backup_guard.py tests/test_production_backup_encrypted_postgresql.py -v
+      - name: Phase 3C isolated schema and read-only SQL only
+        if: github.head_ref == 'ops/v3-phase3c-restore-verification'
+        run: pytest tests/test_g580_restore_verification_postgresql.py -v
+      - name: Phase 3C internal bridge and tmpfs smoke test only
+        if: github.head_ref == 'ops/v3-phase3c-restore-verification'
+        run: bash tests/sh/test_g580_restore_container.sh

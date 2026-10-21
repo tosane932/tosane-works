@@ -5,10 +5,15 @@ BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
 -- 名前だけでは独立性を証明しない。ネットワークとguard.preflightも別途確認。
 SELECT 1 / CASE WHEN current_database() = 'isolated_restore'
                  AND current_setting('server_version_num')::integer / 10000 = 18
+                 AND current_setting('transaction_read_only') = 'on'
                 THEN 1 ELSE 0 END AS expected_isolated_pg18;
 SELECT current_database() AS restored_db, current_setting('server_version') AS pg_version;
 
 -- 表名・実件数。pg_statの推計値を使わない。27表の確認にも使う。
+-- この10月21日のスナップショットから表数が違えば、集計前に停止してスキーマを再確認。
+SELECT 1 / CASE WHEN count(*) = 27 THEN 1 ELSE 0 END AS expected_27_tables
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='public' AND c.relkind IN ('r', 'p');
 SELECT format('SELECT %L AS table_name, count(*) AS rows FROM %I.%I;',
               n.nspname || '.' || c.relname, n.nspname, c.relname)
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -66,10 +71,30 @@ FROM public.register_products;
 SELECT (SELECT count(*) FROM public.register_transaction_lines l
         LEFT JOIN public.register_transactions t ON t.id=l.transaction_id AND t.dataset_id=l.dataset_id
         WHERE t.id IS NULL) AS orphan_transaction_lines,
+       (SELECT count(*) FROM public.register_transaction_lines l
+        LEFT JOIN public.register_products p ON p.id=l.register_product_id AND p.dataset_id=l.dataset_id
+        WHERE p.id IS NULL) AS orphan_transaction_products,
+       (SELECT count(*) FROM public.register_price_history h
+        LEFT JOIN public.register_products p ON p.id=h.register_product_id AND p.dataset_id=h.dataset_id
+        WHERE p.id IS NULL) AS orphan_price_history,
        (SELECT count(*) FROM public.register_prep_links l
         LEFT JOIN public.prep_recipes r ON r.id=l.recipe_id AND r.dataset_id=l.dataset_id
         LEFT JOIN public.register_products p ON p.id=l.register_product_id AND p.dataset_id=l.dataset_id
         WHERE r.id IS NULL OR p.id IS NULL) AS orphan_recipe_links,
+       (SELECT count(*) FROM public.prep_ingredients i
+        LEFT JOIN public.prep_recipes r ON r.id=i.recipe_id AND r.dataset_id=i.dataset_id
+        WHERE r.id IS NULL) AS orphan_ingredients,
+       (SELECT count(*) FROM public.prep_plans p
+        LEFT JOIN public.prep_recipes r ON r.id=p.recipe_id AND r.dataset_id=p.dataset_id
+        WHERE r.id IS NULL) AS orphan_plans,
+       (SELECT count(*) FROM public.register_recovery_lines l
+        LEFT JOIN public.register_recovery_cases c ON c.id=l.case_id AND c.dataset_id=l.dataset_id
+        LEFT JOIN public.register_products p ON p.id=l.register_product_id AND p.dataset_id=l.dataset_id
+        WHERE c.id IS NULL OR p.id IS NULL) AS orphan_recovery_lines,
+       (SELECT count(*) FROM public.register_recovery_events e
+        LEFT JOIN public.register_recovery_cases c ON c.id=e.case_id AND c.dataset_id=e.dataset_id
+        LEFT JOIN public.register_transactions t ON t.id=e.transaction_id AND t.dataset_id=e.dataset_id
+        WHERE c.id IS NULL OR (e.transaction_id IS NOT NULL AND t.id IS NULL)) AS orphan_recovery_events,
        (SELECT count(*) FROM public.shop_shifts s
         LEFT JOIN public.shop_staff t ON t.id=s.staff_id AND t.dataset_id=s.dataset_id
         WHERE t.id IS NULL) AS orphan_shifts;
