@@ -18,7 +18,7 @@ defaults:
 
 jobs:
   register-browser-e2e:
-    if: github.event_name != 'pull_request' || github.head_ref != 'ops/v3-production-db-backup-readiness'
+    if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -50,7 +50,7 @@ jobs:
           retention-days: 3
 
   test:
-    if: github.event_name != 'pull_request' || github.head_ref != 'ops/v3-production-db-backup-readiness'
+    if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup')
     runs-on: ubuntu-latest
 
     steps:
@@ -75,7 +75,7 @@ jobs:
           pytest -v
 
   postgres-integration:
-    if: github.event_name != 'pull_request' || github.head_ref != 'ops/v3-production-db-backup-readiness'
+    if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup')
     runs-on: ubuntu-latest
 
     services:
@@ -172,3 +172,59 @@ jobs:
           sudo apt-get install -y postgresql-client-16
       - name: Synthetic backup and local safety checks only
         run: pytest tests/test_production_backup_guard.py tests/test_register_backup_restore_postgresql.py -v
+
+  encrypted-backup:
+    if: github.event_name == 'pull_request' && github.head_ref == 'ops/v3-g580-encrypted-db-backup'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      source:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci_test_user
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: sales_data_app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_test_user -d sales_data_app_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      target:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci_test_user
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: restore_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_test_user -d restore_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENCRYPTED_BACKUP_SYNTHETIC_TEST: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install synthetic test dependencies
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update
+          sudo apt-get install -y age curl ca-certificates
+          sudo install -d -m 755 /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: noble-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+          export PATH="/usr/lib/postgresql/18/bin:$PATH"
+          echo '/usr/lib/postgresql/18/bin' >> "$GITHUB_PATH"
+          pg_dump --version
+          pg_restore --version
+          age --version
+      - name: Targeted age streaming and safety tests only
+        run: pytest tests/test_production_backup_guard.py tests/test_production_backup_encrypted_postgresql.py -v
