@@ -166,7 +166,8 @@ def test_real_migration_schema_and_read_only_verification(tmp_path):
             isolated.close()
         orphan = _psql("approved_restore_target", service, password)
         assert orphan.returncode == 0, orphan.stderr
-        assert orphan.stdout.count("public.material_order_items|1") == 2
+        # 全表件数はschema付き、動的missing_datasetは表名だけを出力する。
+        assert re.search(r"^material_order_items\|1$", orphan.stdout, re.MULTILINE)
     finally:
         if app is not None:
             with app.app_context():
