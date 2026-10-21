@@ -14,7 +14,7 @@
 | 隔離復元 | Docker 29.8.0 / `postgres:18.6`、内部ネットワーク `bakeryhub-restore-net`、コンテナ `bakeryhub-restore-pg18`、`isolated_restore` / `restore_operator`。独立・空DB・認証付き接続・`preflight()` PASSの後、`restore-encrypted-approved` が `RESTORED ... encrypted size=108985 bytes` | 復元コマンド成功 |
 | 復元後の基本検査 | public表27、制約344、未検証制約0、無効インデックス0、`daily_sales` 104行、`alembic_version` 1行 | この項目だけ実測。全表・全データの完全照合は未実施 |
 
-USB秘密鍵は暗号化媒体 `BakeryHub-Key` に保管。公開recipientは `/home/tosane/BakeryHub-Backup/keys/bakeryhub-age-recipient.txt`。Google Driveに以前置いた**平文秘密鍵の履歴**について、現在のkeysフォルダでは暗号化ファイルが確認されているが、過去コピーの完全削除・ゴミ箱・履歴は独立した未確認事項。鍵の値を表示・記録しない。
+USB秘密鍵は暗号化媒体 `BakeryHub-Key` の `/media/tosane/BakeryHub-Key/keys/bakeryhub-age-identity.txt` に保管。公開recipientは `/home/tosane/BakeryHub-Backup/keys/bakeryhub-age-recipient.txt`。利用者は以前Google Driveに置いた平文秘密鍵を**ゴミ箱も含めて削除済み**、クリップボードもクリア済みと報告した。これらを未完了扱いしない。ただし過去の第三者閲覧や外部コピーの不存在は証明していない。鍵の値を表示・記録しない。
 
 終了時に復元用コンテナは正常停止・削除され、tmpfs上の復元DBは消失した。`/swap.img` は再有効化され、4GB・使用量0Bとの報告。G580の暗号化バックアップ、Driveの暗号化コピー、USB鍵は保持。次の検証では**新しい隔離DBを作り直す**。古い `pg_service.conf` の復元先IPを再利用しない。
 
@@ -69,17 +69,14 @@ install -d -m 700 ~/BakeryHub-Backup/database
 
 鍵方式はageの公開鍵暗号を採用する。暗号化には公開recipientだけを使用し、復号用秘密鍵はG580のバックアップディレクトリと**別の安全な場所**（取り外せる暗号化媒体など）に0600で置く。鍵をGit、チャット、PR、バックアップ本体と同じ場所へ保存しない。鍵の別保管と再読込を確認してから実データを保存する。
 
-**以下の鍵生成は新規導入時の例であり、2026-10-21の実鍵に対して再実行しない。既存の秘密鍵・公開鍵を上書きしない。** 鍵媒体の実際のマウント先を確認し、既存鍵がある場合はこのブロックを飛ばす。
+2026-10-21に鍵は作成・別保管・復号確認済み。**鍵生成を再実行しない。** 秘密鍵・公開鍵の内容は表示せず、存在と権限だけ確認する。
 
 ```bash
-umask 077
-age-keygen -o /media/tosane/保護媒体/bakeryhub-age-identity.txt
-install -d -m 700 /home/tosane/BakeryHub-Backup/keys
-age-keygen -y /media/tosane/保護媒体/bakeryhub-age-identity.txt > /home/tosane/BakeryHub-Backup/keys/bakeryhub-age-recipient.txt
-chmod 600 /home/tosane/BakeryHub-Backup/keys/bakeryhub-age-recipient.txt
+stat -c '%a %U %n' /media/tosane/BakeryHub-Key/keys/bakeryhub-age-identity.txt
+stat -c '%a %U %n' /home/tosane/BakeryHub-Backup/keys/bakeryhub-age-recipient.txt
 ```
 
-`/media/tosane/保護媒体` は例。**実際の暗号化媒体のマウント先・ファイル権限を確認してから**置き換える。秘密鍵の中身を画面共有やチャットに表示しない。媒体を紛失すれば復号できないので、所有者が管理する独立の保護されたコピーも作る。復号検証時だけ鍵を利用し、検証後は媒体を安全に取り外す。秘密鍵を失った場合、バックアップ成功とは判定しない。
+媒体が実際に `BakeryHub-Key` としてマウントされたことを確認し、秘密鍵の中身を画面共有やチャットに表示しない。暗号化した予備鍵はG580とGoogle Driveに保管し、復号とUSB鍵との一致を確認済み。復号検証後はUSBを安全に取り外す。秘密鍵を失った場合、バックアップ成功とは判定しない。
 
 ## 4｜本番接続先と認証情報の照合
 
@@ -116,19 +113,19 @@ python3 production_backup_guard.py backup-encrypted --source-service approved_so
 出力された実際のパスとSHA-256を指定する。パスやSHA-256は秘密鍵ではないが、実バックアップをGitやチャットに添付しない。
 
 ```bash
-python3 production_backup_guard.py verify-encrypted --identity-file /media/tosane/保護媒体/bakeryhub-age-identity.txt --sha256 確認した64桁のSHA256 /home/tosane/BakeryHub-Backup/database/実際のファイル名.dump.age
+python3 production_backup_guard.py verify-encrypted --identity-file /media/tosane/BakeryHub-Key/keys/bakeryhub-age-identity.txt --sha256 確認した64桁のSHA256 /home/tosane/BakeryHub-Backup/database/実際のファイル名.dump.age
 ```
 
 暗号文のサイズ・SHA-256を照合し、ageで全ストリームを復号、`pg_restore` でcustom形式と主要な表を確認する。復号データはプロセス間のパイプを通り、通常のディスクに平文dumpを作らない。これは**将来の別バックアップ**を復元済みと認定するものではない。破損・復号失敗・鍵紛失・認可不足はFAIL。
 
 ## 7｜独立PostgreSQL 18へ隔離復元（別途書込承認後）
 
-G580のローカルで、本番と異なるサーバー／TCP接続先に、空の `isolated_restore` DBを用意する。復元先はWebから接続できないことを確認し、`approved_restore_target` のlibpq service設定を作る。G580上のPostgreSQL 18インストール・DB作成は、この段階で復元先への書込を承認してから行う。新しいRenderサービスは作らない。
+G580のローカルで、本番と異なるサーバー／TCP接続先に、空の `isolated_restore` DBを用意する。復元先はWebから接続できないことを確認し、`approved_restore_target` のlibpq service設定を作る。Docker内部ネットワークの再利用・現在のコンテナIP・tmpfs・スワップ・終了処理は[実機に合わせた再開手順](g580-restore-verification.md)で確認する。G580上の隔離DB作成は書込を承認してから行う。新しいRenderサービスは作らない。
 
 **復元先名・空状態・鍵・実データ書込承認を確認した直後**に実行する。
 
 ```bash
-python3 production_backup_guard.py restore-encrypted-approved --source-service approved_source --source-database bakery_db_4 --target-service approved_restore_target --target-database isolated_restore --confirm-target isolated_restore --identity-file /media/tosane/保護媒体/bakeryhub-age-identity.txt --sha256 確認した64桁のSHA256 /home/tosane/BakeryHub-Backup/database/実際のファイル名.dump.age
+python3 production_backup_guard.py restore-encrypted-approved --source-service approved_source --source-database bakery_db_4 --target-service approved_restore_target --target-database isolated_restore --confirm-target isolated_restore --identity-file /media/tosane/BakeryHub-Key/keys/bakeryhub-age-identity.txt --sha256 確認した64桁のSHA256 /home/tosane/BakeryHub-Backup/database/実際のファイル名.dump.age
 ```
 
 ツールは本番と隔離先の相違、両者18系、空状態、ハッシュと全復号ストリームを確認し、**隔離先だけ**へ1トランザクションで復元する。`--clean`・`--create` は使用しない。失敗時の再試行先は承認済みの別の空DBにする。**この成功表示だけでデータ照合PASSにしない。**

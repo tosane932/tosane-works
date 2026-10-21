@@ -46,40 +46,72 @@ swapon --show
 sha256sum /home/tosane/BakeryHub-Backup/database/bakeryhub_20261021_214150_271fcbe5bdc0.dump.age
 ```
 
-期待値は `241d5f915306f207153f2d175cb219587ea8de9986dfc4b5f54599de9b7502d6`。異なる場合は以降を止める。`stat -c '%a %U %s %n'` でファイルが所有者・600・108985 bytes、親ディレクトリが700か確認する。公開鍵は `~/BakeryHub-Backup/keys/bakeryhub-age-recipient.txt` で、古い `~/bakeryhub-age-recipient.txt` を使わない。秘密鍵は暗号化媒体 `BakeryHub-Key` のみから読み、鍵予備の平文をG580の通常ディスクへ展開しない。以前Driveに置いた平文鍵の履歴・ゴミ箱の完全削除は未確認として別に調べる。
+期待値は `241d5f915306f207153f2d175cb219587ea8de9986dfc4b5f54599de9b7502d6`。異なる場合は以降を止める。`stat -c '%a %U %s %n'` でファイルが所有者・600・108985 bytes、親ディレクトリが700か確認する。公開鍵は `~/BakeryHub-Backup/keys/bakeryhub-age-recipient.txt`。USB秘密鍵は `/media/tosane/BakeryHub-Key/keys/bakeryhub-age-identity.txt` にあり、中身は表示しない。鍵予備の平文をG580の通常ディスクへ展開しない。利用者は以前Driveに置いた平文秘密鍵をゴミ箱も含めて削除し、クリップボードもクリアしたと報告した。過去の第三者閲覧や外部コピーの不存在までは証明していない。
 
 ## 2｜Docker隔離先を新規作成（書込承認とメモリ確認後）
 
-この段階は**新規の隔離DBへの書込**を伴う。利用者が再復元の実行を確認してから進む。既存コンテナ・ネットワークに同名のものがあれば停止して調査し、削除や再利用を機械的に行わない。Dockerホストの容量と空きRAMを確認し、tmpfs 512MiBを確保できないときは停止する。コンテナDBはtmpfsのみ。Dockerのログ、ダンプ、ターミナル記録に実データを出さない。
+この段階は**新規の隔離DBへの書込**を伴う。利用者が再復元の実行を確認してから進む。既存コンテナに同名のものがあれば停止して調査し、勝手に削除しない。Dockerホストの容量と空きRAMを確認し、tmpfs 512MiBを確保できないときは停止する。コンテナDBはtmpfsのみ。Dockerのログ、ダンプ、ターミナル記録に実データを出さない。
 
 ```bash
 docker ps -a --filter name=^/bakeryhub-restore-pg18$
 docker network ls --filter name=^bakeryhub-restore-net$
 ```
 
-復元時にメモリページが平文でスワップへ書かれるのを避ける。`/swap.img`を一時停止しても空きRAMが十分なこと、他の作業に支障がないことを確認。スワップ停止に失敗したら復元しない。終了後は再有効化を必ず確認する。
+各結果を確認する。ネットワークが存在する場合、次のコマンドで `bridge` / `true` / 接続コンテナの一覧を確認し、復元専用で接続先がない場合だけ再利用する。別の用途や不明な接続があれば止める。**無条件に削除・再作成しない。** ネットワークが存在しない場合だけ新規作成する。
+
+```bash
+docker network inspect -f '{{.Name}} {{.Driver}} {{.Internal}} {{json .Containers}}' bakeryhub-restore-net
+```
+
+存在しないことを確認した場合に限る：
+
+```bash
+docker network create --driver bridge --internal --label bakeryhub.purpose=restore-only bakeryhub-restore-net
+```
+
+新規作成後も `network inspect` で `bridge` / `true` / 接続先なしを確認する。既存ネットワークを使った場合は、この作業で新規作成したものとして扱わない。
+
+ローカルで実際に使用した `/home/tosane/.config/bakeryhub/restore-local-password`（所有者の通常ファイル・0600）が存在することだけ確認する。再生成も内容表示もしない。秘密値をコマンド引数、環境変数、チャットへ書かない。コンテナ作成前に `pg_service.conf` の復元先が削除済みコンテナの古いIPを指していないか確認する。実機ではホスト側 `127.0.0.1:55432` のポート経由が到達せず、G580から内部bridge上のコンテナIPへ直接接続して成功した。この経路を採用し、ポートは公開しない。Dockerの一般的なポート公開の可否を断定するものではない。Docker 29.8.0のG580とActions上のLinuxでの到達性は別々に確認する。
+
+```bash
+stat -c '%a %U %n' /home/tosane/.config/bakeryhub/restore-local-password
+```
+
+復元時にメモリページが平文でスワップへ書かれるのを避ける。**ネットワーク・鍵・暗号文・RAM・認証設定の確認を先に終えてから**、コンテナ起動の直前に `/swap.img` を停止する。停止しても空きRAMが十分で、他の作業に支障がないことを確認。停止に失敗したら復元しない。途中失敗時もコンテナ停止・削除を確認してからスワップを再有効化する。
 
 ```bash
 sudo swapoff /swap.img
+```
+
+```bash
 swapon --show
 ```
 
-ローカルの保護された `/home/tosane/.config/bakeryhub/restore_password`（通常ファイル、所有者・0600）を、**エディタでオフライン作成済みであること**を確認する。秘密値をコマンド引数、環境変数、チャットへ書かない。これが用意できない場合は停止。コンテナ作成前に既存の `pg_service.conf` の復元先が削除済みコンテナの古いIPを指していないか確認する。以下ではホストloopback `127.0.0.1:15432` にだけ公開し、Docker内部ネットワークにWebを接続しない。ポートの競合があれば停止。
+PostgreSQL 18.6コンテナのデータ領域 `/var/lib/postgresql` を、実機で成功した `uid=999,gid=999,mode=0700` のtmpfsに置く。パスワードファイルはreadonly bind mount。Docker内部には平文DBがあるため、Docker管理者とG580のアクセスも保護する。起動に失敗したら**後片付けの節**へ進み、スワップを停止したまま放置しない。
 
 ```bash
-stat -c '%a %U %n' /home/tosane/.config/bakeryhub/restore_password
-docker network create --internal bakeryhub-restore-net
-docker network inspect -f '{{.Internal}}' bakeryhub-restore-net
+docker run -d --name bakeryhub-restore-pg18 --network bakeryhub-restore-net --tmpfs /var/lib/postgresql:rw,size=512m,uid=999,gid=999,mode=0700 --mount type=bind,src=/home/tosane/.config/bakeryhub/restore-local-password,dst=/run/secrets/pg_password,readonly --env POSTGRES_USER=restore_operator --env POSTGRES_DB=isolated_restore --env POSTGRES_PASSWORD_FILE=/run/secrets/pg_password postgres:18.6
 ```
 
-`true`を確認してから一つずつ実行。Docker 18.6イメージのデータ領域 `/var/lib/postgresql` をtmpfsに置く。パスワードファイルはreadonly bind mount。Docker内部には平文DBがあるため、Docker管理者とG580のアクセスも保護する。
+`docker port bakeryhub-restore-pg18` に公開ポートがないこと、コンテナが `bakeryhub-restore-net` **だけ**に接続すること、Dockerのtmpfs設定とデータ領域の所有者が期待どおりであることを確認する。コンテナ起動ログを丸ごと公開しない。`docker inspect` で**その回に作成した**コンテナのIPを確認する（過去のIPを転記しない）。
 
 ```bash
-docker run -d --name bakeryhub-restore-pg18 --network bakeryhub-restore-net --publish 127.0.0.1:15432:5432 --tmpfs /var/lib/postgresql:rw,nosuid,nodev,size=512m --mount type=bind,src=/home/tosane/.config/bakeryhub/restore_password,dst=/run/secrets/pg_password,readonly --env POSTGRES_USER=restore_operator --env POSTGRES_DB=isolated_restore --env POSTGRES_PASSWORD_FILE=/run/secrets/pg_password postgres:18.6
 docker port bakeryhub-restore-pg18
 ```
 
-`docker port` は `127.0.0.1:15432` だけであることを確認。コンテナの準備完了後、G580の保護された `pg_service.conf` の `approved_restore_target` を **host=127.0.0.1, port=15432, dbname=isolated_restore, user=restore_operator** に更新し、`pgpass` に対応する認証を保護されたエディタで設定する。旧コンテナのIPは使わない。ファイル内容やパスワードをログへ表示しない。新しいホスト・DB名・認証・空状態を**実行直前**に再確認する。
+```bash
+docker inspect -f '{{json .HostConfig.Tmpfs}} {{json .NetworkSettings.Networks}}' bakeryhub-restore-pg18
+```
+
+```bash
+docker exec bakeryhub-restore-pg18 stat -c '%a %u %g' /var/lib/postgresql
+```
+
+```bash
+docker inspect -f '{{ (index .NetworkSettings.Networks "bakeryhub-restore-net").IPAddress }}' bakeryhub-restore-pg18
+```
+
+コンテナの準備完了後、G580の保護された `pg_service.conf` の `approved_restore_target` を **host=今回inspectで確認したコンテナIP, port=5432, dbname=isolated_restore, user=restore_operator** に更新し、`pgpass` に対応する認証を保護されたエディタで設定する。既存の本番用 `approved_source` は変更しない。ファイル内容やパスワードをログへ表示しない。IPが空、または接続ができない場合は止める。新しいホスト・DB名・認証・空状態を**実行直前**に再確認する。
 
 ```bash
 export PGSERVICEFILE=/home/tosane/.config/bakeryhub/pg_service.conf
@@ -87,7 +119,7 @@ export PGPASSFILE=/home/tosane/.config/bakeryhub/pgpass
 psql -X -A -t -v ON_ERROR_STOP=1 -d 'service=approved_restore_target' -c "SELECT current_database(), current_setting('server_version'), inet_server_addr(), inet_server_port(), (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','S','f'))"
 ```
 
-`isolated_restore`、18.6、空（関係0）を確認。ソース `approved_source` のRender本番ホストと同じサーバーではないことを、管理画面と別の接続設定で再確認する。`preflight`も空・接続先・両サーバー18系を確認する。ここで拒否されれば止める。
+`isolated_restore`、18.6、コンテナの今回のIP・port 5432、空（関係0）を確認。ソース `approved_source` のRender本番ホストと同じサーバーではないことを、管理画面と別の接続設定で再確認する。`preflight`も空・接続先・両サーバー18系を確認する。ここで拒否されれば止める。
 
 ```bash
 cd ~/tosane-works/store/bakery-hub
@@ -96,16 +128,16 @@ python3 production_backup_guard.py preflight --source-service approved_source --
 
 ## 3｜復号と復元（復元先の再確認後）
 
-USBの秘密鍵ファイルの**実際のパスだけ**を手元で確認し、以下の例の `/media/tosane/BakeryHub-Key/bakeryhub-age-identity.txt` が異なれば手元で置き換える。鍵本体は絶対に表示しない。暗号文のハッシュ・全ストリームを再検証する。
+USBの秘密鍵ファイルのパス `/media/tosane/BakeryHub-Key/keys/bakeryhub-age-identity.txt` が存在することだけ手元で確認する。鍵本体は絶対に表示しない。暗号文のハッシュ・全ストリームを再検証する。
 
 ```bash
-python3 production_backup_guard.py verify-encrypted --identity-file /media/tosane/BakeryHub-Key/bakeryhub-age-identity.txt --sha256 241d5f915306f207153f2d175cb219587ea8de9986dfc4b5f54599de9b7502d6 /home/tosane/BakeryHub-Backup/database/bakeryhub_20261021_214150_271fcbe5bdc0.dump.age
+python3 production_backup_guard.py verify-encrypted --identity-file /media/tosane/BakeryHub-Key/keys/bakeryhub-age-identity.txt --sha256 241d5f915306f207153f2d175cb219587ea8de9986dfc4b5f54599de9b7502d6 /home/tosane/BakeryHub-Backup/database/bakeryhub_20261021_214150_271fcbe5bdc0.dump.age
 ```
 
 この直前でも隔離DBが空であることと書込承認を確認する。以下は隔離DBに実データを書き込む。失敗しても既存バックアップを変更しない。途中失敗した復元先を成功扱いにせず、再実行には新しい空DBを用意する。
 
 ```bash
-python3 production_backup_guard.py restore-encrypted-approved --source-service approved_source --source-database bakery_db_4 --target-service approved_restore_target --target-database isolated_restore --confirm-target isolated_restore --identity-file /media/tosane/BakeryHub-Key/bakeryhub-age-identity.txt --sha256 241d5f915306f207153f2d175cb219587ea8de9986dfc4b5f54599de9b7502d6 /home/tosane/BakeryHub-Backup/database/bakeryhub_20261021_214150_271fcbe5bdc0.dump.age
+python3 production_backup_guard.py restore-encrypted-approved --source-service approved_source --source-database bakery_db_4 --target-service approved_restore_target --target-database isolated_restore --confirm-target isolated_restore --identity-file /media/tosane/BakeryHub-Key/keys/bakeryhub-age-identity.txt --sha256 241d5f915306f207153f2d175cb219587ea8de9986dfc4b5f54599de9b7502d6 /home/tosane/BakeryHub-Backup/database/bakeryhub_20261021_214150_271fcbe5bdc0.dump.age
 ```
 
 平文dumpファイルは作らず、age→`pg_restore`の標準ストリームを利用。成功表示は復元コマンドの成功であり、詳細照合のPASSではない。
@@ -122,15 +154,26 @@ psql -X -v ON_ERROR_STOP=1 -d 'service=approved_restore_target' -f docs/g580-res
 
 ## 5｜後片付け
 
-保護したローカル記録が不要なら作成しない。隔離DBの確認終了後、コンテナを停止し、停止済みと確認してから削除する。tmpfsの復元DBは消失する。ネットワークがこのコンテナ専用と確認できた場合だけ削除する。停止・削除に失敗した場合は原因を調べ、スワップ復帰を忘れない。
+**成功・途中失敗・中断のいずれでも**この順序で終了する。まず同名のコンテナが今回作った復元用か調べる。存在するなら停止・停止状態を確認して削除する。`docker run` 前に失敗しコンテナが存在しない場合、停止・削除コマンドは実行しない。tmpfs上の復元DBはコンテナ削除で消失する。停止・削除に失敗した場合は、**コンテナ稼働中にswapを戻さず**、作業を止めて原因を調べる。電源断などの予期しない停止時も、再開後にコンテナとswapを確認する。既存ネットワークは残してよい。
 
 ```bash
-docker stop bakeryhub-restore-pg18
-docker rm bakeryhub-restore-pg18
-docker network rm bakeryhub-restore-net
-sudo swapon /swap.img
-swapon --show
 docker ps -a --filter name=^/bakeryhub-restore-pg18$
 ```
 
-swapが再有効化されていること、復元コンテナがないことを確認。`pg_service.conf`の旧復元先設定は次回使わず、再構築ごとに再同定する。スワップ内の過去ページの消去をこの手順は証明しない。DB保存先・OSスワップの暗号化状態も別途管理する。10月21日の暗号化バックアップはその後の更新を含まないため、期限前の**最終バックアップと本番移行は別の承認工程**とする。
+今回の復元用コンテナが存在する場合に限り、一つずつ：
+
+```bash
+docker stop bakeryhub-restore-pg18
+docker inspect -f '{{.State.Running}}' bakeryhub-restore-pg18
+docker rm bakeryhub-restore-pg18
+```
+
+`Running=false` と削除成功を確かめ、次の結果が空と確認してからswapを戻す：
+
+```bash
+docker ps -a --filter name=^/bakeryhub-restore-pg18$
+sudo swapon /swap.img
+swapon --show
+```
+
+swapが再有効化されていること、復元コンテナがないことを確認。`pg_service.conf`の旧復元先設定は次回使わず、再構築ごとに再同定する。ネットワークは既存のものだったら削除しない。今回新規作成した場合でも、他の接続先がないことを確認してから、必要な場合だけ別途削除する。スワップ内の過去ページの消去をこの手順は証明しない。DB保存先・OSスワップの暗号化状態も別途管理する。10月21日の暗号化バックアップはその後の更新を含まないため、期限前の**最終バックアップと本番移行は別の承認工程**とする。
