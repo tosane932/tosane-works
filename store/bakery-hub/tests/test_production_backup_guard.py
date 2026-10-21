@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import subprocess
+from argparse import Namespace
 
 import pytest
 
@@ -80,7 +81,6 @@ def test_verify_archive_hashes_complete_stream(monkeypatch, tmp_path):
 
 
 def test_restore_refuses_mismatched_confirmation_or_hash(monkeypatch):
-    from argparse import Namespace
     args = Namespace(source_service="source", source_database="bakery_db_4",
                      target_service="target", target_database="isolated",
                      confirm_target="wrong", sha256="a" * 64, path="/unused")
@@ -91,3 +91,43 @@ def test_restore_refuses_mismatched_confirmation_or_hash(monkeypatch):
     monkeypatch.setattr(guard, "verify_archive", lambda *a: (9, "b" * 64))
     with pytest.raises(ValueError, match="SHA-256"):
         guard.restore_approved(args)
+
+
+def test_source_preflight_does_not_require_restore_target(monkeypatch):
+    monkeypatch.setattr(guard, "identity", lambda service: ("bakery_db_4", "192.0.2.1", 5432, 18))
+    monkeypatch.setattr(guard, "client_major", lambda tool: 18)
+    monkeypatch.setattr(guard, "run", lambda *args: "27|t")
+    assert guard.source_preflight("source", "bakery_db_4")[1] == 27
+    monkeypatch.setattr(guard, "run", lambda *args: "27|f")
+    with pytest.raises(ValueError, match="cannot all be read"):
+        guard.source_preflight("source", "bakery_db_4")
+
+
+def test_encrypted_backup_requires_manual_match_and_never_finalizes_partial(monkeypatch, tmp_path):
+    monkeypatch.setattr(guard, "BACKUP_DIR", tmp_path / "BakeryHub-Backup" / "database")
+    guard.BACKUP_DIR.mkdir(parents=True, mode=0o700)
+    os.chmod(guard.BACKUP_DIR.parent, 0o700)
+    recipient = tmp_path / "recipient.txt"
+    recipient.write_text("age1" + "a" * 30 + "\n")
+    os.chmod(recipient, 0o600)
+    monkeypatch.setattr(guard, "check_local_configuration", lambda: None)
+    monkeypatch.setattr(guard, "source_preflight", lambda *args: None)
+    with pytest.raises(ValueError, match="confirmed"):
+        guard.encrypted_backup("source", "bakery_db_4", "bakery_db_4", False, recipient)
+    def failed_stream(*args, **kwargs):
+        kwargs["output"].write(b"partial encrypted bytes")
+        raise ValueError("pg_dump failed")
+    monkeypatch.setattr(guard, "pipe_commands", failed_stream)
+    with pytest.raises(ValueError, match="pg_dump failed"):
+        guard.encrypted_backup("source", "bakery_db_4", "bakery_db_4", True, recipient)
+    assert list(guard.BACKUP_DIR.iterdir()) == []
+
+
+def test_encrypted_restore_refuses_wrong_target_before_decrypt(monkeypatch):
+    args = Namespace(source_service="source", source_database="bakery_db_4",
+                     target_service="target", target_database="isolated",
+                     confirm_target="production", sha256="a" * 64,
+                     identity_file="/unused", path="/unused")
+    monkeypatch.setattr(guard, "check_local_configuration", lambda: pytest.fail("too early"))
+    with pytest.raises(ValueError, match="confirmation"):
+        guard.restore_encrypted_approved(args)

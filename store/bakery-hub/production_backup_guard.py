@@ -9,11 +9,17 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
+import uuid
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 SERVICE = re.compile(r"[a-zA-Z][a-zA-Z0-9_-]{0,63}\Z")
 DATABASE = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]{0,62}\Z")
+ENCRYPTED_NAME = re.compile(r"bakeryhub_\d{8}_\d{6}_[0-9a-f]{12}\.dump\.age\Z")
+BACKUP_DIR = Path("/home/tosane/BakeryHub-Backup/database")
 
 
 def run(*args):
@@ -67,6 +73,187 @@ def preflight(source_service, source_database, target_service, target_database):
     return source, target
 
 
+def source_preflight(service, database):
+    if not DATABASE.fullmatch(database):
+        raise ValueError("Invalid expected database name")
+    source = identity(service)
+    if source[0] != database or source[3] != 18 or client_major("pg_dump") != 18:
+        raise ValueError("Source identity or PostgreSQL 18 pg_dump does not match")
+    # Detect missing SELECT grants before creating any output. pg_dump itself
+    # remains the final authority, including sequences and non-public schemas.
+    access = run("psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1",
+                 "--dbname", f"service={service}", "--command",
+                 "SELECT count(*), bool_and(has_schema_privilege(n.oid, 'USAGE') "
+                 "AND has_table_privilege(c.oid, 'SELECT')) "
+                 "FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+                 "WHERE n.nspname='public' AND c.relkind IN ('r','p','m','f')")
+    match = re.fullmatch(r"(\d+)\|(t|f)", access)
+    if not match or int(match[1]) == 0 or match[2] != "t":
+        raise ValueError("Source tables are missing or cannot all be read")
+    return source, int(match[1])
+
+
+def private_file(path):
+    file = Path(path)
+    details = file.lstat()
+    if not stat.S_ISREG(details.st_mode) or details.st_uid != os.getuid() or details.st_mode & 0o077:
+        raise ValueError("Expected an owned, private regular file (0600), not a symlink")
+    return file
+
+
+def private_directory(path):
+    directory = Path(path)
+    details = directory.lstat()
+    if not stat.S_ISDIR(details.st_mode) or details.st_uid != os.getuid() or details.st_mode & 0o077:
+        raise ValueError("Backup directory must be owned and mode 0700")
+    return directory
+
+
+def check_local_configuration():
+    for name in ("PGSERVICEFILE", "PGPASSFILE"):
+        value = os.environ.get(name)
+        if not value:
+            raise ValueError(f"{name} must refer to a protected local file")
+        private_file(value)
+    if os.environ.get("PGPASSWORD"):
+        raise ValueError("Do not pass a password via PGPASSWORD")
+
+
+def backup_directory():
+    # No user-controlled destination argument: backup bytes never enter a repo
+    # or the Work filesystem when this command is run on the G580.
+    parent = private_directory(BACKUP_DIR.parent)
+    directory = private_directory(parent / "database")
+    if directory.resolve() != BACKUP_DIR.resolve():
+        raise ValueError("Backup location changed")
+    return directory
+
+
+def recipient_file(path):
+    file = private_file(path)
+    recipients = [line.strip() for line in file.read_text(encoding="ascii").splitlines()]
+    if len(recipients) != 1 or not re.fullmatch(r"age1[a-z0-9]{20,}", recipients[0]):
+        raise ValueError("Exactly one age public recipient is required")
+    if file.parent.resolve() == BACKUP_DIR.resolve():
+        raise ValueError("Recipient configuration belongs outside the backup directory")
+    return file
+
+
+def pipe_commands(producer_command, consumer_command, *, output=subprocess.DEVNULL,
+                  capture=False, allow_producer_early_exit=False):
+    producer = subprocess.Popen(producer_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    try:
+        consumer = subprocess.Popen(consumer_command, stdin=producer.stdout,
+                                    stdout=subprocess.PIPE if capture else output,
+                                    stderr=subprocess.DEVNULL)
+        producer.stdout.close()
+        result, _ = consumer.communicate()
+        producer_code = producer.wait()
+        if consumer.returncode != 0 or (producer_code != 0 and not allow_producer_early_exit):
+            raise ValueError("A streaming command failed; output is incomplete")
+        return result
+    finally:
+        if producer.poll() is None:
+            producer.terminate()
+            producer.wait()
+
+
+def encrypted_backup(source_service, source_database, confirm_source,
+                     web_db_match_confirmed, recipient):
+    if confirm_source != source_database or not web_db_match_confirmed:
+        raise ValueError("Source and Web database match must be confirmed separately")
+    check_local_configuration()
+    source_preflight(source_service, source_database)
+    folder = backup_directory()
+    recipient = recipient_file(recipient)
+    timestamp = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y%m%d_%H%M%S")
+    filename = f"bakeryhub_{timestamp}_{uuid.uuid4().hex[:12]}.dump.age"
+    final = folder / filename
+    partial = folder / (filename + ".partial")
+    original_umask = os.umask(0o077)
+    try:
+        fd = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            with os.fdopen(fd, "wb") as sink:
+                pipe_commands(["pg_dump", "--dbname", f"service={source_service}",
+                               "--format=custom", "--no-owner", "--no-acl"],
+                              ["age", "--encrypt", "--recipients-file", str(recipient)],
+                              output=sink)
+                sink.flush()
+                os.fsync(sink.fileno())
+            if partial.stat().st_size == 0:
+                raise ValueError("Encrypted output is empty")
+            # Hard linking is atomic and fails instead of overwriting a final file.
+            os.link(partial, final, follow_symlinks=False)
+            partial.unlink()
+            folder_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(folder_fd)
+            finally:
+                os.close(folder_fd)
+        except BaseException:
+            partial.unlink(missing_ok=True)
+            raise
+    finally:
+        os.umask(original_umask)
+    size, digest = encrypted_file_digest(final)
+    return final, size, digest
+
+
+def encrypted_file_digest(path):
+    archive = private_file(path)
+    if archive.parent.resolve() != backup_directory().resolve() or not ENCRYPTED_NAME.fullmatch(archive.name):
+        raise ValueError("Not a finalized backup in the fixed G580 directory")
+    size = archive.stat().st_size
+    if size == 0:
+        raise ValueError("Encrypted backup is empty")
+    with archive.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    return size, digest
+
+
+def verify_encrypted_archive(path, identity_file, expected_sha256):
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
+        raise ValueError("Expected SHA-256 must be a lowercase hex digest")
+    identity_file = private_file(identity_file)
+    if identity_file.parent.resolve() == BACKUP_DIR.resolve():
+        raise ValueError("Decryption key must not be stored with the backup")
+    size, digest = encrypted_file_digest(path)
+    if digest != expected_sha256:
+        raise ValueError("Encrypted file SHA-256 mismatch")
+    decrypt = ["age", "--decrypt", "--identity", str(identity_file), str(path)]
+    # The SQL stream is discarded in /dev/null. No plain dump is written.
+    pipe_commands(decrypt, ["pg_restore", "--file", os.devnull])
+    # pg_restore --list may stop after the TOC. The first pass already checked
+    # the entire authenticated age stream, so an early SIGPIPE here is normal.
+    listing = pipe_commands(decrypt, ["pg_restore", "--list"], capture=True,
+                            allow_producer_early_exit=True).decode("utf-8", errors="replace")
+    for entry in (" TABLE public datasets ", " TABLE public products ",
+                  " TABLE public daily_sales ", " TABLE public alembic_version ",
+                  " TABLE DATA public daily_sales "):
+        if entry not in listing:
+            raise ValueError("Encrypted archive lacks a required table or data entry")
+    return size, digest
+
+
+def restore_encrypted_approved(args):
+    if args.confirm_target != args.target_database:
+        raise ValueError("Explicit restore target confirmation does not match")
+    check_local_configuration()
+    preflight(args.source_service, args.source_database,
+              args.target_service, args.target_database)
+    if client_major("pg_restore") != 18:
+        raise ValueError("PostgreSQL 18 pg_restore is required")
+    size, _ = verify_encrypted_archive(args.path, args.identity_file, args.sha256)
+    # Recheck emptiness immediately before writing, after the full archive pass.
+    preflight(args.source_service, args.source_database,
+              args.target_service, args.target_database)
+    pipe_commands(["age", "--decrypt", "--identity", args.identity_file, args.path],
+                  ["pg_restore", "--single-transaction", "--exit-on-error",
+                   "--no-owner", "--no-acl", "--dbname", f"service={args.target_service}"])
+    return size
+
+
 def verify_archive(path):
     archive = Path(path)
     if not archive.is_file() or archive.is_symlink() or archive.stat().st_size == 0:
@@ -115,6 +302,23 @@ def main():
     check.add_argument("--target-database", required=True)
     archive = sub.add_parser("verify-archive")
     archive.add_argument("path")
+    encrypted = sub.add_parser("backup-encrypted")
+    encrypted.add_argument("--source-service", required=True)
+    encrypted.add_argument("--source-database", required=True)
+    encrypted.add_argument("--confirm-source", required=True)
+    encrypted.add_argument("--web-db-match-confirmed", action="store_true")
+    encrypted.add_argument("--recipient-file", required=True)
+    verify = sub.add_parser("verify-encrypted")
+    verify.add_argument("--identity-file", required=True)
+    verify.add_argument("--sha256", required=True)
+    verify.add_argument("path")
+    encrypted_restore = sub.add_parser("restore-encrypted-approved")
+    for name in ("source-service", "source-database", "target-service", "target-database"):
+        encrypted_restore.add_argument(f"--{name}", required=True)
+    encrypted_restore.add_argument("--identity-file", required=True)
+    encrypted_restore.add_argument("--confirm-target", required=True)
+    encrypted_restore.add_argument("--sha256", required=True)
+    encrypted_restore.add_argument("path")
     restore = sub.add_parser("restore-approved")
     for name in ("source-service", "source-database", "target-service", "target-database"):
         restore.add_argument(f"--{name}", required=True)
@@ -131,6 +335,20 @@ def main():
         elif args.action == "verify-archive":
             size, digest = verify_archive(args.path)
             print(f"PASS: size={size} bytes; SHA-256={digest}")
+        elif args.action == "backup-encrypted":
+            path, size, digest = encrypted_backup(
+                args.source_service, args.source_database, args.confirm_source,
+                args.web_db_match_confirmed, args.recipient_file)
+            print(f"ENCRYPTED: {path}; size={size} bytes; SHA-256={digest}; "
+                  "decryption and restore NOT TESTED")
+        elif args.action == "verify-encrypted":
+            size, digest = verify_encrypted_archive(args.path, args.identity_file, args.sha256)
+            print(f"PASS: decrypted custom archive and complete stream; size={size}; "
+                  f"encrypted SHA-256={digest}; restore NOT TESTED")
+        elif args.action == "restore-encrypted-approved":
+            size = restore_encrypted_approved(args)
+            print(f"RESTORED to confirmed isolated target; encrypted size={size} bytes; "
+                  "row and constraint comparison still required")
         else:
             size = restore_approved(args)
             print(f"RESTORED to confirmed isolated target; archive size={size} bytes; "
