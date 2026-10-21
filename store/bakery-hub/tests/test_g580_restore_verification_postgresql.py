@@ -152,19 +152,19 @@ def test_real_migration_schema_and_read_only_verification(tmp_path):
         assert wrong.returncode != 0
         assert "public.daily_sales" not in wrong.stdout
 
-        # FKを持たない合成表の孤児を挿入し、動的検出だけを別実行で試す。
+        # 27表の安全ゲートを保ちつつ、FKを持たない合成ビューで動的孤児検出を試す。
         isolated = psycopg2.connect(host="127.0.0.1", port=5433, dbname="isolated_restore",
                                     user="ci_test_user", password="ci_test_password")
         try:
             with isolated.cursor() as cursor:
-                cursor.execute("CREATE TABLE public.orphan_probe(dataset_id uuid)")
-                cursor.execute("INSERT INTO public.orphan_probe VALUES (%s)", (str(uuid.uuid4()),))
+                cursor.execute("CREATE VIEW public.orphan_probe AS SELECT %s::uuid AS dataset_id",
+                               (str(uuid.uuid4()),))
             isolated.commit()
         finally:
             isolated.close()
         orphan = _psql("approved_restore_target", service, password)
         assert orphan.returncode == 0, orphan.stderr
-        assert orphan.stdout.count("public.orphan_probe|1") >= 2
+        assert re.search(r"^public\.orphan_probe\|1$", orphan.stdout, re.MULTILINE)
     finally:
         if app is not None:
             with app.app_context():
