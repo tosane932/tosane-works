@@ -121,6 +121,7 @@ WEATHER_LONGITUDE = os.environ.get("WEATHER_LONGITUDE")
 WEATHER_API_MODE = os.environ.get("WEATHER_API_MODE")
 WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY")
 WEATHER_LOCATION_NAME = os.environ.get("WEATHER_LOCATION_NAME")
+WEATHER_JMA_AREA_CODE = os.environ.get("WEATHER_JMA_AREA_CODE")
 
 # Puoppo側で許可アカウントと分析回数上限を設定済みのときだけ有効化する。
 PUOPPO_INTEGRATION_ENABLED = _environment_flag_is_true(

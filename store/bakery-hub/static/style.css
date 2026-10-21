@@ -9303,6 +9303,23 @@ body.shop-task-reorder-lock .shop-task-card {
 .weather-detail-card #operations-weather-today { margin-top: 15px; border-top: 1px solid #d8d1c8; }
 .weather-detail-card #operations-weather-today h3 { margin: 15px 0 8px; }
 .weather-detail-card .operations-weather-week li { min-width: 0; }
+
+/* The same small SVG symbols are used in the home card and daily forecast. */
+.operations-weather-icon, .operations-weather-week { --weather-sun: #a45b06; --weather-cloud: #526172; --weather-rain: #1767a0; --weather-snow: #177e9d; --weather-storm: #7049a0; }
+:is([data-weather-icon="sun"], [data-forecast-icon="sun"]) circle,
+:is([data-weather-icon="partly"], [data-forecast-icon="partly"]) circle { fill: #ffd35b; stroke: var(--weather-sun); }
+:is([data-weather-icon="sun"], [data-forecast-icon="sun"]) path,
+:is([data-weather-icon="partly"], [data-forecast-icon="partly"]) path:first-of-type { stroke: var(--weather-sun); }
+:is([data-weather-icon="partly"], [data-forecast-icon="partly"]) path:last-child,
+:is([data-weather-icon="cloud"], [data-forecast-icon="cloud"]) path,
+:is([data-weather-icon="rain"], [data-forecast-icon="rain"]) path:first-child,
+:is([data-weather-icon="snow"], [data-forecast-icon="snow"]) path:first-child,
+:is([data-weather-icon="storm"], [data-forecast-icon="storm"]) path:first-child { stroke: var(--weather-cloud); }
+:is([data-weather-icon="rain"], [data-forecast-icon="rain"]) path:last-child { stroke: var(--weather-rain); }
+:is([data-weather-icon="snow"], [data-forecast-icon="snow"]) path:last-child { stroke: var(--weather-snow); stroke-width: 4; }
+:is([data-weather-icon="storm"], [data-forecast-icon="storm"]) path:last-child { stroke: var(--weather-storm); fill: #ffe19a; }
+.weather-detail-card .operations-weather-week span { line-height: 1.4; }
+.weather-detail-card #operations-weather-source:empty, .weather-detail-card #operations-weather-forecast-status:empty { display: none; }
 .operations-links .operations-work-link { --work-color: var(--bakery-products-color); display: flex; justify-content: space-between; align-items: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 52px; margin: 10px 0; padding: 11px 14px; border: 1px solid var(--work-color); border-radius: 10px; background: color-mix(in srgb, var(--work-color) 9%, white); color: #342d28; font-weight: 700; text-decoration: none; }
 .operations-links .operations-work-sales { --work-color: var(--bakery-sales-color); }
 .operations-links .operations-work-memo { --work-color: var(--bakery-info-color); }

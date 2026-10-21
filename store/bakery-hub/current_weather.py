@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from home_forecast import met_daily, open_daily
+from jma_forecast import AREAS as JMA_AREAS, URL as JMA_URL, parse_forecast
 from weather_history import PAID_URL, WeatherHistoryError, _settings, weather_category
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,31 @@ MET_USER_AGENT = "BakeryHub/1.0 bakery-salesdata.onrender.com github.com/tosane9
 UNAVAILABLE = "現在の天気を取得できませんでした。時間をおいて再確認してください。"
 _cache_lock = threading.Lock()
 _cache = {}
+
+
+def _read_jma_weather(config):
+    area = config.get('WEATHER_JMA_AREA_CODE')
+    if area not in JMA_AREAS:
+        raise WeatherHistoryError('気象庁の予報区域が未設定です。')
+    request = Request(JMA_URL, headers={'User-Agent': MET_USER_AGENT, 'Accept': 'application/json'})
+    with urlopen(request, timeout=6) as response:
+        if response.geturl() != JMA_URL:
+            raise ValueError('Unexpected JMA redirect')
+        raw = response.read(256 * 1024 + 1)
+        if len(raw) > 256 * 1024:
+            raise ValueError('Oversized JMA response')
+    now = datetime.datetime.now(JST)
+    return parse_forecast(json.loads(raw), area, now)
+
+
+def _current_valid(result, now):
+    if not result['available']:
+        return True
+    target = datetime.datetime.fromisoformat(result['valid_at'])
+    japan_now = now.astimezone(JST)
+    if result['source'] == '気象庁 府県天気予報':
+        return -datetime.timedelta(minutes=10) <= japan_now - target <= datetime.timedelta(hours=16)
+    return target.date() == japan_now.date() and target >= japan_now - datetime.timedelta(hours=2)
 
 
 def _read_weather(config):
@@ -160,8 +186,12 @@ def _read_met_weather(config, last_modified=None):
 def current_weather(config):
     """失敗や未設定は理由を返す。10分以上キャッシュし提供元の期限も守る。"""
     try:
-        is_met = config.get("WEATHER_API_MODE") == "met_norway"
-        if is_met:
+        mode = config.get('WEATHER_API_MODE')
+        is_met = mode == "met_norway"
+        if mode == 'jma':
+            if config.get('WEATHER_JMA_AREA_CODE') not in JMA_AREAS:
+                raise WeatherHistoryError('気象庁の予報区域が未設定です。')
+        elif is_met:
             _met_coordinates(config)
         else:
             _settings(config)
@@ -174,6 +204,7 @@ def current_weather(config):
         config.get("WEATHER_API_KEY"),
         config.get("LOCAL_DEVELOPMENT"),
         config.get("WEATHER_LOCATION_NAME"),
+        config.get('WEATHER_JMA_AREA_CODE'),
     )
     now = datetime.datetime.now(datetime.timezone.utc)
     with _cache_lock:
@@ -181,13 +212,13 @@ def current_weather(config):
         if cached and cached[0] > now:
             result = deepcopy(cached[1])
             if result["available"]:
-                target = datetime.datetime.fromisoformat(result["valid_at"])
-                japan_now = now.astimezone(JST)
-                if target.date() != japan_now.date() or target < japan_now - datetime.timedelta(hours=2):
+                if not _current_valid(result, now):
                     return {"available": False, "reason": UNAVAILABLE}
             return result
         try:
-            if is_met:
+            if mode == 'jma':
+                result, expires_at, last_modified = _read_jma_weather(config), None, None
+            elif is_met:
                 try:
                     result, expires_at, last_modified = _read_met_weather(
                         config, cached[2] if cached else None,
@@ -208,8 +239,6 @@ def current_weather(config):
         expires_at = expires_at.astimezone(datetime.timezone.utc) if expires_at and expires_at.tzinfo else None
         _cache[key] = (max(now + lifetime, expires_at) if expires_at else now + lifetime, result, last_modified)
         if result["available"]:
-            target = datetime.datetime.fromisoformat(result["valid_at"])
-            japan_now = now.astimezone(JST)
-            if target.date() != japan_now.date() or target < japan_now - datetime.timedelta(hours=2):
+            if not _current_valid(result, now):
                 return {"available": False, "reason": UNAVAILABLE}
         return deepcopy(result)

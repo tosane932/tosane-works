@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>ホーム | Bakery Hub</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='home-weather-20261021') }}">
-    <script src="{{ url_for('static', filename='home_weather.js', v='20261021') }}" defer></script>
-    <script src="{{ url_for('static', filename='store_home.js', v='20261021') }}" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='jma-weather-20261021') }}">
+    <script src="{{ url_for('static', filename='home_weather.js', v='jma-weather-20261021') }}" defer></script>
+    <script src="{{ url_for('static', filename='store_home.js', v='jma-weather-20261021') }}" defer></script>
 {% include "_pwa_head.html" %}
 </head>
 <body class="app-shell-page operations-page">
@@ -38,8 +38,8 @@
                 {% include "_weather_icons.html" %}
                 <span id="operations-weather-status" role="status">天気を確認中です。</span>
             </span>
-            <small id="operations-weather-probability">今日の最大降水確率：確認中</small>
-            <span class="operations-weather-more">詳しい天気・週間予報を見る ›</span>
+            <small id="operations-weather-probability">降水確率 —</small>
+            <span class="operations-weather-more">詳しい天気を見る ›</span>
         </a>
 
         <section class="operations-card operations-card-linked" id="schedule" aria-labelledby="schedule-heading">

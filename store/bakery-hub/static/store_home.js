@@ -88,7 +88,7 @@
             const response = await fetch("/api/home/weather", {credentials: "same-origin"});
             if (!response.ok) throw new Error("weather");
             const data = await response.json();
-            status.textContent = data.available ? data.weather : data.reason;
+            status.textContent = data.available ? (data.weather_label || data.weather) : data.reason;
             if (data.available && data.source === "MET Norway 予報") {
                 // The server reads its validated forecast again; no weather content is sent by the browser.
                 fetch("/api/home/weather/record", {
@@ -98,11 +98,10 @@
             }
             document.getElementById("operations-weather-location").textContent =
                 data.available ? data.location : "";
-            const row = data.available && data.forecast_days?.find(item => item.date === data.valid_at?.slice(0, 10));
-            document.getElementById("operations-weather-probability").textContent =
-                "今日の最大降水確率：" + (typeof row?.precipitation_probability === "number" && Number.isFinite(row.precipitation_probability) ? row.precipitation_probability + "%" : "未提供");
-            document.getElementById("weather").dataset.condition = data.available ? (HomeWeather.icon(data.weather_code) || "unknown") : "unknown";
-            const icon = HomeWeather.icon(data.weather_code);
+            const row = data.available && data.forecast_days?.find(item => item.date === (data.forecast_date || data.valid_at?.slice(0, 10)));
+            document.getElementById("operations-weather-probability").textContent = row ? HomeWeather.day(row).probability : "降水確率 —";
+            const icon = data.weather_icon || HomeWeather.icon(data.weather_code);
+            document.getElementById("weather").dataset.condition = data.available ? (icon || "unknown") : "unknown";
             document.querySelectorAll("[data-weather-icon]").forEach(element => {
                 if (data.available && element.dataset.weatherIcon === icon) {
                     element.removeAttribute("hidden");
@@ -113,7 +112,7 @@
         } catch {
             status.textContent = "現在の天気を取得できませんでした。";
             document.getElementById("operations-weather-location").textContent = "";
-            document.getElementById("operations-weather-probability").textContent = "今日の最大降水確率：未提供";
+            document.getElementById("operations-weather-probability").textContent = "降水確率 —";
             document.getElementById("weather").dataset.condition = "unknown";
             document.querySelectorAll("[data-weather-icon]").forEach(element => element.setAttribute("hidden", ""));
         }
