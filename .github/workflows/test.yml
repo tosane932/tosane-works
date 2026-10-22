@@ -173,6 +173,55 @@ jobs:
       - name: Synthetic backup and local safety checks only
         run: pytest tests/test_production_backup_guard.py tests/test_register_backup_restore_postgresql.py -v
 
+  startup-safety-pg18:
+    if: github.event_name == 'pull_request' && github.head_ref == 'ops/v3.1-phase3f-startup-safety'
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci_test_user
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: sales_data_app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_test_user -d sales_data_app_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRESQL_DATABASE_URL: >-
+        postgresql+psycopg2://ci_test_user:ci_test_password@127.0.0.1:5432/sales_data_app_test
+      ALLOW_POSTGRESQL_TEST_DATABASE_RESET: "1"
+      STARTUP_GUARD_PG18_SYNTHETIC: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: pytest tests/test_startup_guard.py tests/test_seed_demo.py tests/test_startup_guard_postgresql.py -v
+      - name: Start actual web container twice without migration or seed
+        run: |
+          docker build -t bakeryhub-startup-synthetic .
+          for round in 1 2; do
+            container=$(docker run -d --network host \
+              -e DATABASE_URL="$TEST_POSTGRESQL_DATABASE_URL" \
+              -e SECRET_KEY=synthetic-only \
+              bakeryhub-startup-synthetic)
+            trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
+            ready=0
+            for attempt in $(seq 1 30); do
+              if curl --silent --fail http://127.0.0.1:5000/login >/dev/null; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+            docker stop "$container" >/dev/null
+            python -c 'import os; from sqlalchemy import create_engine,text; e=create_engine(os.environ["TEST_POSTGRESQL_DATABASE_URL"]); c=e.connect(); assert tuple(c.execute(text("SELECT count(*) FROM " + t)).scalar_one() for t in ("products","daily_sales","register_products","prep_recipes","prep_ingredients")) == (0,0,1,1,1); c.close(); e.dispose()'
+            trap - EXIT
+          done
+
   encrypted-backup:
     if: github.event_name == 'pull_request' && (github.head_ref == 'ops/v3-g580-encrypted-db-backup' || github.head_ref == 'ops/v3-phase3c-restore-verification')
     runs-on: ubuntu-24.04

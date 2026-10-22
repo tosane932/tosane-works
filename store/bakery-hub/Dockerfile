@@ -30,4 +30,4 @@ ENV PATH=/root/.local/bin:$PATH
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "flask db upgrade && python seed_demo.py && gunicorn --bind 0.0.0.0:${PORT:-5000} app:app"]
+CMD ["sh", "-c", "python startup_guard.py && exec gunicorn --bind 0.0.0.0:${PORT:-5000} app:app"]
