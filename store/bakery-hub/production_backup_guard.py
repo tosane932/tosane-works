@@ -5,7 +5,10 @@ by the operator outside the repository. Restore requires an explicit subcommand.
 """
 
 import argparse
+import configparser
 import hashlib
+import ipaddress
+import json
 import os
 from pathlib import Path
 import re
@@ -254,6 +257,123 @@ def restore_encrypted_approved(args):
     return size
 
 
+def offline_approval(path):
+    """Read a separately controlled, manually approved snapshot record."""
+    record_file = private_file(path)
+    private_directory(record_file.parent)
+    if record_file.parent.resolve() == backup_directory().resolve():
+        raise ValueError("Approval record cannot be stored with the encrypted archive")
+    if record_file.stat().st_size > 4096:
+        raise ValueError("Approval record exceeds size limit")
+    record = json.loads(record_file.read_text(encoding="utf-8"))
+    fields = {"backup_id", "captured_at", "source_database", "source_service",
+              "source_host", "source_address", "source_port", "source_server_id",
+              "postgres_major", "encrypted_size", "encrypted_sha256",
+              "target_service", "target_database", "target_host", "target_address",
+              "target_port", "target_server_id", "approved_at", "approval_reference"}
+    if not isinstance(record, dict) or record.keys() != fields:
+        raise ValueError("Incomplete offline approval record")
+    if any(type(record[key]) is not str for key in (
+            "backup_id", "captured_at", "source_database", "source_service", "source_host",
+            "source_address", "source_server_id", "encrypted_sha256", "target_service",
+            "target_database", "target_host", "target_address", "target_server_id",
+            "approved_at", "approval_reference")):
+        raise ValueError("Invalid offline approval field type")
+    if not ENCRYPTED_NAME.fullmatch(record["backup_id"]):
+        raise ValueError("Invalid approved backup ID")
+    if not all(DATABASE.fullmatch(record[key]) for key in ("source_database", "target_database")):
+        raise ValueError("Invalid approved database name")
+    if not all(SERVICE.fullmatch(record[key]) for key in ("source_service", "target_service")):
+        raise ValueError("Invalid approved service name")
+    if any(not isinstance(record[key], str) or not re.fullmatch(r"[a-zA-Z0-9._-]{3,253}", record[key])
+           for key in ("source_host", "target_host", "source_server_id", "target_server_id")):
+        raise ValueError("Invalid approved server identifier")
+    for key in ("source_address", "target_address"):
+        ipaddress.ip_address(record[key])
+    if any(type(record[key]) is not int or not 1 <= record[key] <= 65535
+           for key in ("source_port", "target_port")):
+        raise ValueError("Invalid approved port")
+    if record["postgres_major"] != 18 or type(record["encrypted_size"]) is not int or record["encrypted_size"] <= 0:
+        raise ValueError("Invalid approved version or size")
+    if not isinstance(record["encrypted_sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", record["encrypted_sha256"]):
+        raise ValueError("Invalid approved SHA-256")
+    for key in ("captured_at", "approved_at"):
+        value = datetime.fromisoformat(record[key])
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Approval times must include timezone")
+    if datetime.fromisoformat(record["approved_at"]) < datetime.fromisoformat(record["captured_at"]):
+        raise ValueError("Approval predates capture")
+    if not isinstance(record["approval_reference"], str) or not re.fullmatch(r"[a-zA-Z0-9._/-]{4,128}", record["approval_reference"]):
+        raise ValueError("Independent approval reference required")
+    return record
+
+
+def offline_target_preflight(record):
+    """Fail closed when service configuration, live server, or isolation is unclear."""
+    if record["source_service"] == record["target_service"] or record["source_server_id"] == record["target_server_id"]:
+        raise ValueError("Source and target identifiers overlap")
+    if (record["source_address"], record["source_port"]) == (record["target_address"], record["target_port"]):
+        raise ValueError("Source and target addresses overlap")
+    if record["source_host"] == record["target_host"] and record["source_port"] == record["target_port"]:
+        raise ValueError("Source and target host overlap")
+    if client_major("pg_restore") != 18 or client_major("psql") != 18:
+        raise ValueError("PostgreSQL 18 clients are required")
+    for name in ("PGHOST", "PGHOSTADDR", "PGPORT", "PGDATABASE", "PGUSER", "PGSERVICE", "PGOPTIONS", "PGSSLMODE"):
+        if os.environ.get(name):
+            raise ValueError("Connection override is forbidden for offline restore")
+    settings = configparser.ConfigParser(interpolation=None)
+    settings.read(os.environ["PGSERVICEFILE"])
+    service = record["target_service"]
+    if service not in settings:
+        raise ValueError("Approved target service is missing")
+    section = settings[service]
+    if (section.get("host"), section.get("port"), section.get("dbname")) != (
+            record["target_host"], str(record["target_port"]), record["target_database"]):
+        raise ValueError("Target service configuration differs from independent approval")
+    if any(key in section for key in ("hostaddr", "service", "options")):
+        raise ValueError("Target service contains an identity override")
+    target = identity(service)
+    if target != (record["target_database"], record["target_address"], record["target_port"], 18):
+        raise ValueError("Live restore target does not match approval")
+    if (target[1], target[2]) == (record["source_address"], record["source_port"]):
+        raise ValueError("Restore target resolves to recorded source")
+    present = run("psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "--dbname", f"service={service}",
+                  "--command", "SELECT count(*) FROM pg_namespace WHERE nspname NOT IN "
+                  "('public','information_schema') AND nspname NOT LIKE 'pg_%'")
+    relations = run("psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "--dbname", f"service={service}",
+                    "--command", "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+                    "WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','S','f')")
+    if present != "0" or relations != "0":
+        raise ValueError("Offline restore target is not empty")
+    state = run("psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "--dbname", f"service={service}",
+                "--command", "SELECT (SELECT count(*) FROM pg_stat_activity WHERE datname=current_database()), "
+                "has_schema_privilege(current_user, 'public', 'CREATE'), "
+                "(SELECT pg_get_userbyid(datdba)=current_user FROM pg_database WHERE datname=current_database())")
+    if state != "1|t|t":
+        raise ValueError("Target has competing sessions or insufficient restore ownership")
+    return target
+
+
+def restore_encrypted_offline_approved(args):
+    """Restore an approved encrypted snapshot without contacting its source."""
+    check_local_configuration()
+    record = offline_approval(args.approval_record)
+    if (args.confirm_source, args.confirm_target, args.confirm_backup_id) != (
+            record["source_database"], record["target_database"], record["backup_id"]):
+        raise ValueError("Explicit offline confirmations differ from approval")
+    if Path(args.path).name != record["backup_id"]:
+        raise ValueError("Encrypted backup ID differs from approval")
+    offline_target_preflight(record)
+    size, digest = verify_encrypted_archive(args.path, args.identity_file, record["encrypted_sha256"])
+    if (size, digest) != (record["encrypted_size"], record["encrypted_sha256"]):
+        raise ValueError("Encrypted backup differs from approval")
+    offline_target_preflight(record)
+    pipe_commands(["age", "--decrypt", "--identity", args.identity_file, args.path],
+                  ["pg_restore", "--single-transaction", "--exit-on-error", "--no-owner", "--no-acl",
+                   "--dbname", f"service={record['target_service']}"])
+    return size
+
+
 def verify_archive(path):
     archive = Path(path)
     if not archive.is_file() or archive.is_symlink() or archive.stat().st_size == 0:
@@ -319,6 +439,13 @@ def main():
     encrypted_restore.add_argument("--confirm-target", required=True)
     encrypted_restore.add_argument("--sha256", required=True)
     encrypted_restore.add_argument("path")
+    offline = sub.add_parser("restore-encrypted-offline-approved")
+    offline.add_argument("--approval-record", required=True)
+    offline.add_argument("--identity-file", required=True)
+    offline.add_argument("--confirm-source", required=True)
+    offline.add_argument("--confirm-target", required=True)
+    offline.add_argument("--confirm-backup-id", required=True)
+    offline.add_argument("path")
     restore = sub.add_parser("restore-approved")
     for name in ("source-service", "source-database", "target-service", "target-database"):
         restore.add_argument(f"--{name}", required=True)
@@ -348,6 +475,10 @@ def main():
         elif args.action == "restore-encrypted-approved":
             size = restore_encrypted_approved(args)
             print(f"RESTORED to confirmed isolated target; encrypted size={size} bytes; "
+                  "row and constraint comparison still required")
+        elif args.action == "restore-encrypted-offline-approved":
+            size = restore_encrypted_offline_approved(args)
+            print(f"RESTORED to independently approved isolated target; encrypted size={size} bytes; "
                   "row and constraint comparison still required")
         else:
             size = restore_approved(args)
