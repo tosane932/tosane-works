@@ -270,7 +270,7 @@ def offline_approval(path):
               "source_host", "source_address", "source_port", "source_server_id",
               "postgres_major", "encrypted_size", "encrypted_sha256",
               "target_service", "target_database", "target_host", "target_address",
-              "target_port", "target_server_id", "approved_at", "approval_reference"}
+              "target_port", "target_connect_port", "target_server_id", "approved_at", "approval_reference"}
     if not isinstance(record, dict) or record.keys() != fields:
         raise ValueError("Incomplete offline approval record")
     if any(type(record[key]) is not str for key in (
@@ -291,7 +291,7 @@ def offline_approval(path):
     for key in ("source_address", "target_address"):
         ipaddress.ip_address(record[key])
     if any(type(record[key]) is not int or not 1 <= record[key] <= 65535
-           for key in ("source_port", "target_port")):
+           for key in ("source_port", "target_port", "target_connect_port")):
         raise ValueError("Invalid approved port")
     if record["postgres_major"] != 18 or type(record["encrypted_size"]) is not int or record["encrypted_size"] <= 0:
         raise ValueError("Invalid approved version or size")
@@ -314,7 +314,7 @@ def offline_target_preflight(record):
         raise ValueError("Source and target identifiers overlap")
     if (record["source_address"], record["source_port"]) == (record["target_address"], record["target_port"]):
         raise ValueError("Source and target addresses overlap")
-    if record["source_host"] == record["target_host"] and record["source_port"] == record["target_port"]:
+    if record["source_host"] == record["target_host"] and record["source_port"] == record["target_connect_port"]:
         raise ValueError("Source and target host overlap")
     if client_major("pg_restore") != 18 or client_major("psql") != 18:
         raise ValueError("PostgreSQL 18 clients are required")
@@ -328,7 +328,7 @@ def offline_target_preflight(record):
         raise ValueError("Approved target service is missing")
     section = settings[service]
     if (section.get("host"), section.get("port"), section.get("dbname")) != (
-            record["target_host"], str(record["target_port"]), record["target_database"]):
+            record["target_host"], str(record["target_connect_port"]), record["target_database"]):
         raise ValueError("Target service configuration differs from independent approval")
     if any(key in section for key in ("hostaddr", "service", "options")):
         raise ValueError("Target service contains an identity override")

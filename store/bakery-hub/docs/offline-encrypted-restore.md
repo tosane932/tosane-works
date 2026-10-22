@@ -17,13 +17,14 @@
   "encrypted_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "target_service": "ci_target", "target_database": "isolated_restore",
   "target_host": "127.0.0.1", "target_address": "127.0.0.1",
-  "target_port": 5433, "target_server_id": "synthetic-target-id",
+  "target_port": 5432, "target_connect_port": 5433,
+  "target_server_id": "synthetic-target-id",
   "approved_at": "2026-10-22T09:00:00+09:00",
   "approval_reference": "local-approved-ticket-1"
 }
 ```
 
-所有者が取得当時の独立したRender管理画面記録・バックアップ実行記録とハッシュ、サイズ、発表済みの監査記録を照合し、接続先識別子と承認日時を記入します。**過去の値を推測して記録を作らないでください。** 特に2026年10月21日の原本にはこの形式の承認記録がなく、当時のホスト・アドレス等を独立に確認できない場合はSTOPです。ハッシュ一致は暗号文の一致であり、取得元の真正性を単独で証明しません。JSONファイルの権限は改変防止の暗号署名ではありません。承認記録の保護と作成者の確認が必要です。
+`target_connect_port` はserviceファイルから接続するポート、`target_port` と `target_address` はDBサーバーが返す内部アドレスと待受ポートです。Dockerのポート転送では両者が異なり得ます。所有者が取得当時の独立したRender管理画面記録・バックアップ実行記録とハッシュ、サイズ、発表済みの監査記録を照合し、接続先識別子と承認日時を記入します。**過去の値を推測して記録を作らないでください。** 特に2026年10月21日の原本にはこの形式の承認記録がなく、当時のホスト・アドレス等を独立に確認できない場合はSTOPです。ハッシュ一致は暗号文の一致であり、取得元の真正性を単独で証明しません。JSONファイルの権限は改変防止の暗号署名ではありません。承認記録の保護と作成者の確認が必要です。
 
 ## 実行前のゲート
 

@@ -17,6 +17,7 @@ def approved():
                 postgres_major=18, encrypted_size=123, encrypted_sha256="a" * 64,
                 target_service="ci_target", target_database="isolated_restore",
                 target_host="127.0.0.1", target_address="127.0.0.1", target_port=5433,
+                target_connect_port=5433,
                 target_server_id="synthetic-target-id", approved_at="2026-10-22T09:00:00+09:00",
                 approval_reference="local-approved-ticket-1")
 

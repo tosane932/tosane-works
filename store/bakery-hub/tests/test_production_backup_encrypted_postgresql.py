@@ -147,16 +147,19 @@ def test_encrypted_stream_backup_verify_and_isolated_restore(monkeypatch, tmp_pa
             cursor.execute("CREATE DATABASE offline_test")
     finally:
         admin.close()
+    source_address = guard.identity("ci_backup_source")[1]
     service.write_text("[ci_offline_target]\nhost=127.0.0.1\nport=5433\n"
                        "dbname=offline_test\nuser=ci_test_user\nsslmode=disable\n")
     password.write_text("127.0.0.1:5433:offline_test:ci_test_user:ci_test_password\n")
+    target_address = guard.identity("ci_offline_target")[1]
     approval_dir = tmp_path / "approvals"
     approval_dir.mkdir(mode=0o700)
     record = approved() | dict(
         backup_id=path.name, source_database="sales_data_app_test", source_service="ci_backup_source",
-        source_host="127.0.0.1", source_address="127.0.0.1", source_port=5432,
+        source_host="127.0.0.1", source_address=source_address, source_port=5432,
         target_service="ci_offline_target", target_database="offline_test",
-        target_host="127.0.0.1", target_address="127.0.0.1", target_port=5433,
+        target_host="127.0.0.1", target_address=target_address, target_port=5432,
+        target_connect_port=5433,
         encrypted_size=size, encrypted_sha256=digest,
     )
     approval = approval_dir / "approved.json"
