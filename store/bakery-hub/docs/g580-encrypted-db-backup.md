@@ -18,7 +18,22 @@ USB秘密鍵は暗号化媒体 `BakeryHub-Key` の `/media/tosane/BakeryHub-Key/
 
 終了時に復元用コンテナは正常停止・削除され、tmpfs上の復元DBは消失した。`/swap.img` は再有効化され、4GB・使用量0Bとの報告。G580の暗号化バックアップ、Driveの暗号化コピー、USB鍵は保持。次の検証では**新しい隔離DBを作り直す**。古い `pg_service.conf` の復元先IPを再利用しない。
 
-**現在の判定はPARTIAL。** 取得・復号・独立復元と基本検査は利用者報告に基づく成功。27表の行数、売上集計、Dataset関連、画像ハッシュ、制約・sequence等の詳細照合と、取得時点の独立した元DB証拠との比較は未完了。10月21日21:41頃より後の本番値を当時の値とみなさない。[詳細照合のローカル手順](g580-restore-verification.md)を参照。
+**10月21日時点の判定はPARTIAL。** 取得・復号・独立復元と基本検査は利用者報告に基づく成功。詳細SQLの実行と取得時点の独立した元DB証拠との比較は、この時点では未完了だった。10月21日21:41頃より後の本番値を当時の値とみなさない。
+
+## 2026-10-22の再復元・詳細照合記録（G580利用者の報告）
+
+以下は利用者がG580で実施して会話で報告した結果。WorkはG580、暗号文や本番データを直接確認していない。対象は上記の**同じ10月21日21:41頃の暗号化ファイル**で、10月22日までの本番更新を含まない。
+
+| 確認段階 | 利用者から報告された結果 | 判定範囲 |
+|---|---|---|
+| 原本・道具 | 108985 bytes、上記SHA-256一致、所有者`tosane`、権限600。LUKS USBのマウント、age秘密鍵の存在・権限600を確認。クライアントPostgreSQL 18.6、Docker 29.8.0、age 1.1.1 | 暗号化ファイル整合性PASS（利用者報告）。鍵の内容は取得・記録していない |
+| 復元先の隔離 | `postgres:18.6`、`bakeryhub-restore-net` はbridge・`Internal=true`、外部公開ポートなし。`bakeryhub-restore-pg18` / `isolated_restore` / `restore_operator`、tmpfs 512MiB・権限`700 999 999`。今回のコンテナIPは`172.19.0.2` | この実行で確認したIPであり、次回の接続先として固定しない |
+| 復元前 | swap停止中、DB名・PostgreSQL 18.6・今回のIPのport 5432へ接続成功、public関係数0。`preflight` は `PASS: source=bakery_db_4 PostgreSQL 18; empty isolated target=isolated_restore PostgreSQL 18` | 隔離先の空状態と接続先を実行前に確認 |
+| 復号・復元 | `verify-encrypted` は `PASS: decrypted custom archive and complete stream`。SHA-256・サイズ一致。`restore-encrypted-approved` は `RESTORED to confirmed isolated target; encrypted size=108985 bytes; row and constraint comparison still required` | 復号と完全ストリームPASS、隔離DBへの実復元PASS |
+| 詳細SQL | `psql -X -v ON_ERROR_STOP=1` で[読取専用SQL](g580-restore-verification.sql)が`COMMIT`までERRORなく完走。27表の件数検査を通過し、表示された`orphan_...`はすべて0、`unvalidated`・`invalid`・`not_ready`も0 | 内部整合性は**報告された確認範囲でPASS**。全表の個別件数・集約ダイジェストの出力全文をWorkは見ていない |
+| 終了 | コンテナ停止、`State.Running=false`、削除と一覧からの消失を確認。`/swap.img`は4GBで再有効化、使用量0B。tmpfs上の復元DBは消失し、暗号化原本とUSB鍵は保持 | 終了状態を利用者が確認 |
+
+**総合判定はPARTIAL。** 取得・復号・隔離復元・詳細SQLの完走をそれぞれ確認範囲で記録した。取得時点の本番DBについて独立した全表照合記録が確認できず、**本番DBとの全表完全一致はNOT TESTED**。後日の本番件数と比べてもこの時点の完全一致を証明しない。これは[再現手順と判定範囲](g580-restore-verification.md)に沿った記録であり、正式レジはNO-GO。期限前の継続・最終バックアップと移行は[別の計画](production-db-free-expiry-plan.md)で扱う。
 
 ## 1｜G580のGitを安全に同期
 
