@@ -159,6 +159,7 @@ def test_logged_in_guest_sees_return_link_instead_of_new_guest_start(
 ):
     dataset = _create_guest_dataset(active=True)
     db.session.commit()
+    original_expiry = dataset.absolute_expires_at
 
     guest_client = flask_app.test_client()
     with guest_client.session_transaction() as session_data:
@@ -172,7 +173,7 @@ def test_logged_in_guest_sees_return_link_instead_of_new_guest_start(
 
     assert response.status_code == 200
     assert return_link is not None
-    assert return_link.get("href") == "/"
+    assert return_link.get("href") == "/home"
     assert return_link.get_text(strip=True) == "ゲストデモに戻る"
     assert "ゲストデモを利用中です。" in document.get_text(
         " ", strip=True
@@ -183,6 +184,14 @@ def test_logged_in_guest_sees_return_link_instead_of_new_guest_start(
 
     # 管理者へ切り替える導線は残す
     assert document.select_one("#admin-login-form") is not None
+
+    home_response = guest_client.get(return_link["href"], follow_redirects=False)
+    assert home_response.status_code == 200
+    assert "利用中：ゲストデモ" in home_response.get_data(as_text=True)
+    with guest_client.session_transaction() as session_data:
+        assert session_data["_user_id"] == f"guest:{dataset.id}"
+    assert Dataset.query.filter_by(kind="guest").count() == 1
+    assert db.session.get(Dataset, dataset.id).absolute_expires_at == original_expiry
 
 
 def test_login_capacity_counts_only_active_guest_and_enables_start_button(
