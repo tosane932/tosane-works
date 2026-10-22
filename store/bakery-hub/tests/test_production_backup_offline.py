@@ -3,6 +3,7 @@
 from argparse import Namespace
 import json
 import os
+import sys
 
 import pytest
 
@@ -148,3 +149,25 @@ def test_offline_does_not_restore_after_changed_target_or_archive(monkeypatch, t
     with pytest.raises(ValueError, match="target changed"):
         guard.restore_encrypted_offline_approved(args)
     assert not writes
+
+
+def test_streaming_restore_failure_cannot_be_reported_as_success(monkeypatch, tmp_path):
+    path = fixture_approval(monkeypatch, tmp_path)
+    record = approved()
+    args = Namespace(approval_record=str(path), identity_file="identity", confirm_source=record["source_database"],
+                     confirm_target=record["target_database"], confirm_backup_id=record["backup_id"],
+                     path=str(guard.BACKUP_DIR / record["backup_id"]))
+    monkeypatch.setattr(guard, "offline_target_preflight", lambda record: None)
+    monkeypatch.setattr(guard, "verify_encrypted_archive", lambda *a: (123, "a" * 64))
+    def failed_restore(*args, **kwargs):
+        raise ValueError("A streaming command failed; output is incomplete")
+    monkeypatch.setattr(guard, "pipe_commands", failed_restore)
+    with pytest.raises(ValueError, match="incomplete"):
+        guard.restore_encrypted_offline_approved(args)
+
+
+def test_pipe_detects_consumer_failure_without_plain_dump():
+    producer = [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'synthetic')"]
+    consumer = [sys.executable, "-c", "import sys; sys.stdin.buffer.read(); sys.exit(7)"]
+    with pytest.raises(ValueError, match="incomplete"):
+        guard.pipe_commands(producer, consumer)
