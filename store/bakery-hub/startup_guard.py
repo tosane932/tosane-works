@@ -11,6 +11,8 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
 
+from models import db
+
 
 def check_schema(engine, migrations_dir=None):
     migrations_dir = Path(migrations_dir or Path(__file__).resolve().parent / "migrations")
@@ -30,16 +32,23 @@ def check_schema(engine, migrations_dir=None):
         revisions = connection.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
         if revisions != heads:
             raise RuntimeError("Database revision does not match application migration head")
-        # A manually stamped empty DB must not be accepted as a migrated DB.
-        if not {"datasets", "products", "daily_sales"}.issubset(inspect(connection).get_table_names()):
+        # A manually stamped partial DB is still unsafe: inspect every model's
+        # mapped table and column. This is a structural gate, not an exhaustive
+        # comparison of every constraint or its data.
+        schema = inspect(connection)
+        actual = set(schema.get_table_names())
+        expected = db.metadata.tables
+        if not set(expected).issubset(actual):
             raise RuntimeError("Required application tables are missing")
+        for name, table in expected.items():
+            columns = {column["name"] for column in schema.get_columns(name)}
+            if not set(table.columns.keys()).issubset(columns):
+                raise RuntimeError("Required application columns are missing")
 
 
 def main():
     try:
         from app import app
-        from models import db
-
         with app.app_context():
             check_schema(db.engine)
     except Exception:

@@ -38,8 +38,32 @@ def test_stale_or_falsely_stamped_database_refused(tmp_path):
 def test_migrated_database_repeated_checks_do_not_modify_business_rows(tmp_path):
     from alembic.config import Config
     from alembic.script import ScriptDirectory
+    from models import db
 
     engine = create_engine(f"sqlite:///{tmp_path / 'ready.db'}")
+    config = Config()
+    config.set_main_option("script_location", str(ROOT / "migrations"))
+    head = ScriptDirectory.from_config(config).get_current_head()
+    db.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("CREATE TABLE alembic_version (version_num varchar(32))")
+        connection.execute(text("INSERT INTO alembic_version VALUES (:head)"), {"head": head})
+        connection.exec_driver_sql("INSERT INTO datasets (id,kind,system_key,created_at,last_activity_at) "
+                                   "VALUES ('00000000000000000000000000000001','admin','admin',"
+                                   "'2026-10-22','2026-10-22')")
+    for _ in range(3):
+        check_schema(engine)
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == head
+        assert connection.execute(text("SELECT count(*) FROM datasets")).scalar_one() == 1
+        assert connection.execute(text("SELECT count(*) FROM products")).scalar_one() == 0
+        assert connection.execute(text("SELECT count(*) FROM daily_sales")).scalar_one() == 0
+
+
+def test_stamped_partial_schema_is_rejected(tmp_path):
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    engine = create_engine(f"sqlite:///{tmp_path / 'partial.db'}")
     config = Config()
     config.set_main_option("script_location", str(ROOT / "migrations"))
     head = ScriptDirectory.from_config(config).get_current_head()
@@ -47,14 +71,9 @@ def test_migrated_database_repeated_checks_do_not_modify_business_rows(tmp_path)
         connection.exec_driver_sql("CREATE TABLE alembic_version (version_num varchar(32))")
         connection.execute(text("INSERT INTO alembic_version VALUES (:head)"), {"head": head})
         for table in ("datasets", "products", "daily_sales"):
-            connection.exec_driver_sql(f"CREATE TABLE {table} (id integer primary key, marker text)")
-            connection.exec_driver_sql(f"INSERT INTO {table} VALUES (1, 'original')")
-    for _ in range(3):
+            connection.exec_driver_sql(f"CREATE TABLE {table} (id integer primary key)")
+    with pytest.raises(RuntimeError, match="tables"):
         check_schema(engine)
-    with engine.connect() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == head
-        for table in ("datasets", "products", "daily_sales"):
-            assert connection.exec_driver_sql(f"SELECT * FROM {table}").all() == [(1, "original")]
 
 
 def test_main_fails_closed_without_schema(monkeypatch, tmp_path):
