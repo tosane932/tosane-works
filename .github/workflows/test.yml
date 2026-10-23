@@ -223,7 +223,7 @@ jobs:
           done
 
   encrypted-backup:
-    if: github.event_name == 'pull_request' && (github.head_ref == 'ops/v3-g580-encrypted-db-backup' || github.head_ref == 'ops/v3-phase3c-restore-verification')
+    if: github.event_name == 'pull_request' && (github.head_ref == 'ops/v3-g580-encrypted-db-backup' || github.head_ref == 'ops/v3-phase3c-restore-verification' || github.head_ref == 'ops/v3.1-phase3f-offline-restore-guard')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -276,7 +276,7 @@ jobs:
           pg_restore --version
           age --version
       - name: Targeted age streaming and safety tests only
-        run: pytest tests/test_production_backup_guard.py tests/test_production_backup_encrypted_postgresql.py -v
+        run: pytest tests/test_production_backup_guard.py tests/test_production_backup_offline.py tests/test_production_backup_encrypted_postgresql.py -v
       - name: Phase 3C isolated schema and read-only SQL only
         if: github.head_ref == 'ops/v3-phase3c-restore-verification'
         run: pytest tests/test_g580_restore_verification_postgresql.py -v
