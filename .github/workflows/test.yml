@@ -2,7 +2,7 @@ name: Bakery Hub Tests
 
 on:
   push:
-    branches: [ main, feature/v3-unified-product-management ]
+    branches: [ main, feature/v3-unified-product-management, audit/phase3g-combined ]
     paths:
       - "store/bakery-hub/**"
       - ".github/workflows/test.yml"
@@ -173,8 +173,57 @@ jobs:
       - name: Synthetic backup and local safety checks only
         run: pytest tests/test_production_backup_guard.py tests/test_register_backup_restore_postgresql.py -v
 
+  startup-safety-pg18:
+    if: (github.event_name == 'pull_request' && github.head_ref == 'ops/v3.1-phase3f-startup-safety') || (github.event_name == 'push' && github.ref == 'refs/heads/audit/phase3g-combined')
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci_test_user
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: sales_data_app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_test_user -d sales_data_app_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRESQL_DATABASE_URL: >-
+        postgresql+psycopg2://ci_test_user:ci_test_password@127.0.0.1:5432/sales_data_app_test
+      ALLOW_POSTGRESQL_TEST_DATABASE_RESET: "1"
+      STARTUP_GUARD_PG18_SYNTHETIC: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: pytest tests/test_startup_guard.py tests/test_seed_demo.py tests/test_startup_guard_postgresql.py -v
+      - name: Start actual web container twice without migration or seed
+        run: |
+          docker build -t bakeryhub-startup-synthetic .
+          for round in 1 2; do
+            container=$(docker run -d --network host \
+              -e DATABASE_URL="$TEST_POSTGRESQL_DATABASE_URL" \
+              -e SECRET_KEY=synthetic-only \
+              bakeryhub-startup-synthetic)
+            trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
+            ready=0
+            for attempt in $(seq 1 30); do
+              if curl --silent --fail http://127.0.0.1:5000/login >/dev/null; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+            docker stop "$container" >/dev/null
+            python -c 'import os; from sqlalchemy import create_engine,text; e=create_engine(os.environ["TEST_POSTGRESQL_DATABASE_URL"]); c=e.connect(); assert tuple(c.execute(text("SELECT count(*) FROM " + t)).scalar_one() for t in ("products","daily_sales","register_products","prep_recipes","prep_ingredients")) == (0,0,1,1,1); c.close(); e.dispose()'
+            trap - EXIT
+          done
+
   encrypted-backup:
-    if: github.event_name == 'pull_request' && (github.head_ref == 'ops/v3-g580-encrypted-db-backup' || github.head_ref == 'ops/v3-phase3c-restore-verification')
+    if: (github.event_name == 'pull_request' && (github.head_ref == 'ops/v3-g580-encrypted-db-backup' || github.head_ref == 'ops/v3-phase3c-restore-verification' || github.head_ref == 'ops/v3.1-phase3f-offline-restore-guard')) || (github.event_name == 'push' && github.ref == 'refs/heads/audit/phase3g-combined')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -206,6 +255,10 @@ jobs:
           --health-retries 10
     env:
       ENCRYPTED_BACKUP_SYNTHETIC_TEST: "1"
+      TEST_POSTGRESQL_DATABASE_URL: >-
+        postgresql+psycopg2://ci_test_user:ci_test_password@127.0.0.1:5432/sales_data_app_test
+      ALLOW_POSTGRESQL_TEST_DATABASE_RESET: "1"
+      PHASE3G_SYNTHETIC_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -227,7 +280,12 @@ jobs:
           pg_restore --version
           age --version
       - name: Targeted age streaming and safety tests only
-        run: pytest tests/test_production_backup_guard.py tests/test_production_backup_encrypted_postgresql.py -v
+        run: pytest tests/test_production_backup_guard.py tests/test_production_backup_offline.py tests/test_production_backup_encrypted_postgresql.py -v
+      - name: Combined migration, offline restore and repeated web startup audit
+        if: github.ref == 'refs/heads/audit/phase3g-combined'
+        run: |
+          docker build -t bakeryhub-phase3g-synthetic .
+          pytest tests/test_phase3g_integration_postgresql.py -v
       - name: Phase 3C isolated schema and read-only SQL only
         if: github.head_ref == 'ops/v3-phase3c-restore-verification'
         run: pytest tests/test_g580_restore_verification_postgresql.py -v

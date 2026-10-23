@@ -49,7 +49,7 @@
 
 [保存・dry-run・復元の手順と制限](docs/data-vault-guide.md)／[Private保管庫の初期構成（架空データのみ）](docs/data-vault-template/README.md)。Phase 7の正式レジ公開判定はNO-GOを維持します。
 
-現行Docker起動の `seed_demo.py` は旧商品・旧売上で投入要否を判断します。設定だけを復元した新DBをそのまま接続せず、本番切替前にデモ投入方針と旧売上の保全・移行を別途承認してください。今回、起動処理は変更しません。
+`seed_demo.py` は旧商品・旧売上で投入要否を判断します。通常のDocker起動からは外し、復元済みDBでは実行しません。明示的な保守操作は [Web起動とDB保守の分離](docs/startup-maintenance.md) を参照してください。
 
 ## レジの端末別レイアウト（2026-10-20）
 
@@ -172,7 +172,7 @@ PR #127ではレジのヘッダー・縦スクロール調整を範囲外にし�
 
 単一head `b6d2e9f4a107`、親 `a3c9d7e5f102`。既存表に `bread_kind`・`product_class`・`photo_webp`・`revision` を追加し、4表5価格制約を拡張する。旧Product・DailySalesと既存明細の値は変更しない。SQLiteの表再構築後は価格履歴・復旧明細の追記専用トリガーを再設定する。downgradeは新分類・写真・版番号・500円超の価格、またはレジ証拠行が存在すればDDL前に拒否する。データを削除してdowngradeしない。
 
-**Dockerfileは起動時に `flask db upgrade` を実行する。** mainの自動デプロイが有効な場合、マージは本番migrationにつながり得る。管理フラグがOFFでもスキーマ変更は実行されるため、マージ前に本番バックアップ・別DBへの復元・稼働revision・旧ワーカー停止・メンテナンス方法・DB容量を確認し、適用の明示許可を得る。今回の作業では本番適用・切替日の確定・公開を行わない。
+**通常のDocker起動はmigrationを実行しない。** DB revisionがコードと異なる場合はWeb起動を拒否します。本番反映にはバックアップ・別DBへの復元・稼働revision・停止時間を確認し、明示的なmigration承認と適用が必要です。
 
 
 ---
@@ -266,7 +266,7 @@ Open-Meteoを使う場合は、商用の契約済みAPIキーで `WEATHER_API_MO
 
 Adminホームの「今日の出勤予定」は、既存の `planned_work_for_day()` を使って、認可済みAdmin Datasetと `business_today()` のJST業務日に登録された出勤・終日予定を読みます。休みは人数に含めず、終日は「終日（時刻未指定）」、既存の翌日終了はその旨を表示します。4人までをコンパクトに並べ、残り人数とシフト表へのリンクを示します。スタッフ未登録と本日の予定なし、DB取得失敗は別の文言です。Guestはスタッフの検索も表示も行いません。表示は予定であり、実際の出勤や勤務中を意味しません。ホームのGETはスタッフ・シフト情報を書き換えません。
 
-保存先は`shop_staff`・`shop_shifts`テーブルで、`ShopSchedule`とは独立しています。新revision `d5a9f1b7c204` は `c8e6a1b9d4f2` の後に適用し、`shop_shifts` のCHECK制約だけを拡張します。既存行の時刻と状態は維持します。本番反映前にバックアップと現在のAlembic revisionを確認し、先にmigrationを適用してから新コードを起動してください。Dockerの起動コマンドにも `flask db upgrade` があるため、複数インスタンスでの同時適用を避けます。このPRでは本番DBへ適用しません。終日予定が残る間のdowngradeはデータ損失を避けるため拒否されます。さらに以前のrevisionへのdowngradeはスタッフ・シフト表自体を削除するため実行しないでください。
+保存先は`shop_staff`・`shop_shifts`テーブルで、`ShopSchedule`とは独立しています。新revision `d5a9f1b7c204` は `c8e6a1b9d4f2` の後に適用し、`shop_shifts` のCHECK制約だけを拡張します。既存行の時刻と状態は維持します。本番反映前にバックアップと現在のAlembic revisionを確認し、先にmigrationを適用してから新コードを起動してください。通常のDocker起動ではmigrationを実行しません。適用は独立した保守操作とします。このPRでは本番DBへ適用しません。終日予定が残る間のdowngradeはデータ損失を避けるため拒否されます。さらに以前のrevisionへのdowngradeはスタッフ・シフト表自体を削除するため実行しないでください。
 
 ### 仕込み管理（Admin専用）
 
@@ -2238,6 +2238,8 @@ GUEST_CREATION_RATE_LIMIT_WINDOW_SECONDS
 ```bash
 docker compose up --build
 ```
+
+新規DBは自動migration・seedされず、schema不一致ならWebは起動しません。開発DBの準備は [保守手順](docs/startup-maintenance.md) を参照してください。
 
 ブラウザからアクセスします。
 
