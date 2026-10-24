@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>製造実績・廃棄ロス | Bakery Hub</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='production_prep.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='waste_records.css') }}">
+<script src="{{ url_for('static', filename='waste_records.js') }}" defer></script>
+{% include "_pwa_head.html" %}</head>
+<body class="app-shell-page prep-page">{% include '_app_navigation.html' %}
+<main class="prep-shell waste-shell">
+  {% include '_flash_notices.html' %}
+  <header class="prep-header">
+    <a href="{{ url_for('production_prep.index', date=day.isoformat()) }}" class="waste-back">← 仕込み管理へ戻る</a>
+    <h1>製造実績・廃棄ロス</h1>
+    <p class="prep-hint">実際に完成した数と、実際に廃棄した数を記録します。予定数や販売数から自動計算しません。</p>
+    <form method="get" action="{{ url_for('.index') }}" class="waste-date-form">
+      <label for="waste-date">営業日（日本時間）</label>
+      <input id="waste-date" type="date" name="date" value="{{ day.isoformat() }}" required>
+      <button class="prep-secondary" type="submit">この日を表示</button>
+    </form>
+  </header>
+  {% if error %}<p role="alert" class="prep-error">保存できませんでした：{{ error }}</p>{% endif %}
+
+  <section class="prep-panel" aria-labelledby="waste-new-heading">
+    <h2 id="waste-new-heading">{{ day.month }}月{{ day.day }}日の記録を追加</h2>
+    {% if registered or legacy %}
+    <form class="waste-card waste-edit-form" method="post" action="{{ url_for('.save') }}" data-waste-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="business_date" value="{{ day.isoformat() }}">
+      <label for="waste-product">商品</label>
+      <select id="waste-product" name="product_key" required>
+        <option value="">商品を選択してください</option>
+        {% if registered %}<optgroup label="継続商品">
+          {% for product in registered %}<option value="register:{{ product.id }}" {% if new_draft.product_key == 'register:' ~ product.id %}selected{% endif %}>{{ product.name }}{% if not product.is_active %}（終売）{% endif %}</option>{% endfor %}
+        </optgroup>{% endif %}
+        {% if legacy %}<optgroup label="旧月次商品（年月別）">
+          {% for product in legacy %}<option value="legacy:{{ product.id }}" {% if new_draft.product_key == 'legacy:' ~ product.id %}selected{% endif %}>{{ product.year }}年{{ product.month }}月 · {{ product.name }}{% if not product.is_active %}（終売）{% endif %}</option>{% endfor %}
+        </optgroup>{% endif %}
+      </select>
+      <div class="waste-fields">
+        <label>実製造数 <span class="waste-optional">未入力可</span><input type="number" inputmode="numeric" name="made_quantity" min="0" max="{{ max_quantity }}" step="1" value="{{ new_draft.made_quantity or '' }}" placeholder="未入力"></label>
+        <label>廃棄数 <span class="waste-optional">未入力可</span><input type="number" inputmode="numeric" name="discarded_quantity" min="0" max="{{ max_quantity }}" step="1" value="{{ new_draft.discarded_quantity or '' }}" placeholder="未入力"></label>
+      </div>
+      <p class="prep-hint">空欄は未入力、0は確認して0個です。少なくとも一方を入力してください。</p>
+      <p class="waste-caution" data-waste-caution hidden>廃棄数が当日の実製造数を超えています。前日からの持ち越しなど、入力内容を確認してください。</p>
+      <label>メモ（任意）<textarea name="note" maxlength="500" rows="2" placeholder="例：前日から持ち越した商品を廃棄">{{ new_draft.note or '' }}</textarea></label>
+      <div class="waste-actions"><span class="waste-state" data-save-state aria-live="polite">未入力</span><button class="prep-primary" type="submit">この商品を保存</button></div>
+    </form>
+    {% else %}<p>商品がまだありません。商品一覧で登録してから記録してください。</p>{% endif %}
+  </section>
+
+  <section class="prep-panel" aria-labelledby="waste-list-heading">
+    <h2 id="waste-list-heading">{{ day.month }}月{{ day.day }}日の保存済み記録</h2>
+    {% if records %}<div class="waste-list">
+      {% for record in records %}{% set key = ('register:' ~ record.register_product_id) if record.register_product_id else ('legacy:' ~ record.legacy_product_id) %}
+      {% set editing = draft.product_key == key %}
+      <article class="waste-card">
+        <h3>{{ record.product_label }}</h3>
+        <p class="prep-hint">{{ day.isoformat() }}の記録 · 保存後はこの欄にDBの値を表示します。</p>
+        <form class="waste-edit-form" method="post" action="{{ url_for('.save') }}" data-waste-form>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="business_date" value="{{ day.isoformat() }}">
+          <input type="hidden" name="product_key" value="{{ key }}">
+          <div class="waste-fields">
+            <label>実製造数 <span class="waste-optional">未入力可</span><input type="number" inputmode="numeric" name="made_quantity" min="0" max="{{ max_quantity }}" step="1" value="{{ draft.made_quantity if editing else (record.made_quantity if record.made_quantity is not none else '') }}" placeholder="未入力"></label>
+            <label>廃棄数 <span class="waste-optional">未入力可</span><input type="number" inputmode="numeric" name="discarded_quantity" min="0" max="{{ max_quantity }}" step="1" value="{{ draft.discarded_quantity if editing else (record.discarded_quantity if record.discarded_quantity is not none else '') }}" placeholder="未入力"></label>
+          </div>
+          <p class="waste-caution" data-waste-caution hidden>廃棄数が当日の実製造数を超えています。前日からの持ち越しなど、入力内容を確認してください。</p>
+          <label>メモ（任意）<textarea name="note" maxlength="500" rows="2">{{ draft.note if editing else record.note }}</textarea></label>
+          <div class="waste-actions"><span class="waste-state" data-save-state aria-live="polite">保存済み</span><button class="prep-primary" type="submit">この記録を修正</button></div>
+        </form>
+      </article>
+      {% endfor %}
+    </div>{% else %}<p>この日の記録はまだありません。</p>{% endif %}
+  </section>
+</main>
+</body></html>

@@ -68,7 +68,7 @@ def test_postgresql_real_schema_export_restore_matches_every_business_value(pg_p
     assert import_bundle(target, dst, folder, static_folder=STATIC)['dry_run']
     with Session(target) as s:
         assert not s.scalars(select(RegisterProduct)).all()
-        assert s.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == 'b6d2e9f4a107'
+        assert s.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == 'c8d3e7f1a204'
     import_bundle(target, dst, folder, static_folder=STATIC, apply=True, confirm_dataset=str(dst))
     assert business_snapshot(source, src) == business_snapshot(target, dst)
     with Session(target) as s:

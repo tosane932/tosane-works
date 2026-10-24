@@ -39,7 +39,7 @@ def migrated_postgresql():
     db.init_app(app)
     Migrate(app, db, directory=str(MIGRATIONS_DIR))
     with app.app_context():
-        upgrade(directory=str(MIGRATIONS_DIR), revision="head")
+        upgrade(directory=str(MIGRATIONS_DIR), revision=NEW_HEAD)
         yield app
         db.session.remove()
         db.engine.dispose()

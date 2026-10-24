@@ -17,6 +17,7 @@ from models import db
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 OLD_HEAD = "e2a7c4d9b105"
 NEW_HEAD = "b6d2e9f4a107"
+CURRENT_HEAD = "c8d3e7f1a204"
 TABLES = {"register_products", "register_cutovers", "register_transactions",
           "register_transaction_lines", "register_prep_links",
           "register_price_history", "register_cutover_approvals",
@@ -54,10 +55,10 @@ def assert_previous_rows():
 def test_empty_database_upgrades_to_single_head_without_seeding(migration_app):
     c = Config(str(MIGRATIONS_DIR / "alembic.ini"))
     c.set_main_option("script_location", str(MIGRATIONS_DIR))
-    assert ScriptDirectory.from_config(c).get_heads() == [NEW_HEAD]
+    assert ScriptDirectory.from_config(c).get_heads() == [CURRENT_HEAD]
     assert table_state() == set()
     migrate("head")
-    assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == NEW_HEAD
+    assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == CURRENT_HEAD
     assert TABLES <= table_state()
     for table in TABLES:
         assert db.session.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one() == 0
@@ -76,7 +77,7 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
     old_sales_columns = [x["name"] for x in old_inspector.get_columns("daily_sales")]
     assert_previous_rows()
 
-    migrate("head")
+    migrate(NEW_HEAD)
     inspector = inspect(db.engine)
     assert TABLES <= set(inspector.get_table_names())
     assert [x["name"] for x in inspector.get_columns("products")] == old_product_columns
@@ -172,7 +173,7 @@ def test_existing_rows_and_schema_survive_upgrade_and_empty_downgrade(migration_
 
 @pytest.mark.parametrize("occupied", ["register_products", "register_cutovers", "register_transactions", "register_transaction_lines"])
 def test_downgrade_refuses_populated_tables_before_dropping_any(migration_app, occupied):
-    migrate("head")
+    migrate(NEW_HEAD)
     admin_id = db.session.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()
     sale_id, key = uuid.uuid4().hex, uuid.uuid4().hex
     if occupied in {"register_products", "register_transaction_lines"}:
@@ -209,7 +210,7 @@ def test_product_creation_key_upgrade_preserves_existing_data_and_rejects_duplic
     db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) "
                             "VALUES (11,:owner,'既存商品',280)"), {"owner": owner})
     db.session.commit()
-    migrate("head")
+    migrate(NEW_HEAD)
     assert db.session.execute(text("SELECT name,price_yen,creation_key,creation_digest "
                                    "FROM register_products WHERE id=11")).one() == (
                                        "既存商品", 280, None, None)
@@ -237,7 +238,7 @@ def test_price_history_migration_does_not_invent_old_prices_and_is_append_only(m
     db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) "
                             "VALUES (11,:owner,'以前からある商品',280)"), {"owner": owner})
     db.session.commit()
-    migrate("head")
+    migrate(NEW_HEAD)
     assert db.session.execute(text("SELECT COUNT(*) FROM register_price_history")).scalar_one() == 0
     db.session.execute(text("INSERT INTO register_price_history "
                             "(dataset_id,register_product_id,event,old_price_yen,new_price_yen) "
@@ -262,7 +263,7 @@ def test_recovery_migration_preserves_legacy_and_refuses_populated_downgrade(mig
     db.session.execute(text("INSERT INTO register_products (id,dataset_id,name,price_yen) "
                             "VALUES (11,:owner,'パン',120)"), {"owner": owner})
     db.session.commit()
-    migrate("head")
+    migrate(NEW_HEAD)
     assert db.session.execute(text("SELECT review_decisions FROM register_cutover_approvals")).all() == []
     db.session.execute(text("INSERT INTO register_recovery_cases "
         "(id,dataset_id,submission_key,source_digest,snapshot_json,status,kind,client_business_date,total_yen) "
@@ -286,7 +287,7 @@ def test_link_migration_rejects_populated_downgrade_and_preserves_old_recipe(mig
                             "(id,dataset_id,product_key,display_name,base_quantity) "
                             "VALUES (21,:owner,'product:100','旧レシピ',10)"), {"owner": owner})
     db.session.commit()
-    migrate("head")
+    migrate(NEW_HEAD)
     assert db.session.execute(text("SELECT product_key FROM prep_recipes WHERE id=21")
                               ).scalar_one() == "product:100"
     db.session.execute(text("INSERT INTO register_prep_links "
