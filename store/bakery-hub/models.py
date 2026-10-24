@@ -436,6 +436,9 @@ class ShopShift(db.Model):
 class Product(db.Model):
     """その月に登録された商品マスタ（商品名・単価）を表すテーブル。"""
     __tablename__ = "products"
+    __table_args__ = (
+        db.UniqueConstraint("id", "dataset_id", name="uq_products_id_dataset_waste"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     dataset_id = db.Column(
@@ -526,6 +529,51 @@ class PrepPlan(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, server_default=db.func.now())
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=db.func.now())
     recipe = db.relationship("PrepRecipe", back_populates="plans")
+
+
+class WasteRecord(db.Model):
+    """営業日・商品別に確定した実製造数と実廃棄数。予定・売上とは独立。"""
+    __tablename__ = "waste_records"
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ["register_product_id", "dataset_id"],
+            ["register_products.id", "register_products.dataset_id"],
+            name="fk_waste_register_product_dataset", ondelete="RESTRICT",
+        ),
+        db.ForeignKeyConstraint(
+            ["legacy_product_id", "dataset_id"],
+            ["products.id", "products.dataset_id"],
+            name="fk_waste_legacy_product_dataset", ondelete="RESTRICT",
+        ),
+        db.UniqueConstraint("dataset_id", "business_date", "register_product_id",
+                            name="uq_waste_register_day"),
+        db.UniqueConstraint("dataset_id", "business_date", "legacy_product_id",
+                            name="uq_waste_legacy_day"),
+        db.CheckConstraint(
+            "(register_product_id IS NULL) <> (legacy_product_id IS NULL)",
+            name="ck_waste_one_product",
+        ),
+        db.CheckConstraint("made_quantity IS NOT NULL OR discarded_quantity IS NOT NULL",
+                           name="ck_waste_has_quantity"),
+        db.CheckConstraint("made_quantity IS NULL OR made_quantity BETWEEN 0 AND 100000",
+                           name="ck_waste_made_quantity"),
+        db.CheckConstraint("discarded_quantity IS NULL OR discarded_quantity BETWEEN 0 AND 100000",
+                           name="ck_waste_discarded_quantity"),
+        db.CheckConstraint("length(note) <= 500", name="ck_waste_note_length"),
+        db.Index("ix_waste_dataset_day", "dataset_id", "business_date"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    dataset_id = db.Column(db.Uuid(as_uuid=True), db.ForeignKey("datasets.id", ondelete="RESTRICT"), nullable=False)
+    business_date = db.Column(db.Date, nullable=False)
+    register_product_id = db.Column(db.Integer, nullable=True)
+    legacy_product_id = db.Column(db.Integer, nullable=True)
+    product_label = db.Column(db.String(160), nullable=False)
+    made_quantity = db.Column(db.Integer, nullable=True)
+    discarded_quantity = db.Column(db.Integer, nullable=True)
+    note = db.Column(db.String(500), nullable=False, default="", server_default="")
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now,
+                           onupdate=utc_now, server_default=db.func.now())
 
 
 class DailySales(db.Model):

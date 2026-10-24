@@ -23,7 +23,7 @@
     {% set active_app_page = 'dashboard' %}
 {% elif current_endpoint.startswith('shop_staff_shifts.') %}
     {% set active_app_page = 'staff-shifts' %}
-{% elif current_endpoint.startswith('production_prep.') %}
+{% elif current_endpoint.startswith('production_prep.') or current_endpoint.startswith('waste_records.') %}
     {% set active_app_page = 'prep' %}
 {% elif current_endpoint == 'bakery_news_list' %}
     {% set active_app_page = 'news' %}

@@ -41,6 +41,13 @@ jobs:
           name: home-weather-screenshots
           path: store/bakery-hub/test-results/home_weather-*/*.png
           retention-days: 7
+      - name: Upload synthetic waste layout screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-recording-screenshots
+          path: store/bakery-hub/test-results/waste-recording-*/*.png
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload E2E trace on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -131,6 +138,7 @@ jobs:
             tests/test_shop_memos_postgresql.py \
             tests/test_shop_staff_shifts_postgresql.py \
             tests/test_prep_postgresql.py \
+            tests/test_waste_postgresql.py \
             -v
 
       - name: 隔離DBの全量バックアップと別DBへの復元を検証
@@ -138,6 +146,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client-16
           pytest tests/test_register_backup_restore_postgresql.py -v
+
+  waste-pg18:
+    if: github.event_name == 'pull_request' && github.head_ref == 'feature/v3.1-waste-loss-management-phase1'
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci_test_user
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: sales_data_app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_test_user -d sales_data_app_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRESQL_DATABASE_URL: >-
+        postgresql+psycopg2://ci_test_user:ci_test_password@127.0.0.1:5432/sales_data_app_test
+      ALLOW_POSTGRESQL_TEST_DATABASE_RESET: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: pytest tests/test_waste_postgresql.py -v
 
   backup-readiness:
     if: github.event_name == 'pull_request' && github.head_ref == 'ops/v3-production-db-backup-readiness'
