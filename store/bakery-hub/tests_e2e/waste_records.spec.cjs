@@ -10,7 +10,7 @@ test.beforeEach(async ({context}) => {
 });
 
 for (const width of [390, 1280]) {
-    test(`waste recording ${width}px: link, entry, edit and readable layout`, async ({page}, testInfo) => {
+    test(`waste recording ${width}px: link, entry, edit and readable layout`, async ({page}) => {
         await page.setViewportSize({width, height:844});
         await page.goto('/login');
         await page.locator('#username').fill(auth().username);
@@ -37,7 +37,9 @@ for (const width of [390, 1280]) {
         const inputs = await page.locator('.waste-list .waste-fields input').evaluateAll(nodes =>
             nodes.map(node => ({right:node.getBoundingClientRect().right, width:node.getBoundingClientRect().width})));
         expect(inputs.every(input => input.width >= 100 && input.right <= width)).toBe(true);
-        await page.screenshot({path:testInfo.outputPath(`waste-${width}.png`), fullPage:true});
+        const screenshots = path.join(__dirname, '..', 'test-results', 'waste-screenshots');
+        fs.mkdirSync(screenshots, {recursive:true});
+        await page.screenshot({path:path.join(screenshots, `waste-${width}.png`), fullPage:true});
     });
 }
 
