@@ -26,13 +26,16 @@ def test_empty_database_refused_without_creating_schema(tmp_path):
         assert connection.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'").all() == []
 
 
-def test_stale_or_falsely_stamped_database_refused(tmp_path):
+@pytest.mark.parametrize("revision", ["stale", "b6d2e9f4a107"])
+def test_stale_or_falsely_stamped_database_refused(tmp_path, revision):
     engine = create_engine(f"sqlite:///{tmp_path / 'stale.db'}")
     with engine.begin() as connection:
         connection.exec_driver_sql("CREATE TABLE alembic_version (version_num varchar(32))")
-        connection.exec_driver_sql("INSERT INTO alembic_version VALUES ('stale')")
+        connection.execute(text("INSERT INTO alembic_version VALUES (:revision)"), {"revision": revision})
     with pytest.raises(RuntimeError, match="revision"):
         check_schema(engine)
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == revision
 
 
 def test_migrated_database_repeated_checks_do_not_modify_business_rows(tmp_path):

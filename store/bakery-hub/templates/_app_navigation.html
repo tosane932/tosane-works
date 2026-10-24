@@ -261,6 +261,10 @@
             </span>
             <span>仕込み管理</span>
         </a>
+        <div class="app-sidebar-submenu" id="app-prep-submenu">
+            <a href="{{ url_for('production_prep.index') }}" {% if current_endpoint.startswith('production_prep.') %}aria-current="page"{% endif %}>製造予定・材料管理</a>
+            <a href="{{ url_for('waste_records.index') }}" {% if current_endpoint.startswith('waste_records.') %}aria-current="page"{% endif %}>廃棄・ロス管理</a>
+        </div>
         {% endif %}
         <div class="app-sidebar-nav-divider" aria-hidden="true"></div>
 

@@ -35,6 +35,32 @@ SIDEBAR_ROUTES = {**{key: value for key, value in APP_ROUTES.items() if key != "
 ADMIN_ONLY_ROUTES = {"staff-shifts": "/staff-shifts", "prep": "/prep"}
 
 
+@pytest.mark.parametrize("path, active_href", [
+    ("/home", None),
+    ("/prep", "/prep"),
+    ("/prep/waste", "/prep/waste"),
+])
+def test_prep_menu_shows_two_admin_destinations(
+    authenticated_client, admin_dataset, path, active_href,
+):
+    page = authenticated_client.get(path)
+    assert page.status_code == 200
+    sidebar = BeautifulSoup(page.data, "html.parser").select_one("#app-sidebar")
+    parent = sidebar.select_one('a[data-page="prep"]')
+    assert parent is not None
+    assert (parent.get("aria-current") == "page") == (active_href is not None)
+    submenu = sidebar.select_one("#app-prep-submenu")
+    assert submenu is not None and not submenu.has_attr("hidden")
+    links = submenu.select("a")
+    assert [(link.get_text(" ", strip=True), link["href"]) for link in links] == [
+        ("製造予定・材料管理", "/prep"),
+        ("廃棄・ロス管理", "/prep/waste"),
+    ]
+    assert [link["href"] for link in links if link.get("aria-current") == "page"] == (
+        [active_href] if active_href else []
+    )
+
+
 def _assert_inline_icon(container, icon_name):
     icon = container.select_one(f'svg[data-icon="{icon_name}"]')
 
