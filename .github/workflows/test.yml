@@ -45,7 +45,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: waste-recording-screenshots
-          path: store/bakery-hub/test-results/waste-recording-*/*.png
+          path: store/bakery-hub/test-results/*waste-recording*/*.png
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload E2E trace on failure
