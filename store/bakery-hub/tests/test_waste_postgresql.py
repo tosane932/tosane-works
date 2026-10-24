@@ -35,9 +35,8 @@ def test_postgresql_waste_migration_and_dataset_boundaries():
             assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "c8d3e7f1a204"
 
         with engine.begin() as connection:
-            admin, guest = uuid.uuid4(), uuid.uuid4()
-            connection.execute(text("INSERT INTO datasets (id, kind, system_key) VALUES (:id, 'admin', 'admin')"),
-                               {"id": admin})
+            admin = connection.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()
+            guest = uuid.uuid4()
             connection.execute(text("INSERT INTO datasets (id, kind, absolute_expires_at) "
                                     "VALUES (:id, 'guest', now() + interval '2 hours')"), {"id": guest})
             register = connection.execute(text("INSERT INTO register_products (dataset_id, name, price_yen) "
