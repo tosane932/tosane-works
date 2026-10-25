@@ -201,7 +201,7 @@
             <dd>{{ source_links(['static/manifest.webmanifest', 'static/pwa/icon-source.svg', 'templates/_pwa_head.html', 'app.py', 'static/register_offline_sw.js', 'tests/test_pwa.py', 'tests_e2e/pwa.spec.cjs', 'README.md']) }}</dd>
         {% endcall %}
 
-        <p>共通サイドメニューはホーム・販売業務・店舗運営・情報収集と学習の4群です。商品登録は商品一覧から進み、共通管理が無効な環境とGuestには旧月次登録の入口を残します。日次入力とレジモードは既存の公開状態・切替日で出し分けます。Admin専用のレジ管理・検証はフラグに従って表示し、初めは閉じています。Jinjaの表示条件は入口の整理であり、各URLの認可やDataset境界に置き換わるものではありません。</p>
+        <p>共通サイドメニューはホーム・販売業務・店舗運営・情報収集と学習の4群です。Adminの「仕込み管理」には「製造予定・材料管理」（<code>/prep</code>）と「廃棄・ロス管理」（<code>/prep/waste</code>）の2つの入口があり、計画と実績を別々に操作します。商品登録は商品一覧から進み、共通管理が無効な環境とGuestには旧月次登録の入口を残します。日次入力とレジモードは既存の公開状態・切替日で出し分けます。Admin専用のレジ管理・検証はフラグに従って表示し、初めは閉じています。Jinjaの表示条件は入口の整理であり、各URLの認可やDataset境界に置き換わるものではありません。</p>
         {% call feature('home', '店舗運営ホーム', 'パン工房 ひだまりの今日の予定・予報・売上を確認します。Adminは出勤予定も見られます。', 'GET /home・GET /weather・GET /api/home/weather・GET /bakery-news') %}
             <dt>Python / Flask</dt>
             <dd><code>home()</code>が認証済みDatasetの当日予定を返します。Adminだけは<code>business_today()</code>のJST業務日を使い、<code>planned_work_for_day()</code>で同日の出勤・終日予定を読みます。GETはスタッフ情報を変更しません。現在の天気は設定済みの地点について別APIで取得し、失敗時は理由を表示します。Open-Meteoの現在モデル推定と、MET Norwayの直近予報を設定で選択できます。MET NorwayのExpiresまでキャッシュし、過去天気の確定記録を現在の天気として流用しません。正常なMET Norway予報の取得後はCSRF付きPOSTがサーバー側の予報を再確認し、Datasetごとに日本時間の当日最初の予報だけを<code>DailyForecast</code>へ保存します。これは観測結果ではありません。ホームを開かなかった日は保存されず、保存失敗時もホーム画面は閲覧できます。</dd>
@@ -248,21 +248,23 @@
 
         {% endcall %}
 
-        {% call feature('prep', '仕込み管理', '管理者が商品別レシピと日別の製造予定を登録し、別画面で実製造数と廃棄数を記録します。', 'GET /prep・GET /prep/recipes・POST /prep/recipes/new・POST /prep/plans/bulk・POST /prep/plans・GET/POST /prep/waste') %}
+        {% call feature('prep', '仕込み管理', '管理者が「製造予定・材料管理」で日別の予定を立て、「廃棄・ロス管理」で実際の製造・廃棄数を独立して記録します。', 'GET /prep・GET /prep/recipes・POST /prep/recipes/new・POST /prep/plans/bulk・POST /prep/plans・GET/POST /prep/waste') %}
             <dt>試験環境の参考表示</dt><dd>統合集計を明示的に有効化したテスト・ローカル開発環境では、<code>prep_sales_reference.py</code>が対象営業日の確定済み販売数を読取専用で表示します。旧商品IDと標準テンプレートキーを区別し、返金を差し引き、未記録と0個も区別します。独自レジ商品は名前だけでレシピへ結び付けません。本番の既定設定では非表示で、予定数や材料に自動反映しません。</dd>
             <dt>Python / Flask</dt>
             <dd><code>production_prep.py</code>のBlueprintがGET /prepでJSTの今日の仕込み、GET /prep/recipesでレシピ管理を表示します。①パンを選ぶ、②個数を決める、③材料を見る順に操作し、CSRF付きPOST /prep/plans/bulkで選択した商品の予定をまとめて保存します。選択を外すだけでは削除せず、0個も予定として保持します。<code>admin_required</code>と<code>require_current_dataset()</code>でAdmin Datasetを確認し、ID指定時もDatasetで絞ります。日付・全ID・全個数を検証し、Dataset行のロックと一意制約で並行POSTを扱い、一度のSQLAlchemy transactionでcommitします。失敗時は全件rollbackします。</dd>
             <dt>Database</dt>
             <dd><code>PrepRecipe</code>は月次Productと独立したレシピです。標準・承認済みテンプレートは安定した商品キー、自由入力の月次商品はProduct IDを元の識別子とし、商品名一致で統合しません。<code>PrepIngredient</code>はレシピの材料と単位・Decimal量、<code>PrepPlan</code>はJST対象日・レシピID・予定個数を保存します。Datasetを含む複合外部キーと一意制約で別Datasetへの関連付けと二重登録を拒否します。レシピは翌月も再利用できます。過去日の必要量は現在のレシピで再試算し、過去の製造実績を表しません。</dd>
             <dt>実製造・廃棄</dt>
-            <dd><code>waste_records.py</code>はAdminだけがJSTの営業日と継続商品IDまたは旧月次商品IDを選んで実製造数・実廃棄数・メモを保存・修正します。<code>WasteRecord</code>はDataset、営業日、どちらか一方の商品ID、保存時の商品名を持ちます。数量のNULLは未入力、0は確認済みの0個です。同じ日の同じ商品は一件のみで、商品とDatasetを複合外部キーで照合します。仕込み予定、販売、商品マスタは書き換えず、廃棄数を自動算出しません。CSRF付きPOSTで検証後commitし、DB失敗時はrollbackします。</dd>
+            <dd><code>waste_records.py</code>はAdminだけがJSTの営業日と継続商品IDまたは旧月次商品IDを選んで実製造数・実廃棄数・メモを保存・修正します。<code>WasteRecord</code>はDataset、営業日、どちらか一方の商品ID、保存時の商品名を持ちます。実製造数か廃棄数の一方だけでも記録でき、数量のNULLは未入力、0は確認済みの0個です。同じ日の同じ商品は一件のみで、商品とDatasetを複合外部キーで照合します。廃棄数が実製造数を超える場合は入力内容の確認を促しますが、自動修正しません。仕込み予定、販売、商品マスタは書き換えず、廃棄数を自動算出しません。CSRF付きPOSTで検証後commitし、DB失敗時はrollbackします。</dd>
+            <dt>DB構造と公開</dt>
+            <dd>migration <code>c8d3e7f1a204</code>は親revision <code>b6d2e9f4a107</code>の後に<code>waste_records</code>表と商品参照用の制約を追加します。<code>startup_guard.py</code>は起動前にAlembicのheadとDBのrevision、必要な表・列を読み取り専用で照合し、不一致なら起動を拒否します。PRのマージやテスト成功だけでは本番DBは更新されません。migrationの適用は通常起動と分けた承認済み保守作業です。</dd>
             <dt>Frontend</dt>
             <dd>Pythonの<code>Decimal</code>で<code>使用量 × 製造予定数 ÷ 基準個数</code>を計算し、小数第6位まで不足しない方向で表示します。材料名の前後空白だけを揃え、名前と単位の両方が同じものを合算します。<code>production_prep.js</code>は±10ボタンと1個単位の数値直接入力で同じ再計算を呼び、BigIntの固定小数点で画面を再読み込みせず試算します。変更中は未保存と示し、保存済みの結果と区別します。商品選択で表示を切り替えます。内訳と在庫比較は必要時だけ開きます。在庫は一時入力で、開閉・再計算中も入力値を保持し、未入力と0を区別して不足・余裕・未確認を表示します。在庫減算や自動発注はしません。既存の材料発注リストへ移れます。発注メモの明示的な電話行は妥当な国内番号だけ<code>tel:</code>リンクにします。</dd>
             <dt>pytest</dt>
             <dd><code>tests/test_production_prep.py</code>が3ステップ表示・一括保存のatomic性とrollback・配合・端数・材料の区別・日付別の更新・Admin認可・Dataset分離・CSRF・エスケープ・発注電話を確認し、<code>tests/test_prep_migration.py</code>が新テーブルのupgrade・downgradeと既存商品保全を確認します。</dd>
             <dt>実績テスト</dt><dd><code>tests/test_waste_records.py</code>は未入力と0、日別修正、認可・CSRF・rollbackを、<code>tests/test_waste_migration.py</code>と<code>tests/test_waste_postgresql.py</code>はmigrationと複合外部キーを確認します。</dd>
             <dt>確認するコード</dt>
-            <dd>{{ source_links(['production_prep.py', 'waste_records.py', 'prep_sales_reference.py', 'register_sales_aggregation.py', 'models.py', 'migrations/versions/e2a7c4d9b105_add_prep_recipes_plans.py', 'migrations/versions/c8d3e7f1a204_add_waste_records.py', 'templates/prep_index.html', 'templates/prep_recipe_form.html', 'templates/prep_plans.html', 'templates/waste_records.html', 'static/production_prep.js', 'static/waste_records.js', 'material_orders.py', 'tests/test_production_prep.py', 'tests/test_waste_records.py', 'tests/test_waste_migration.py', 'tests/test_waste_postgresql.py', 'tests/test_register_image_prep_reference.py', 'tests/test_prep_postgresql.py', 'tests/test_prep_migration.py']) }}</dd>
+            <dd>{{ source_links(['production_prep.py', 'waste_records.py', 'prep_sales_reference.py', 'register_sales_aggregation.py', 'models.py', 'migrations/versions/e2a7c4d9b105_add_prep_recipes_plans.py', 'migrations/versions/c8d3e7f1a204_add_waste_records.py', 'templates/prep_index.html', 'templates/prep_recipe_form.html', 'templates/prep_plans.html', 'templates/waste_records.html', 'static/production_prep.js', 'static/waste_records.js', 'material_orders.py', 'tests/test_production_prep.py', 'tests/test_waste_records.py', 'tests/test_waste_migration.py', 'tests/test_waste_postgresql.py', 'startup_guard.py', 'docs/startup-maintenance.md', 'tests/test_register_image_prep_reference.py', 'tests/test_prep_postgresql.py', 'tests/test_prep_migration.py']) }}</dd>
         {% endcall %}
 
         {% call feature('products', '旧月次の商品・メニュー登録', '18品の標準テンプレートとAdminが申請した商品カタログから選び、月ごとの商品と売価を登録します。自由入力もできます。', 'GET /・POST /・POST /admin/product-catalog') %}
@@ -1035,7 +1037,7 @@
             <dt>Gemini API</dt><dd>売上の改善案とひとことを生成。Python側でAPIを呼び、timeout・エラー応答・Guest利用上限を扱います。</dd>
             <dt>pytest / GitHub Actions</dt><dd>pytestが期待する応答とDB状態を検証。<code>.github/workflows/test.yml</code>は対象パスのmainへのpush・PRで、通常テストとPostgreSQLのmigration・指定された並行処理テストを実行します。</dd>
             <dt>Docker / Gunicorn / Render</dt><dd>DockerfileでPython実行環境を組み立て、GunicornがFlaskアプリへのHTTP要求を処理します。READMEにRenderでの公開構成を記載。Docker ComposeはwebとPostgreSQLを組み合わせます。</dd>
-            <dt>Flask-Migrate / Alembic</dt><dd><code>migrations/</code>でDB構造の変更履歴を管理します。スケジュール用の<code>shop_schedules</code>表を追加するmigrationがあります。本番DBへの適用は別作業です。</dd>
+            <dt>Flask-Migrate / Alembic</dt><dd><code>migrations/</code>でDB構造の変更履歴を管理します。<code>startup_guard.py</code>はコードのmigration headとDBの<code>alembic_version</code>、必要な表・列を読取専用で照合します。不一致なら通常Web起動を止め、自動で<code>flask db upgrade</code>を実行しません。本番へのmigration適用には別途確認と承認が必要です。</dd>
         </dl>
         <p class="overview-note">ここではコードと設定ファイルにある設計を説明しています。稼働中の本番環境を診断するページではありません。認証情報や設定の秘密値、実際のCookie・Session値は表示しません。</p>
     </section>
