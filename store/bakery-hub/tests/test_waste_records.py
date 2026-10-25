@@ -154,8 +154,28 @@ def test_db_failure_rolls_back_and_reports_unsaved(authenticated_client, admin_d
     monkeypatch.setattr(db.session, "commit", fail_once)
     response = save(authenticated_client, csrf_post, key, made_quantity="99")
     assert response.status_code == 500
-    assert "保存できませんでした" in response.get_data(as_text=True)
+    html = response.get_data(as_text=True)
+    assert "保存できませんでした" in html
+    assert 'name="made_quantity" min="0" max="100000" step="1" value="99"' in html
+    assert 'data-save-state aria-live="polite">保存できませんでした' in html
     assert WasteRecord.query.one().made_quantity == 50
+
+
+def test_new_record_failure_keeps_unsaved_input(authenticated_client, admin_dataset, csrf_post, monkeypatch):
+    register, _ = add_products(admin_dataset)
+    original_commit = db.session.commit
+    def fail_once():
+        monkeypatch.setattr(db.session, "commit", original_commit)
+        raise SQLAlchemyError("synthetic commit failure")
+    monkeypatch.setattr(db.session, "commit", fail_once)
+    response = save(authenticated_client, csrf_post, f"register:{register.id}",
+                    made_quantity="", discarded_quantity="0", note="持ち越し")
+    assert response.status_code == 500
+    html = response.get_data(as_text=True)
+    assert 'data-save-state aria-live="polite">保存できませんでした' in html
+    assert 'name="discarded_quantity" min="0" max="100000" step="1" value="0"' in html
+    assert "持ち越し" in html
+    assert WasteRecord.query.count() == 0
 
 
 def test_database_constraints_keep_dataset_and_unique_boundary(flask_app, admin_dataset):

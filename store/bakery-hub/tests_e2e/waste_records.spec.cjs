@@ -29,10 +29,16 @@ for (const width of [390, 1280]) {
         await expect(page.locator('.waste-list .waste-card')).toHaveCount(1);
         const edit = page.locator('.waste-list .waste-card').first();
         await expect(edit.locator('[name=made_quantity]')).toHaveValue('0');
+        await expect(edit.locator('[name=discarded_quantity]')).toHaveValue('3');
+        await page.reload();
+        await expect(page.locator('.waste-list [name=made_quantity]')).toHaveValue('0');
         await edit.locator('[name=made_quantity]').fill('50');
         await edit.getByRole('button', {name:'この記録を修正'}).click();
+        await expect(page.locator('.waste-list .waste-card')).toHaveCount(1);
         await expect(page.locator('.waste-list [name=made_quantity]')).toHaveValue('50');
         await expect(page.locator('.waste-list [name=discarded_quantity]')).toHaveValue('3');
+        await page.reload();
+        await expect(page.locator('.waste-list [name=made_quantity]')).toHaveValue('50');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         const inputs = await page.locator('.waste-list .waste-fields input').evaluateAll(nodes =>
             nodes.map(node => ({right:node.getBoundingClientRect().right, width:node.getBoundingClientRect().width})));

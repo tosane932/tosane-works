@@ -44,7 +44,7 @@
       <p class="prep-hint">空欄は未入力、0は確認して0個です。少なくとも一方を入力してください。</p>
       <p class="waste-caution" data-waste-caution hidden>廃棄数が当日の実製造数を超えています。前日からの持ち越しなど、入力内容を確認してください。</p>
       <label>メモ（任意）<textarea name="note" maxlength="500" rows="2" placeholder="例：前日から持ち越した商品を廃棄">{{ new_draft.note or '' }}</textarea></label>
-      <div class="waste-actions"><span class="waste-state" data-save-state aria-live="polite">未入力</span><button class="prep-primary" type="submit">この商品を保存</button></div>
+      <div class="waste-actions"><span class="waste-state" data-save-state aria-live="polite">{% if error and new_draft.product_key %}保存できませんでした{% else %}未入力{% endif %}</span><button class="prep-primary" type="submit">この商品を保存</button></div>
     </form>
     {% else %}<p>商品がまだありません。商品一覧で登録してから記録してください。</p>{% endif %}
   </section>
@@ -67,7 +67,7 @@
           </div>
           <p class="waste-caution" data-waste-caution hidden>廃棄数が当日の実製造数を超えています。前日からの持ち越しなど、入力内容を確認してください。</p>
           <label>メモ（任意）<textarea name="note" maxlength="500" rows="2">{{ draft.note if editing else record.note }}</textarea></label>
-          <div class="waste-actions"><span class="waste-state" data-save-state aria-live="polite">保存済み</span><button class="prep-primary" type="submit">この記録を修正</button></div>
+          <div class="waste-actions"><span class="waste-state" data-save-state aria-live="polite">{% if error and editing %}保存できませんでした{% else %}保存済み{% endif %}</span><button class="prep-primary" type="submit">この記録を修正</button></div>
         </form>
       </article>
       {% endfor %}
