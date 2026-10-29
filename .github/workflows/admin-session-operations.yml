@@ -1,0 +1,50 @@
+name: Admin session operations
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'store/bakery-hub/**'
+      - '.github/workflows/admin-session-operations.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-postgresql:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [16, 18]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: ci_test_user
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: sales_data_app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_test_user -d sales_data_app_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      TEST_POSTGRESQL_DATABASE_URL: postgresql+psycopg2://ci_test_user:ci_test_password@127.0.0.1:5432/sales_data_app_test
+      ALLOW_POSTGRESQL_TEST_DATABASE_RESET: '1'
+    defaults:
+      run:
+        working-directory: store/bakery-hub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Synthetic worker, schema, COMMIT and authentication restore checks
+        env:
+          PHASE5_TEST_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: pytest tests/test_admin_session_migration.py tests/test_admin_session_postgresql.py tests/test_admin_session_operations_postgresql.py -v
+      - name: Existing PG18 startup guard regression
+        if: matrix.postgres == 18
+        env:
+          STARTUP_GUARD_PG18_SYNTHETIC: '1'
+        run: pytest tests/test_startup_guard_postgresql.py -v
