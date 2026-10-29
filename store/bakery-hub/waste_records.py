@@ -3,7 +3,7 @@
 import logging
 import re
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from models import Product, RegisterProduct, WasteRecord, db
@@ -50,7 +50,8 @@ def create_waste_blueprint(*, access_required, resolve_dataset, business_today):
             abort(404)
         return "legacy_product_id", item.id, f"旧商品｜{item.year}年{item.month}月｜{item.name}"
 
-    def show(current, day, *, error=None, status=200, draft=None):
+    def show(current, day, *, error=None, status=200, draft=None, result=None,
+             overage=False):
         try:
             registered = RegisterProduct.query.filter_by(dataset_id=current.id).order_by(
                 RegisterProduct.is_active.desc(), RegisterProduct.id).all()
@@ -67,7 +68,14 @@ def create_waste_blueprint(*, access_required, resolve_dataset, business_today):
         new_draft = {} if draft and draft.get("product_key") in keys else (draft or {})
         return render_template("waste_records.html", day=day, registered=registered,
                                legacy=legacy, records=records, draft=draft or {}, new_draft=new_draft,
-                               error=error, max_quantity=MAX_QUANTITY), status
+                               error=error, result=result, overage=overage,
+                               max_quantity=MAX_QUANTITY), status
+
+    def return_to_record(day, record_id, message):
+        session["waste_record_result"] = {"day": day.isoformat(), "id": record_id,
+                                          "message": message}
+        return redirect(url_for(".index", date=day.isoformat(),
+                                _anchor=f"waste-record-{record_id}"), code=303)
 
     @blueprint.get("/prep/waste")
     @access_required
@@ -77,7 +85,10 @@ def create_waste_blueprint(*, access_required, resolve_dataset, business_today):
             day = parse_business_date(request.args["date"]) if "date" in request.args else business_today()
         except ValueError as error:
             return str(error), 400
-        return show(current, day)
+        result = session.pop("waste_record_result", None)
+        if not isinstance(result, dict) or result.get("day") != day.isoformat():
+            result = None
+        return show(current, day, result=result)
 
     @blueprint.post("/prep/waste")
     @access_required
@@ -109,6 +120,16 @@ def create_waste_blueprint(*, access_required, resolve_dataset, business_today):
             db.session.query(type(current)).filter_by(id=current.id).with_for_update().one()
             filters = {"dataset_id": current.id, "business_date": day, field: identifier}
             record = WasteRecord.query.filter_by(**filters).with_for_update().one_or_none()
+            if record is not None and (record.made_quantity, record.discarded_quantity, record.note) == (
+                    made, discarded, draft["note"]):
+                record_id = record.id
+                db.session.rollback()  # Release the Dataset lock without writing or touching updated_at.
+                return return_to_record(day, record_id, "変更はありません。保存済みの内容を表示しています。")
+            if made is not None and discarded is not None and discarded > made and (
+                    request.form.get("overage_confirm") != "confirmed"):
+                db.session.rollback()
+                return show(current, day, error="廃棄数が実製造数を超えています。持ち越し等の理由を確認し、確認欄を選んでください。",
+                            status=400, draft=draft, overage=True)
             if record is None:
                 record = WasteRecord(**filters, product_label=label)
                 db.session.add(record)
@@ -126,7 +147,6 @@ def create_waste_blueprint(*, access_required, resolve_dataset, business_today):
             return show(current, day, error="保存できませんでした。再度お試しください。",
                         status=500, draft=draft)
 
-        flash("製造実績・廃棄数を保存しました。", "success")
-        return redirect(url_for(".index", date=day.isoformat()), code=303)
+        return return_to_record(day, record.id, "製造実績・廃棄数を保存しました。")
 
     return blueprint
