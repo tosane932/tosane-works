@@ -114,3 +114,21 @@ def test_parallel_same_submission_key_creates_one_product_and_detects_conflict(p
             create_custom_product(db.session.get(Dataset, guest_id), name="別商品",
                                   price_yen=500, request_key=key)
         assert RegisterProduct.query.filter_by(dataset_id=guest_id, template_key=None).count() == 1
+
+
+def test_guest_seed_and_cutover_share_transaction(pg_app):
+    from models import RegisterCutover
+    app, guest_id = pg_app
+    with app.app_context():
+        owner = db.session.get(Dataset, guest_id)
+        day = datetime.date.today()
+        db.session.add(RegisterCutover(dataset_id=guest_id, first_register_date=day))
+        assert ensure_standard_products(owner, commit=False) > 0
+        db.session.rollback()
+        assert db.session.get(RegisterCutover, guest_id) is None
+        assert RegisterProduct.query.filter_by(dataset_id=guest_id).count() == 0
+        db.session.add(RegisterCutover(dataset_id=guest_id, first_register_date=day))
+        ensure_standard_products(owner, commit=False)
+        db.session.commit()
+        assert db.session.get(RegisterCutover, guest_id).first_register_date == day
+        assert ensure_standard_products(owner) == 0

@@ -321,7 +321,7 @@
     <div class="app-sidebar-session">
         {% if current_user.is_authenticated %}
         <span class="app-sidebar-user-label">
-            利用中：{% if current_user.is_guest %}ゲストデモ{% else %}管理者{% endif %}
+            利用中：{% if current_user.is_guest %}ゲストデモ{% if config.REGISTER_V32_GUEST_ENABLED %}（架空データ専用）{% endif %}{% else %}管理者{% endif %}
         </span>
         <form method="POST" action="{{ url_for('logout') }}" id="app-logout-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

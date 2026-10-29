@@ -56,6 +56,7 @@ from production_prep import create_production_prep_blueprint
 from waste_records import create_waste_blueprint
 from prompts import build_sales_prompt
 from sales_period_summary import PERIOD_OFFSETS, sales_period_summary, period_bounds
+from guest_register import guest_register_enabled
 from legacy_sales_cutover import LegacySalesClosed, assert_legacy_sales_writable, legacy_sales_closed
 from register_sales_aggregation import (
     SalesAggregationConsistencyError, SalesCutoverIntegrityError,
@@ -126,6 +127,7 @@ app.config["WEATHER_API_KEY"] = config.WEATHER_API_KEY
 app.config["WEATHER_LOCATION_NAME"] = config.WEATHER_LOCATION_NAME
 app.config["WEATHER_JMA_AREA_CODE"] = config.WEATHER_JMA_AREA_CODE
 app.config["PUOPPO_INTEGRATION_ENABLED"] = config.PUOPPO_INTEGRATION_ENABLED
+app.config["REGISTER_V32_GUEST_ENABLED"] = config.REGISTER_V32_GUEST_ENABLED
 app.config["REGISTER_V3_PREVIEW_ENABLED"] = config.REGISTER_V3_PREVIEW_ENABLED
 app.config["REGISTER_V3_SAVE_ENABLED"] = config.REGISTER_V3_SAVE_ENABLED
 app.config["REGISTER_V3_AGGREGATION_ENABLED"] = config.REGISTER_V3_AGGREGATION_ENABLED
@@ -645,6 +647,10 @@ def register_navigation_state():
         owner = require_current_dataset()
         row = db.session.get(RegisterCutover, owner.id)
         active = row is not None and business_today() >= row.first_register_date
+    if guest_register_enabled():
+        owner = require_current_dataset()
+        row = db.session.get(RegisterCutover, owner.id)
+        active = row is not None and business_today() >= row.first_register_date
     return {"register_nav_active": active}
 
 
@@ -1111,9 +1117,16 @@ def start_guest_session():
                 absolute_expires_at=now + GUEST_ABSOLUTE_LIFETIME,
             )
             db.session.add(guest_dataset)
+            if app.config.get("REGISTER_V32_GUEST_ENABLED"):
+                # 新規Guestだけを原子的に初期化。既存Guestの売上や切替日は変えない。
+                from register_products import ensure_standard_products
+                db.session.flush()
+                db.session.add(RegisterCutover(
+                    dataset_id=guest_dataset.id, first_register_date=business_today()))
+                ensure_standard_products(guest_dataset, commit=False)
 
         db.session.commit()
-    except SQLAlchemyError:
+    except (SQLAlchemyError, ValueError, OSError):
         db.session.rollback()
         logger.exception(
             "Failed to enforce Guest capacity or create a Guest Dataset."
@@ -1949,7 +1962,7 @@ def product_catalog():
     """今月の登録商品と、過去月の最新履歴をDataset内で表示する。"""
     current_dataset = require_current_dataset()
     from register_product_routes import _preview_enabled, render_product_list
-    if current_user.is_admin and _preview_enabled():
+    if (current_user.is_admin and _preview_enabled()) or guest_register_enabled(current_dataset):
         return render_product_list(current_dataset)
     today = business_today()
     products = (
@@ -2030,6 +2043,11 @@ def _dashboard_period_label(target_year, target_month):
 
 
 def _unified_sales_enabled():
+    # 保存停止後も、既に切り替えたGuestの売上を旧集計へ戻さない。
+    if current_user and current_user.is_authenticated and current_user.is_guest:
+        owner = require_current_dataset()
+        if db.session.get(RegisterCutover, owner.id) is not None:
+            return True
     return bool(app.config.get("REGISTER_V3_AGGREGATION_ENABLED")) and bool(
         app.config.get("TESTING") or app.config.get("LOCAL_DEVELOPMENT")
         or app.config.get("REGISTER_V3_PRODUCTION_ENABLED")

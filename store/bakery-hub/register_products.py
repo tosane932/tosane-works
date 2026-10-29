@@ -114,11 +114,14 @@ def _standard_rows(static_folder):
     return rows
 
 
-def ensure_standard_products(dataset):
+def ensure_standard_products(dataset, *, commit=True):
     """不足する標準品だけを一括追加。既存の価格・名称・画像・状態には触れない。"""
     try:
         rows = _standard_rows(current_app.static_folder)
         owner = _lock_dataset(dataset)
+        if owner.kind == "guest":
+            rows = [row for row in rows if product_images.PRODUCT_IMAGE_OPTIONS[
+                row["template_key"]].get("guest_allowed") is True]
         before = ({item.id for item in RegisterProduct.query.filter_by(dataset_id=owner.id).all()}
                   if owner.kind == "admin" else set())
         values = [dict(row, dataset_id=owner.id) for row in rows]
@@ -142,7 +145,10 @@ def ensure_standard_products(dataset):
                     db.session.add(RegisterPriceHistory(
                         dataset_id=owner.id, register_product_id=item.id,
                         event="created", new_price_yen=item.price_yen))
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         return count
     except Exception:
         db.session.rollback()
@@ -174,7 +180,7 @@ def _attributes(*, bread_kind, product_class, image_key, photo_webp, is_guest, v
     if validate_image_key and image_key is not None and (type(image_key) is not str or image_key not in
             register_image_choices(current_app.static_folder, is_guest=is_guest, include_urls=False)):
         raise ValueError("利用できる承認済み画像を選択してください。")
-    if photo_webp is not None and (is_guest or type(photo_webp) is not bytes
+    if photo_webp is not None and ((is_guest and not current_app.config.get("REGISTER_V32_GUEST_ENABLED")) or type(photo_webp) is not bytes
             or not 1 <= len(photo_webp) <= 512000 or image_key is not None):
         raise ValueError("写真の指定が不正です。")
     return dict(bread_kind=bread_kind, product_class=product_class,

@@ -7,7 +7,7 @@
 <body class="app-shell-page">{% include "_app_navigation.html" %}
 <main class="container register-product-page">
 <h1>商品一覧</h1>
-<p>写真・価格・分類・販売状態をここで管理します。登録した商品は翌年も同じIDで使えます。</p>
+<p>写真・価格・分類・販売状態をここで管理します。{% if current_user.is_guest %}体験用データは利用期限後に削除されます。{% else %}登録した商品は翌年も同じIDで使えます。{% endif %}</p>
 {% if write_enabled %}<a class="product-primary-action" href="{{ url_for('register_products.create') }}">＋ 新しい商品を登録</a>
 {% else %}<p role="status" class="register-product-note">この環境では商品を変更できません。</p>{% endif %}
 {% set notices = {'created': '商品を登録しました。', 'updated': '商品を更新しました。', 'copied': '確認した旧商品を登録しました。', 'image': '写真の選択を保存しました。'} %}

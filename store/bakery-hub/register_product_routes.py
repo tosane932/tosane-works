@@ -9,6 +9,7 @@ from flask_login import current_user
 from itsdangerous import BadSignature, URLSafeSerializer
 from sqlalchemy.exc import SQLAlchemyError
 
+from guest_register import guest_register_enabled
 from models import Product, RegisterProduct, db
 from register_images import register_image_choices, product_image_url
 from product_rules import BREAD_KINDS, PRODUCT_CLASSES, MAX_PRODUCT_PRICE_YEN
@@ -21,13 +22,13 @@ from register_products import (
 
 
 def _preview_enabled():
-    return bool(current_app.config.get("REGISTER_V3_PRODUCTS_PREVIEW_ENABLED")) and bool(
+    return guest_register_enabled() or bool(current_app.config.get("REGISTER_V3_PRODUCTS_PREVIEW_ENABLED")) and bool(
         current_app.config.get("TESTING") or current_app.config.get("LOCAL_DEVELOPMENT")
         or current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED"))
 
 
 def _write_enabled():
-    return _preview_enabled() and bool(current_app.config.get("REGISTER_V3_PRODUCTS_WRITE_ENABLED"))
+    return guest_register_enabled() or _preview_enabled() and bool(current_app.config.get("REGISTER_V3_PRODUCTS_WRITE_ENABLED"))
 
 
 def _signature(action, owner_id, product):
@@ -90,7 +91,7 @@ def _revision_original(owner_id, product_id, token):
 def _form_context(owner, product=None):
     choices = register_image_choices(current_app.static_folder, is_guest=owner.kind == "guest")
     return dict(choices=choices, bread_kinds=BREAD_KINDS, product_classes=PRODUCT_CLASSES,
-                max_price=MAX_PRODUCT_PRICE_YEN, can_upload=owner.kind == "admin",
+                max_price=MAX_PRODUCT_PRICE_YEN, can_upload=owner.kind == "admin" or guest_register_enabled(owner),
                 photo_url=product_image_url(product, choices) if product else None)
 
 
@@ -103,7 +104,7 @@ def _photo(owner):
         upload = camera
     if upload is None or not upload.filename:
         return None
-    if owner.kind != "admin":
+    if owner.kind != "admin" and not guest_register_enabled(owner):
         abort(403)
     return validate_image(upload)[1]
 
@@ -135,7 +136,7 @@ def create_register_product_blueprint(*, access_required, resolve_dataset):
                         current_app.config.get("REGISTER_V3_PREVIEW_ENABLED"))
         if not _preview_enabled() and not photo_access:
             abort(404)
-        if current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED") and (
+        if not guest_register_enabled() and current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED") and (
                 not current_user.is_authenticated or not current_user.is_admin):
             abort(403)
         if request.method == "POST" and not _write_enabled():
@@ -172,7 +173,7 @@ def create_register_product_blueprint(*, access_required, resolve_dataset):
     def photo(product_id):
         owner = resolve_dataset()
         product = RegisterProduct.query.filter_by(id=product_id, dataset_id=owner.id).one_or_none()
-        if product is None or not product.photo_webp or owner.kind != "admin":
+        if product is None or not product.photo_webp or (owner.kind != "admin" and not guest_register_enabled(owner)):
             abort(404)
         digest = hashlib.sha256(product.photo_webp).hexdigest()
         if request.args.get("v") != digest:
