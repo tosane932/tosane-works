@@ -32,7 +32,7 @@ def test_postgresql_waste_migration_and_dataset_boundaries():
         with app.app_context():
             upgrade(directory=str(MIGRATIONS), revision="head")
             assert "waste_records" in inspect(db.engine).get_table_names()
-            assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "c8d3e7f1a204"
+            assert db.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "d7a9c2e4f601"
 
         with engine.begin() as connection:
             admin = connection.execute(text("SELECT id FROM datasets WHERE system_key='admin'")).scalar_one()

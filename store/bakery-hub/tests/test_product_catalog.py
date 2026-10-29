@@ -29,6 +29,8 @@ def _client_for(flask_app, dataset):
     with client.session_transaction() as session:
         session["_fresh"] = True
         if dataset.kind == "admin":
+            from conftest import establish_test_admin_session
+            establish_test_admin_session(session)
             session["_user_id"] = "admin"
             session[app_module.ADMIN_AUTH_FINGERPRINT_SESSION_KEY] = (
                 app_module._get_admin_auth_fingerprint(

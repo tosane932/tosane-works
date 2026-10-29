@@ -136,8 +136,9 @@ def test_home_today_sales_distinguishes_missing_zero_and_other_dataset(
 
 
 def test_puoppo_handoff_is_admin_only_and_get_has_no_ai_side_effect(
-    authenticated_client, admin_dataset, flask_app,
+    authenticated_client, admin_dataset, flask_app, monkeypatch,
 ):
+    monkeypatch.setattr(app_module, "get_news", lambda limit=15: [])
     flask_app.config["PUOPPO_INTEGRATION_ENABLED"] = True
     try:
         document = BeautifulSoup(authenticated_client.get("/bakery-news").get_data(as_text=True), "html.parser")

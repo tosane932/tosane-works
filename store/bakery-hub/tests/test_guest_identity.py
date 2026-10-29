@@ -360,6 +360,8 @@ def test_guest_id_is_not_restored_as_admin(flask_app):
 
 def test_admin_id_is_not_restored_as_guest(flask_app):
     with flask_app.test_request_context("/"):
+        from conftest import establish_test_admin_session
+        establish_test_admin_session(app_module.session)
         app_module.session[
             app_module.ADMIN_AUTH_FINGERPRINT_SESSION_KEY
         ] = app_module._get_admin_auth_fingerprint(

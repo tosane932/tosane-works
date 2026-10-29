@@ -18,6 +18,16 @@ import app as app_module
 from models import Dataset, db
 
 
+def establish_test_admin_session(session_data):
+    """Create the real server-side record for tests that build an Admin context."""
+    from admin_sessions import ADMIN_SESSION_TOKEN_KEY, issue_admin_session
+    session_data[ADMIN_SESSION_TOKEN_KEY] = issue_admin_session()
+    db.session.commit()
+    session_data[app_module.ADMIN_AUTH_FINGERPRINT_SESSION_KEY] = (
+        app_module._get_admin_auth_fingerprint(app_module.app.config["ADMIN_PASSWORD_HASH"])
+    )
+
+
 class _CSRFTokenParser(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -51,6 +61,7 @@ def flask_app():
         SECRET_KEY=TEST_SECRET_KEY,
         ADMIN_USERNAME=TEST_ADMIN_USERNAME,
         ADMIN_PASSWORD_HASH=TEST_ADMIN_PASSWORD_HASH,
+        ADMIN_SESSION_MAX_AGE_SECONDS=12 * 60 * 60,
         ADMIN_LOGIN_RATE_LIMIT_MAX_FAILURES=5,
         ADMIN_LOGIN_RATE_LIMIT_WINDOW_SECONDS=15 * 60,
         GUEST_CREATION_RATE_LIMIT_MAX_ATTEMPTS=100,

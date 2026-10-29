@@ -11,6 +11,22 @@ def utc_now():
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+class AdminAuthSession(db.Model):
+    """Independent, revocable Admin logins; no plaintext bearer token is stored."""
+    __tablename__ = "admin_auth_sessions"
+    __table_args__ = (
+        db.CheckConstraint("length(token_hash) = 64", name="ck_admin_auth_session_hash"),
+        db.CheckConstraint("expires_at > issued_at", name="ck_admin_auth_session_expiry"),
+        db.CheckConstraint("revoked_at IS NULL OR revoked_at >= issued_at",
+                           name="ck_admin_auth_session_revocation"),
+        db.Index("ix_admin_auth_sessions_expiry", "expires_at"),
+    )
+    token_hash = db.Column(db.String(64), primary_key=True)
+    issued_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+
 class Dataset(db.Model):
     """管理者またはGuestごとに分離されたデータ領域を表すテーブル。"""
     __tablename__ = "datasets"

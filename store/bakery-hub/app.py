@@ -72,6 +72,8 @@ from current_weather import current_weather
 from bakery_news import get_news
 from forecast_history import save_forecast, stored_forecasts
 from product_images import available_product_images, available_product_image_assets
+from admin_sessions import (ADMIN_SESSION_TOKEN_KEY, active_admin_session,
+                            issue_admin_session, revoke_admin_session)
 from register_routes import LOCAL_SCOPE_SESSION_KEY, REGISTER_BODY_LIMIT, create_register_blueprint
 from register_readiness_routes import create_register_readiness_blueprint
 from register_recovery_routes import create_register_recovery_blueprint
@@ -115,6 +117,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = config.SQLALCHEMY_TRACK_MODIFICAT
 app.config["SECRET_KEY"] = config.SECRET_KEY
 app.config["ADMIN_USERNAME"] = config.ADMIN_USERNAME
 app.config["ADMIN_PASSWORD_HASH"] = config.ADMIN_PASSWORD_HASH
+app.config["ADMIN_SESSION_MAX_AGE_SECONDS"] = config.ADMIN_SESSION_MAX_AGE_SECONDS
 app.config["LOCAL_DEVELOPMENT"] = config.LOCAL_DEVELOPMENT
 app.config["WEATHER_LATITUDE"] = config.WEATHER_LATITUDE
 app.config["WEATHER_LONGITUDE"] = config.WEATHER_LONGITUDE
@@ -448,6 +451,14 @@ def load_user(user_id):
             return None
         if not hmac.compare_digest(current_fingerprint, session_fingerprint):
             return None
+
+        try:
+            if not active_admin_session(session.get(ADMIN_SESSION_TOKEN_KEY)):
+                return None
+        except SQLAlchemyError:
+            db.session.rollback()
+            logger.error("Admin session verification unavailable.")
+            abort(503)
 
         return AdminUser()
 
@@ -1392,7 +1403,18 @@ def login():
                 and username == configured_username
                 and password_matches
             ):
+                try:
+                    token = issue_admin_session(
+                        session.get(ADMIN_SESSION_TOKEN_KEY)
+                        if session.get("_user_id") == AdminUser.id else None
+                    )
+                    db.session.commit()
+                except (SQLAlchemyError, ValueError):
+                    db.session.rollback()
+                    logger.error("Admin login session could not be saved.")
+                    abort(503)
                 login_user(AdminUser())
+                session[ADMIN_SESSION_TOKEN_KEY] = token
                 session.pop(LOCAL_SCOPE_SESSION_KEY, None)
                 session[ADMIN_AUTH_FINGERPRINT_SESSION_KEY] = (
                     _get_admin_auth_fingerprint(configured_password_hash)
@@ -1419,17 +1441,21 @@ def login():
 @login_required
 def logout():
     """現在のAdminまたはGuestの認証Sessionだけを終了する。"""
-    if current_user.is_admin and app.config.get("REGISTER_V3_OFFLINE_MODE_ENABLED"):
-        from register_offline_service import revoke_offline
+    if current_user.is_admin:
         try:
-            revoke_offline(require_current_dataset())
+            if app.config.get("REGISTER_V3_OFFLINE_MODE_ENABLED"):
+                from register_offline_service import revoke_offline
+                revoke_offline(require_current_dataset(), commit=False)
+            revoke_admin_session(session.get(ADMIN_SESSION_TOKEN_KEY))
+            db.session.commit()
         except SQLAlchemyError:
             db.session.rollback()
-            app.logger.exception("Could not revoke offline permits on logout")
+            app.logger.error("Admin logout could not be saved.")
             abort(503)
     logout_user()
     session.pop(LOCAL_SCOPE_SESSION_KEY, None)
     session.pop(ADMIN_AUTH_FINGERPRINT_SESSION_KEY, None)
+    session.pop(ADMIN_SESSION_TOKEN_KEY, None)
     return redirect(url_for("login"))
 
 

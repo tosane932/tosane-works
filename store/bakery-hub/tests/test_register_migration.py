@@ -17,7 +17,7 @@ from models import db
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 OLD_HEAD = "e2a7c4d9b105"
 NEW_HEAD = "b6d2e9f4a107"
-CURRENT_HEAD = "c8d3e7f1a204"
+CURRENT_HEAD = "d7a9c2e4f601"
 TABLES = {"register_products", "register_cutovers", "register_transactions",
           "register_transaction_lines", "register_prep_links",
           "register_price_history", "register_cutover_approvals",

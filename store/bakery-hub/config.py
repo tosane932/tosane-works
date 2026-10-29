@@ -65,6 +65,7 @@ GEMINI_MODEL = "gemini-3.8-flash"
 SECRET_KEY = os.environ.get("SECRET_KEY")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH")
+ADMIN_SESSION_MAX_AGE_SECONDS = 12 * 60 * 60
 
 # HTTPを使うLocal Development ModeだけSecure属性を無効化する。
 # 未設定・誤値を含む通常環境では必ずTrueへ倒す。

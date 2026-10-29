@@ -1150,6 +1150,8 @@ def test_today_sales_preserves_dataset_boundary(
     monkeypatch.setattr(app_module, "business_today", lambda: datetime.date(2026, 8, 1))
     client = flask_app.test_client()
     with client.session_transaction() as session:
+        from conftest import establish_test_admin_session
+        establish_test_admin_session(session)
         session["_user_id"] = "admin"
         session["_fresh"] = True
         session[app_module.ADMIN_AUTH_FINGERPRINT_SESSION_KEY] = app_module._get_admin_auth_fingerprint(flask_app.config["ADMIN_PASSWORD_HASH"])

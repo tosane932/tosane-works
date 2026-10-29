@@ -39,6 +39,8 @@ def _login_restored_user(user_id):
 
 
 def _login_valid_admin(flask_app):
+    from conftest import establish_test_admin_session
+    establish_test_admin_session(app_module.session)
     app_module.session[
         app_module.ADMIN_AUTH_FINGERPRINT_SESSION_KEY
     ] = app_module._get_admin_auth_fingerprint(
