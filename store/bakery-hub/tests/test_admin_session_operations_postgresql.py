@@ -122,6 +122,8 @@ class Workers:
         return BeautifulSoup(response.text, "html.parser").select_one('input[name="csrf_token"]')["value"]
 
     def login(self, client):
+        # Simulate the existing trusted-proxy ingress contract on loopback only.
+        client.headers["CF-Connecting-IP"] = "127.0.0.1"
         response = client.post(self.base + "/login", data={
             "username": self.env["ADMIN_USERNAME"], "password": self.password,
             "csrf_token": self.csrf(client, "/login"),
