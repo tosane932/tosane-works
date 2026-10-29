@@ -255,7 +255,7 @@
             <dt>Database</dt>
             <dd><code>PrepRecipe</code>は月次Productと独立したレシピです。標準・承認済みテンプレートは安定した商品キー、自由入力の月次商品はProduct IDを元の識別子とし、商品名一致で統合しません。<code>PrepIngredient</code>はレシピの材料と単位・Decimal量、<code>PrepPlan</code>はJST対象日・レシピID・予定個数を保存します。Datasetを含む複合外部キーと一意制約で別Datasetへの関連付けと二重登録を拒否します。レシピは翌月も再利用できます。過去日の必要量は現在のレシピで再試算し、過去の製造実績を表しません。</dd>
             <dt>実製造・廃棄</dt>
-            <dd><code>waste_records.py</code>はAdminだけがJSTの営業日と継続商品IDまたは旧月次商品IDを選んで実製造数・実廃棄数・メモを保存・修正します。<code>WasteRecord</code>はDataset、営業日、どちらか一方の商品ID、保存時の商品名を持ちます。実製造数か廃棄数の一方だけでも記録でき、数量のNULLは未入力、0は確認済みの0個です。同じ日の同じ商品は一件のみで、商品とDatasetを複合外部キーで照合します。廃棄数が実製造数を超える場合は入力内容の確認を促しますが、自動修正しません。仕込み予定、販売、商品マスタは書き換えず、廃棄数を自動算出しません。CSRF付きPOSTで検証後commitし、DB失敗時はrollbackします。</dd>
+            <dd><code>waste_records.py</code>はAdminだけがJSTの営業日と継続商品IDまたは旧月次商品IDを選んで実製造数・実廃棄数・メモを保存・修正します。<code>WasteRecord</code>はDataset、営業日、どちらか一方の商品ID、保存時の商品名を持ちます。実製造数か廃棄数の一方だけでも記録でき、数量のNULLは未入力、0は確認済みの0個です。同じ日の同じ商品は一件のみで、商品とDatasetを複合外部キーで照合します。両方入力して廃棄数が実製造数を超える場合は明示的な確認なしでは保存せず、同じ内容の修正ではDBへ書き込みません。保存済み記録は折りたたんで表示し、保存結果を該当商品付近に示します。仕込み予定、販売、商品マスタは書き換えず、廃棄数を自動算出しません。CSRF付きPOSTで検証後commitし、DB失敗時はrollbackします。</dd>
             <dt>DB構造と公開</dt>
             <dd>migration <code>c8d3e7f1a204</code>は親revision <code>b6d2e9f4a107</code>の後に<code>waste_records</code>表と商品参照用の制約を追加します。<code>startup_guard.py</code>は起動前にAlembicのheadとDBのrevision、必要な表・列を読み取り専用で照合し、不一致なら起動を拒否します。PRのマージやテスト成功だけでは本番DBは更新されません。migrationの適用は通常起動と分けた承認済み保守作業です。</dd>
             <dt>Frontend</dt>

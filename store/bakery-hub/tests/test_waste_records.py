@@ -97,12 +97,21 @@ def test_invalid_input_does_not_create_or_partially_edit(authenticated_client, a
                 made_quantity="", discarded_quantity="").status_code == 400
     assert save(authenticated_client, csrf_post, key, note="x" * 501).status_code == 400
     assert WasteRecord.query.count() == 0
-    assert save(authenticated_client, csrf_post, key,
-                made_quantity="0", discarded_quantity="1", note="前日持ち越し").status_code == 303
-    assert WasteRecord.query.one().discarded_quantity == 1  # More than today's production is allowed.
+    rejected = save(authenticated_client, csrf_post, key,
+                    made_quantity="0", discarded_quantity="1", note="前日持ち越し")
+    assert rejected.status_code == 400
+    assert "確認" in rejected.get_data(as_text=True)
+    assert WasteRecord.query.count() == 0
+    assert save(authenticated_client, csrf_post, key, made_quantity="0",
+                discarded_quantity="1", note="前日持ち越し",
+                overage_confirm="confirmed").status_code == 303
+    assert WasteRecord.query.one().discarded_quantity == 1  # Confirmed carryover is allowed.
     assert save(authenticated_client, csrf_post, key,
                 made_quantity="25", discarded_quantity="bad").status_code == 400
     assert WasteRecord.query.one().made_quantity == 0
+    assert save(authenticated_client, csrf_post, key, made_quantity="0",
+                discarded_quantity="2", overage_confirm="on").status_code == 400
+    assert WasteRecord.query.one().discarded_quantity == 1
     assert save(authenticated_client, csrf_post, key, note="<script>alert(1)</script>").status_code == 303
     html = authenticated_client.get(PATH + "?date=" + DAY).get_data(as_text=True)
     assert "&lt;script&gt;" in html and "<script>alert(1)</script>" not in html
@@ -158,6 +167,7 @@ def test_db_failure_rolls_back_and_reports_unsaved(authenticated_client, admin_d
     assert "保存できませんでした" in html
     assert 'name="made_quantity" min="0" max="100000" step="1" value="99"' in html
     assert 'data-save-state aria-live="polite">保存できませんでした' in html
+    assert f'id="waste-record-{WasteRecord.query.one().id}" open' in html
     assert WasteRecord.query.one().made_quantity == 50
 
 
@@ -176,6 +186,29 @@ def test_new_record_failure_keeps_unsaved_input(authenticated_client, admin_data
     assert 'name="discarded_quantity" min="0" max="100000" step="1" value="0"' in html
     assert "持ち越し" in html
     assert WasteRecord.query.count() == 0
+
+
+def test_unchanged_edit_does_not_commit_and_targeted_notice(authenticated_client, admin_dataset,
+                                                              csrf_post, monkeypatch):
+    register, _ = add_products(admin_dataset)
+    key = f"register:{register.id}"
+    response = save(authenticated_client, csrf_post, key)
+    assert response.status_code == 303
+    record = WasteRecord.query.one()
+    record_id, updated_at = record.id, record.updated_at
+    page = authenticated_client.get(response.headers["Location"])
+    assert f'id="waste-record-{record_id}"' in page.get_data(as_text=True)
+    assert "保存しました" in page.get_data(as_text=True)
+
+    def forbidden_commit():
+        pytest.fail("Unchanged edit must not commit")
+    monkeypatch.setattr(db.session, "commit", forbidden_commit)
+    response = save(authenticated_client, csrf_post, key)
+    assert response.status_code == 303
+    assert response.headers["Location"].endswith(f"#waste-record-{record_id}")
+    page = authenticated_client.get(response.headers["Location"])
+    assert "変更はありません" in page.get_data(as_text=True)
+    assert WasteRecord.query.one().updated_at == updated_at
 
 
 def test_database_constraints_keep_dataset_and_unique_boundary(flask_app, admin_dataset):

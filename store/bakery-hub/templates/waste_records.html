@@ -12,7 +12,7 @@
   <header class="prep-header">
     <a href="{{ url_for('production_prep.index', date=day.isoformat()) }}" class="waste-back">← 仕込み管理へ戻る</a>
     <h1>製造実績・廃棄ロス</h1>
-    <p class="prep-hint">実際に完成した数と、実際に廃棄した数を記録します。予定数や販売数から自動計算しません。</p>
+    <p class="prep-hint">実際に完成・廃棄した数を記録します。予定数や販売数とは別です。</p>
     <form method="get" action="{{ url_for('.index') }}" class="waste-date-form">
       <label for="waste-date">営業日（日本時間）</label>
       <input id="waste-date" type="date" name="date" value="{{ day.isoformat() }}" required>
@@ -41,8 +41,11 @@
         <label>実製造数 <span class="waste-optional">未入力可</span><input type="number" inputmode="numeric" name="made_quantity" min="0" max="{{ max_quantity }}" step="1" value="{{ new_draft.made_quantity or '' }}" placeholder="未入力"></label>
         <label>廃棄数 <span class="waste-optional">未入力可</span><input type="number" inputmode="numeric" name="discarded_quantity" min="0" max="{{ max_quantity }}" step="1" value="{{ new_draft.discarded_quantity or '' }}" placeholder="未入力"></label>
       </div>
-      <p class="prep-hint">空欄は未入力、0は確認して0個です。少なくとも一方を入力してください。</p>
-      <p class="waste-caution" data-waste-caution hidden>廃棄数が当日の実製造数を超えています。前日からの持ち越しなど、入力内容を確認してください。</p>
+      <p class="prep-hint">空欄は未入力、0は確認済みの0個。少なくとも一方を入力してください。</p>
+      <div class="waste-caution" data-waste-caution {% if not (error and new_draft.product_key and overage) %}hidden{% endif %}>
+        <p>廃棄数が実製造数を超えています。前日からの持ち越しなどを確認してください。</p>
+        <label><input type="checkbox" name="overage_confirm" value="confirmed"> 理由を確認し、この数で保存する</label>
+      </div>
       <label>メモ（任意）<textarea name="note" maxlength="500" rows="2" placeholder="例：前日から持ち越した商品を廃棄">{{ new_draft.note or '' }}</textarea></label>
       <div class="waste-actions"><span class="waste-state" data-save-state aria-live="polite">{% if error and new_draft.product_key %}保存できませんでした{% else %}未入力{% endif %}</span><button class="prep-primary" type="submit">この商品を保存</button></div>
     </form>
@@ -54,10 +57,17 @@
     {% if records %}<div class="waste-list">
       {% for record in records %}{% set key = ('register:' ~ record.register_product_id) if record.register_product_id else ('legacy:' ~ record.legacy_product_id) %}
       {% set editing = draft.product_key == key %}
-      <article class="waste-card">
-        <h3>{{ record.product_label }}</h3>
-        <p class="prep-hint">{{ day.isoformat() }}の記録 · 保存後はこの欄にDBの値を表示します。</p>
-        <form class="waste-edit-form" method="post" action="{{ url_for('.save') }}" data-waste-form>
+      <details class="waste-card waste-saved" id="waste-record-{{ record.id }}" {% if error and editing %}open{% endif %}>
+        <summary class="waste-summary">
+          <strong>{{ record.product_label }}</strong>
+          <span>実製造 {{ record.made_quantity ~ '個' if record.made_quantity is not none else '未入力' }} · 廃棄 {{ record.discarded_quantity ~ '個' if record.discarded_quantity is not none else '未入力' }}</span>
+          <span class="waste-open-label">修正する</span>
+          {% if result and result.id == record.id %}<span class="waste-record-result" role="status">{{ result.message }}</span>{% endif %}
+        </summary>
+        <form class="waste-edit-form" method="post" action="{{ url_for('.save') }}" data-waste-form data-waste-edit
+              data-saved-made="{{ record.made_quantity if record.made_quantity is not none else '' }}"
+              data-saved-discarded="{{ record.discarded_quantity if record.discarded_quantity is not none else '' }}"
+              data-saved-note="{{ record.note }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="business_date" value="{{ day.isoformat() }}">
           <input type="hidden" name="product_key" value="{{ key }}">
@@ -65,11 +75,14 @@
             <label>実製造数 <span class="waste-optional">未入力可</span><input type="number" inputmode="numeric" name="made_quantity" min="0" max="{{ max_quantity }}" step="1" value="{{ draft.made_quantity if editing else (record.made_quantity if record.made_quantity is not none else '') }}" placeholder="未入力"></label>
             <label>廃棄数 <span class="waste-optional">未入力可</span><input type="number" inputmode="numeric" name="discarded_quantity" min="0" max="{{ max_quantity }}" step="1" value="{{ draft.discarded_quantity if editing else (record.discarded_quantity if record.discarded_quantity is not none else '') }}" placeholder="未入力"></label>
           </div>
-          <p class="waste-caution" data-waste-caution hidden>廃棄数が当日の実製造数を超えています。前日からの持ち越しなど、入力内容を確認してください。</p>
+          <div class="waste-caution" data-waste-caution {% if not (error and editing and overage) %}hidden{% endif %}>
+            <p>廃棄数が実製造数を超えています。前日からの持ち越しなどを確認してください。</p>
+            <label><input type="checkbox" name="overage_confirm" value="confirmed"> 理由を確認し、この数で保存する</label>
+          </div>
           <label>メモ（任意）<textarea name="note" maxlength="500" rows="2">{{ draft.note if editing else record.note }}</textarea></label>
           <div class="waste-actions"><span class="waste-state" data-save-state aria-live="polite">{% if error and editing %}保存できませんでした{% else %}保存済み{% endif %}</span><button class="prep-primary" type="submit">この記録を修正</button></div>
         </form>
-      </article>
+      </details>
       {% endfor %}
     </div>{% else %}<p>この日の記録はまだありません。</p>{% endif %}
   </section>

@@ -25,27 +25,53 @@ for (const width of [390, 1280]) {
         await form.locator('[name=made_quantity]').fill('0');
         await form.locator('[name=discarded_quantity]').fill('3');
         await expect(form.locator('[data-save-state]')).toHaveText('未保存の変更があります');
+        await expect(form.locator('[data-waste-caution]')).toBeVisible();
+        await form.getByRole('button', {name:'この商品を保存'}).click();
+        await expect(form.locator('[data-save-state]')).toContainText('確認欄');
+        await form.locator('[name=overage_confirm]').check();
         await form.getByRole('button', {name:'この商品を保存'}).click();
         await expect(page.locator('.waste-list .waste-card')).toHaveCount(1);
         const edit = page.locator('.waste-list .waste-card').first();
+        await expect(edit.locator('summary')).toContainText('実製造 0個 · 廃棄 3個');
+        await expect(edit.locator('[role=status]')).toContainText('保存しました');
+        await edit.locator('summary').click();
         await expect(edit.locator('[name=made_quantity]')).toHaveValue('0');
         await expect(edit.locator('[name=discarded_quantity]')).toHaveValue('3');
         await page.reload();
+        await edit.locator('summary').click();
         await expect(page.locator('.waste-list [name=made_quantity]')).toHaveValue('0');
+        await edit.getByRole('button', {name:'この記録を修正'}).click();
+        await expect(edit.locator('[data-save-state]')).toHaveText('変更はありません');
         await edit.locator('[name=made_quantity]').fill('50');
         await edit.getByRole('button', {name:'この記録を修正'}).click();
         await expect(page.locator('.waste-list .waste-card')).toHaveCount(1);
+        await expect(edit.locator('summary')).toContainText('実製造 50個 · 廃棄 3個');
+        await expect(edit.locator('[role=status]')).toContainText('保存しました');
+        await expect(page).toHaveURL(/#waste-record-\d+$/);
+        await edit.locator('summary').click();
         await expect(page.locator('.waste-list [name=made_quantity]')).toHaveValue('50');
         await expect(page.locator('.waste-list [name=discarded_quantity]')).toHaveValue('3');
         await page.reload();
+        await edit.locator('summary').click();
         await expect(page.locator('.waste-list [name=made_quantity]')).toHaveValue('50');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         const inputs = await page.locator('.waste-list .waste-fields input').evaluateAll(nodes =>
             nodes.map(node => ({right:node.getBoundingClientRect().right, width:node.getBoundingClientRect().width})));
         expect(inputs.every(input => input.width >= 100 && input.right <= width)).toBe(true);
+        const entryInputs = await form.locator('.waste-fields input').evaluateAll(nodes =>
+            nodes.map(node => node.getBoundingClientRect().top));
+        expect(entryInputs[0]).toBe(entryInputs[1]);
         const screenshots = path.join(__dirname, '..', 'test-results', 'waste-screenshots');
         fs.mkdirSync(screenshots, {recursive:true});
         await page.screenshot({path:path.join(screenshots, `waste-${width}.png`), fullPage:true});
+
+        await edit.locator('[name=made_quantity]').fill('1');
+        await edit.locator('[name=discarded_quantity]').fill('5');
+        await edit.locator('form').evaluate(node => node.submit()); // Bypass JS: server must reject.
+        await expect(page.getByRole('alert')).toContainText('確認欄');
+        await expect(edit).toHaveAttribute('open', '');
+        await expect(edit.locator('[name=made_quantity]')).toHaveValue('1');
+        await expect(edit.locator('summary')).toContainText('実製造 50個 · 廃棄 3個');
     });
 }
 
