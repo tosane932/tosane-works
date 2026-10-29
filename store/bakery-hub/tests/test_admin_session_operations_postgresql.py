@@ -42,7 +42,7 @@ def bound_app(url):
     app = Flask("phase5-synthetic")
     app.config.update(SQLALCHEMY_DATABASE_URI=url, SQLALCHEMY_TRACK_MODIFICATIONS=False,
                       SQLALCHEMY_ENGINE_OPTIONS={"hide_parameters": True},
-                      ADMIN_SESSION_MAX_AGE_SECONDS=43200)
+                      ADMIN_SESSION_MAX_AGE_SECONDS=43200, SECRET_KEY=secrets.token_urlsafe(32))
     db.init_app(app)
     Migrate(app, db, directory=MIGRATIONS)
     with app.app_context():
