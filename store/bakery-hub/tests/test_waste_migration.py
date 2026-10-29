@@ -24,7 +24,7 @@ def test_waste_upgrade_and_downgrade_preserve_older_data(tmp_path):
         before = set(inspect(db.engine).get_table_names())
         upgrade(directory=str(MIGRATIONS_DIR), revision="head")
         inspector = inspect(db.engine)
-        assert set(inspector.get_table_names()) - before == {"waste_records"}
+        assert set(inspector.get_table_names()) - before == {"waste_records", "admin_auth_sessions"}
         assert any(item["name"] == "uq_products_id_dataset_waste"
                    for item in inspector.get_unique_constraints("products"))
         assert db.session.execute(text("SELECT quantity FROM daily_sales")).scalar_one() == 7

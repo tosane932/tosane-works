@@ -146,7 +146,12 @@ admin_deleted_id = int(os.environ["TEST_ADMIN_MEMO_ID"])
 result_path = Path(os.environ["TEST_RESULT_PATH"])
 
 client = app_module.app.test_client()
+from admin_sessions import ADMIN_SESSION_TOKEN_KEY, issue_admin_session
+with app_module.app.app_context():
+    admin_token = issue_admin_session()
+    app_module.db.session.commit()
 with client.session_transaction() as session_data:
+    session_data[ADMIN_SESSION_TOKEN_KEY] = admin_token
     session_data["_user_id"] = f"guest:{guest_a_id}"
     session_data["_fresh"] = True
 
@@ -248,10 +253,16 @@ restore_id = int(os.environ["TEST_RESTORE_MEMO_ID"])
 delete_id = int(os.environ["TEST_DELETE_MEMO_ID"])
 result_path = Path(os.environ["TEST_RESULT_PATH"])
 
+with app_module.app.app_context():
+    from admin_sessions import issue_admin_session
+    admin_token = issue_admin_session()
+    app_module.db.session.commit()
+
 client = app_module.app.test_client()
 with client.session_transaction() as session_data:
     session_data["_user_id"] = "admin"
     session_data["_fresh"] = True
+    session_data[app_module.ADMIN_SESSION_TOKEN_KEY] = admin_token
     session_data[app_module.ADMIN_AUTH_FINGERPRINT_SESSION_KEY] = (
         app_module._get_admin_auth_fingerprint(
             app_module.app.config["ADMIN_PASSWORD_HASH"]

@@ -83,7 +83,8 @@ jobs:
 
   postgres-integration:
     if: github.event_name != 'pull_request' || (github.head_ref != 'ops/v3-production-db-backup-readiness' && github.head_ref != 'ops/v3-g580-encrypted-db-backup' && github.head_ref != 'ops/v3-phase3c-restore-verification')
-    runs-on: ubuntu-latest
+    # PostgreSQL 16 client packages are available on the matching LTS runner.
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
@@ -121,6 +122,9 @@ jobs:
       - name: PostgreSQL migrationを検証
         run: |
           pytest tests/test_migrations_postgresql.py tests/test_register_postgresql.py tests/test_register_products_postgresql.py tests/test_register_service_postgresql.py tests/test_register_sales_aggregation_postgresql.py tests/test_register_cutover_postgresql.py tests/test_unified_products_postgresql.py -v
+
+      - name: Adminセッション失効と実COMMIT障害のHTTP回帰を検証
+        run: pytest tests/test_admin_session_migration.py tests/test_admin_session_postgresql.py -v
 
       - name: 商品設定CSVを別の空PostgreSQLへ復元して照合
         run: pytest tests/test_data_vault_postgresql.py -v

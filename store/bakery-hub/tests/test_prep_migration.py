@@ -32,6 +32,7 @@ def test_prep_upgrade_downgrade_preserves_existing_tables(tmp_path):
                 "register_recovery_cases", "register_recovery_lines", "register_recovery_events",
                 "register_offline_permits",
             "waste_records",
+            "admin_auth_sessions",
         }
         assert after - before == added_tables
         assert db.session.execute(text("SELECT name FROM products WHERE name='従来の商品'")).scalar() == "従来の商品"

@@ -75,14 +75,17 @@ def prepare_offline(dataset, device_id, *, next_day=False):
         raise
 
 
-def revoke_offline(dataset):
+def revoke_offline(dataset, *, commit=True):
     """Online logout or lost-device response. Existing receipts remain intact."""
     try:
         owner = _lock_dataset(dataset)
         now = utc_now()
         for grant in RegisterOfflinePermit.query.filter_by(dataset_id=owner.id, revoked_at=None):
             grant.revoked_at = now
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
     except Exception:
         db.session.rollback()
         raise

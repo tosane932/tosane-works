@@ -238,6 +238,7 @@ test('オフライン会計はIndexedDBへ保存して次へ進み、復旧後�
     await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
     assert.equal(ui.calls.filter(call => call.method !== 'GET').length, 1);
     assert.equal(ui.calls.filter(call => call.method === 'GET').length, 1);
+    await until(() => ui.elements['sync-state'].textContent === '✓ サーバー保存済み 1件 / 未同期 0件');
     assert.equal(ui.elements['sync-state'].textContent, '✓ サーバー保存済み 1件 / 未同期 0件');
     assert.equal(ui.calls[0].submission_key,
         [...ui.database.stores.get('queue').values()][0].receipt.submission_key);
@@ -358,6 +359,7 @@ test('HTML応答は保存成功と判断せず、端末の記録を残す', asyn
     ui.elements['complete-checkout'].fire('click');
     await until(() => [...ui.database.stores.get('queue').values()][0]?.status === 'auth_required');
     assert.equal(ui.database.stores.get('queue').size, 1);
+    await until(() => /認証の確認が必要/.test(ui.elements['sync-state'].textContent));
     assert.match(ui.elements['sync-state'].textContent, /認証の確認が必要/);
 });
 
@@ -418,6 +420,7 @@ test('価格競合は差額を表示し、送信キーとローカル会計を�
     const record = [...ui.database.stores.get('queue').values()][0];
     assert.equal(record.status, 'needs_review');
     assert.equal(record.receipt.displayed_prices[0][1], 120);
+    await until(() => /150円/.test(ui.elements['recovery-list'].textContent));
     assert.match(ui.elements['recovery-list'].textContent, /150円/);
     assert.match(ui.elements['recovery-list'].textContent, /会計差 30円/);
     ui.events.online();
@@ -436,6 +439,7 @@ test('Guest期限切れは通信障害と区別して再送停止し、別スコ
     ui.elements['received-yen'].fire('input');
     ui.elements['complete-checkout'].fire('click');
     await until(() => [...db.stores.get('queue').values()][0]?.status === 'guest_expired');
+    await until(() => /利用期限が終了/.test(ui.elements['sync-state'].textContent));
     assert.match(ui.elements['sync-state'].textContent, /利用期限が終了/);
     ui.events.online();
     await new Promise(resolve => setTimeout(resolve, 15));
