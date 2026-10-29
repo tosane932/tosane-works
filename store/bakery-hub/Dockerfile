@@ -30,4 +30,4 @@ ENV PATH=/root/.local/bin:$PATH
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "python startup_guard.py && exec gunicorn --bind 0.0.0.0:${PORT:-5000} app:app"]
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-5000} maintenance_app:app"]
