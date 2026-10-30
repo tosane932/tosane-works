@@ -154,7 +154,8 @@ dialog h2{font-size:1.2rem;margin:0 0 12px}
 .checkout-help{margin:6px 0 0;font-size:.72rem}
 .register-tools{margin:16px 0;padding:10px 12px;border:1px solid #d6c9b8;border-radius:8px;background:#fff}
 .register-tools summary{cursor:pointer;min-height:30px;font-weight:700}.register-tools[open] summary{margin-bottom:12px}
-#checkout-result:empty{display:none}
+#checkout-result[hidden],#guest-sales-analysis-link[hidden]{display:none}
+#guest-sales-analysis-link{display:inline-flex;align-items:center;min-height:44px;margin-left:8px;font-weight:700;color:#255c4c;text-decoration:underline}
 @media(min-width:851px){
  .register-shell{padding:12px 14px 24px}.catalog{padding:12px}
  .register-header{margin-bottom:8px}.sync-state{margin-top:0;margin-bottom:0}

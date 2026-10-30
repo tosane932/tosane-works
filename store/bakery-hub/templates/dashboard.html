@@ -742,7 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 通信中の状態をユーザーに明示
         setAiAdviceStatus('loading');
-        aiText.textContent = "AIアシスタントが売上データを分析中...（15秒ほどかかる場合があります）";
+        aiText.textContent = "売上データを読み込んでいます...";
 
         // バックエンドの非同期データ取得APIエンドポイントへリクエストを送信
         fetch(`/api/dashboard-data?year=${year}&month=${month}`)

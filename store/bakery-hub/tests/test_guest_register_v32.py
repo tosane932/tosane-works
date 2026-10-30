@@ -182,3 +182,138 @@ def test_guest_status_expiry_and_limit(flask_app, monkeypatch):
     db.session.commit()
     assert checkout(ca, p, token).status_code == 403
     assert RegisterTransaction.query.filter_by(dataset_id=a.id).count() == 1
+
+
+def test_guest_period_sales_refund_and_dataset_isolation(flask_app):
+    """Guestの販売・返金を全期間で集計し、別Guestへ混入させない。"""
+    flask_app.config["REGISTER_V32_GUEST_ENABLED"] = True
+    owner_a, client_a = start(flask_app)
+    owner_b, client_b = start(flask_app)
+
+    token, config, page = token_and_product(preview(client_a))
+    assert config["guestExperience"] is True
+    link = page.select_one("#guest-sales-analysis-link")
+    assert link is not None
+    assert link["href"] == "/dashboard"
+    assert link.has_attr("hidden")
+
+    product = RegisterProduct.query.filter(
+        RegisterProduct.dataset_id == owner_a.id,
+        RegisterProduct.price_yen > 0
+    ).first()
+    assert product is not None
+    price = product.price_yen
+
+    sale = checkout(
+        client_a, product, token,
+        items=[[product.id, 2]], received_yen=100000
+    )
+    assert sale.status_code == 200
+
+    refund = checkout(
+        client_a, product, token,
+        kind="refund", items=[[product.id, -1]],
+        received_yen=None, refund_confirmed=True
+    )
+    assert refund.status_code == 200
+
+    for period in ("day", "week", "month", "year"):
+        g.pop("_login_user", None)
+        response = client_a.get(
+            f"/api/sales-period-summary?period={period}&offset=0"
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total_sales"] == price
+        assert data["transaction_count"] == 2
+        assert data["sale_count"] == 1
+        assert data["refund_count"] == 1
+        assert len(data["rankings"]) == 1
+        assert data["rankings"][0]["quantity"] == 1
+        assert data["rankings"][0]["revenue"] == price
+
+        g.pop("_login_user", None)
+        other = client_b.get(
+            f"/api/sales-period-summary?period={period}&offset=0"
+        )
+        assert other.status_code == 200
+        assert other.get_json()["total_sales"] == 0
+
+    assert RegisterTransaction.query.filter_by(
+        dataset_id=owner_a.id
+    ).count() == 2
+    assert RegisterTransaction.query.filter_by(
+        dataset_id=owner_b.id
+    ).count() == 0
+
+
+def test_guest_register_ai_prompt_uses_own_net_sales(flask_app, monkeypatch):
+    """Guestレジの販売・返金をAI入力へ渡し、他Guestを除外する。"""
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from conftest import post_ai
+
+    flask_app.config["REGISTER_V32_GUEST_ENABLED"] = True
+    a, ca = start(flask_app)
+    b, cb = start(flask_app)
+
+    pa = RegisterProduct(
+        dataset_id=a.id, name="GuestA専用クロワッサン", price_yen=180
+    )
+    pb = RegisterProduct(
+        dataset_id=b.id, name="GuestB専用メロンパン", price_yen=270
+    )
+    db.session.add_all([pa, pb])
+    db.session.commit()
+
+    token_a, _, _ = token_and_product(preview(ca))
+    token_b, _, _ = token_and_product(preview(cb))
+
+    assert checkout(
+        ca, pa, token_a, items=[[pa.id, 2]], received_yen=1000
+    ).status_code == 200
+
+    assert checkout(
+        ca, pa, token_a, kind="refund",
+        items=[[pa.id, -1]], received_yen=None,
+        refund_confirmed=True
+    ).status_code == 200
+
+    assert checkout(
+        cb, pb, token_b, received_yen=500
+    ).status_code == 200
+
+    generate = Mock(
+        return_value=SimpleNamespace(text="架空のAIアドバイス")
+    )
+    fake = SimpleNamespace(
+        models=SimpleNamespace(generate_content=generate)
+    )
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-key")
+    monkeypatch.setattr(
+        app_module.genai, "Client", lambda **kwargs: fake
+    )
+
+    today = app_module.business_today()
+    path = f"/api/ai-advice?year={today.year}&month={today.month}"
+
+    g.pop("_login_user", None)
+    ra = post_ai(ca, path)
+    assert ra.status_code == 200
+    assert ra.json["ai_advice"] == "架空のAIアドバイス"
+    prompt_a = generate.call_args.kwargs["contents"]
+    assert "GuestA専用クロワッサン" in prompt_a
+    assert "差引1個、差引180円" in prompt_a
+    assert "GuestB専用メロンパン" not in prompt_a
+
+    g.pop("_login_user", None)
+    rb = post_ai(cb, path)
+    assert rb.status_code == 200
+    prompt_b = generate.call_args.kwargs["contents"]
+    assert "GuestB専用メロンパン" in prompt_b
+    assert "GuestA専用クロワッサン" not in prompt_b
+
+    db.session.expire_all()
+    assert db.session.get(Dataset, a.id).guest_ai_usage_count == 1
+    assert db.session.get(Dataset, b.id).guest_ai_usage_count == 1
+    assert generate.call_count == 2

@@ -31,7 +31,7 @@
         <p id="register-layout-notice" class="layout-notice" role="status" hidden>表示領域が狭いため、上下にスクロールして操作できます。</p>
         <p id="recovery-list" class="recovery-list" role="status" aria-live="polite" hidden></p>
         <p id="register-message" class="register-message" role="alert" hidden></p>
-        {% if not demo|default(false) %}<p id="checkout-result" role="status" aria-live="polite"></p>{% endif %}
+        {% if not demo|default(false) %}<p id="checkout-result" role="status" aria-live="polite" hidden><span id="checkout-result-text"></span>{% if guest_experience|default(false) %} <a id="guest-sales-analysis-link" href="{{ url_for('dashboard') }}" hidden>売上分析を見る</a>{% endif %}</p>{% endif %}
         {% if offline_shell|default(false) %}<form id="offline-unlock" class="register-status-check"><h2>端末内レジを開く</h2><label>端末用PIN <input id="offline-pin" type="password" autocomplete="off" minlength="8" required></label><button type="submit">確認して開く</button></form><p id="offline-unlock-state" role="status"></p>{% endif %}
         <div class="register-layout">
             <section class="catalog" aria-labelledby="catalog-title">
@@ -106,7 +106,7 @@
     {% elif offline_shell|default(false) %}
     <script id="register-config" type="application/json">{"offlineShell":true}</script>
     {% else %}
-    <script id="register-config" type="application/json">{{ {"products": products, "scope": local_scope, "saveEnabled": save_enabled, "postUrl": url_for('register.create_transaction'), "statusBase": url_for('register.create_transaction'), "offlineSyncUrl": url_for('register.offline_sync') if offline_enabled else none, "offlineMode": offline_enabled, "offlinePrepareUrl": offline_prepare_url|default(none), "recoveryUrl": url_for('register_recovery.preserve') if recovery_enabled else none, "catalogProof": catalog_proof|default(none), "catalogFetchedAt": catalog_fetched_at|default(none)} | tojson }}</script>
+    <script id="register-config" type="application/json">{{ {"products": products, "scope": local_scope, "guestExperience": guest_experience|default(false), "saveEnabled": save_enabled, "postUrl": url_for('register.create_transaction'), "statusBase": url_for('register.create_transaction'), "offlineSyncUrl": url_for('register.offline_sync') if offline_enabled else none, "offlineMode": offline_enabled, "offlinePrepareUrl": offline_prepare_url|default(none), "recoveryUrl": url_for('register_recovery.preserve') if recovery_enabled else none, "catalogProof": catalog_proof|default(none), "catalogFetchedAt": catalog_fetched_at|default(none)} | tojson }}</script>
     {% endif %}
 </body>
 </html>
