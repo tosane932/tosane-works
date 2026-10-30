@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import app  # noqa: E402  (database URL must precede app import)
 import app as app_module  # noqa: E402
 from flask import abort, jsonify, request  # noqa: E402
-from models import (Dataset, RegisterCutover, RegisterProduct, RegisterTransaction,
+from models import (AdminAuthSession, Dataset, RegisterCutover, RegisterProduct, RegisterTransaction,
                     RegisterTransactionLine, db)  # noqa: E402
 from register_products import update_register_product  # noqa: E402
 import register_catalog_proof  # noqa: E402
@@ -135,6 +135,17 @@ def e2e_reset_scenario():
         update_register_product(owner, product.id, name=product.name, price_yen=120,
                                 expected_name=product.name, expected_price_yen=product.price_yen)
     return jsonify(day=test_now().astimezone(ZoneInfo("Asia/Tokyo")).date().isoformat())
+
+
+@app.get("/__e2e/expire-admin-sessions")
+def e2e_expire_admin_sessions():
+    """Controlled expiry in the throwaway E2E SQLite DB only; never a production route."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for row in AdminAuthSession.query.filter_by(revoked_at=None):
+        row.issued_at = now - datetime.timedelta(hours=13)
+        row.expires_at = now - datetime.timedelta(hours=1)
+    db.session.commit()
+    return jsonify(expired=True)
 
 
 @app.get("/__e2e/pager-catalog")

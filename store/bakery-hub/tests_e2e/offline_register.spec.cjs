@@ -1,5 +1,5 @@
 const { enterCash, openTools } = require('./register_helpers.cjs');
-const { test, expect, chromium, devices } = require('playwright/test');
+const { test, expect, chromium, devices, request: requestFactory } = require('playwright/test');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -296,4 +296,81 @@ test('Chromium: Adminログアウト後はキャッシュ済みシェルからPI
         await expect(page.locator('#product-grid .product-tile')).toHaveCount(0);
         expect(await records(page)).toHaveLength(0);
     } finally { await context.close(); }
+});
+
+test('Phase5: 12時間期限後も元会計2件を保持し再ログイン後だけ同じキーで同期', async ({ browser, request }) => {
+    const context = await browser.newContext();
+    let oldIdentity;
+    try {
+        const page = await context.newPage();
+        await login(page);
+        oldIdentity = await requestFactory.newContext({ storageState: await context.storageState() });
+        await prepare(page);
+        await context.setOffline(true);
+        await sale(page);
+        await sale(page, true);
+        const before = await records(page);
+        expect(before).toHaveLength(2);
+        const receipts = before.map(item => item.receipt);
+        const keys = receipts.map(item => item.submission_key);
+        expect((await control(request, 'expire-admin-sessions')).ok()).toBe(true);
+        await context.setOffline(false);
+        await page.evaluate(() => window.dispatchEvent(new Event('online')));
+        await expect(page.locator('#offline-unlock-state')).toContainText('再ログイン');
+        expect((await oldIdentity.get(`${base}/api/dashboard-data`, { maxRedirects: 0 })).status()).toBe(302);
+        expect((await records(page)).map(item => item.receipt)).toEqual(receipts);
+        expect((await records(page)).every(item => item.status !== 'synced')).toBe(true);
+        const remoteBefore = await (await control(request, 'state')).json();
+        expect(remoteBefore.filter(item => keys.includes(item.key))).toHaveLength(0);
+        const loginTab = await context.newPage();
+        await login(loginTab);
+        await loginTab.close();
+        expect((await oldIdentity.get(`${base}/api/dashboard-data`, { maxRedirects: 0 })).status()).toBe(302);
+        await page.reload();
+        await unlock(page);
+        await expect.poll(async () => (await records(page)).filter(item => item.status === 'synced').length,
+                          { timeout: 30000 }).toBe(2);
+        expect((await records(page)).map(item => item.receipt)).toEqual(receipts);
+        await page.evaluate(() => window.dispatchEvent(new Event('online')));
+        const saved = await (await control(request, 'state')).json();
+        for (const key of keys) { expect(saved.filter(item => item.key === key)).toHaveLength(1); }
+    } finally {
+        if (oldIdentity) { await oldIdentity.dispose(); }
+        await context.close();
+    }
+});
+
+test('Phase5: 他端末logout後の未同期会計は新許可で書き換えず要確認として保持', async ({ browser, request }) => {
+    const a = await browser.newContext();
+    const b = await browser.newContext();
+    try {
+        const pageA = await a.newPage();
+        const pageB = await b.newPage();
+        await login(pageA);
+        await login(pageB);
+        await prepare(pageB);
+        await b.setOffline(true);
+        await sale(pageB);
+        const before = await records(pageB);
+        const original = before[0];
+        await pageA.goto(`${base}/home`);
+        await pageA.locator('#app-logout-form').evaluate(form => form.requestSubmit());
+        await expect(pageA).toHaveURL(/\/login/);
+        await b.setOffline(false);
+        await pageB.evaluate(() => window.dispatchEvent(new Event('online')));
+        await expect(pageB.locator('#offline-unlock-state')).toContainText('端末許可');
+        expect((await pageB.request.get(`${base}/api/dashboard-data`, { maxRedirects: 0 })).status()).toBe(200);
+        expect((await records(pageB))[0].receipt).toEqual(original.receipt);
+        expect((await records(pageB))[0].grantToken).toBe(original.grantToken);
+        // A fresh permit authorizes future receipts, not rewriting an old receipt's authority.
+        await prepare(pageB);
+        await expect.poll(async () => (await records(pageB))[0].status,
+                          { timeout: 30000 }).toBe('needs_review');
+        const retained = (await records(pageB))[0];
+        expect(retained.receipt).toEqual(original.receipt);
+        expect(retained.grantToken).toBe(original.grantToken);
+        expect(retained.reason).toBe('offline_review');
+        const saved = await (await control(request, 'state')).json();
+        expect(saved.filter(item => item.key === original.receipt.submission_key)).toHaveLength(0);
+    } finally { await a.close(); await b.close(); }
 });
