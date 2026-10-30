@@ -7,6 +7,7 @@ for (const width of [390, 1280]) {
     const headers = {'X-E2E-Control': auth.control};
     await request.post('/__e2e/guest-register?enabled=1&staff=1', {headers});
     const other = await browser.newContext();
+    let second;
     try {
       await page.setViewportSize({width, height:800});
       await page.goto('/login');
@@ -21,7 +22,7 @@ for (const width of [390, 1280]) {
       await page.getByRole('button', {name:'保存する', exact:true}).click();
       await page.goto('/home');
       await expect(page.locator('main')).toContainText(name);
-      const second = await other.newPage();
+      second = await other.newPage();
       await second.goto('http://127.0.0.1:8765/login');
       await second.locator('#guest-demo-start').click();
       await second.goto('http://127.0.0.1:8765/staff-shifts');
@@ -31,6 +32,8 @@ for (const width of [390, 1280]) {
       await page.goto('/home');
       await expect(page.locator('.app-sidebar-link-staff-shifts')).toHaveCount(0);
     } finally {
+      await page.request.post('/__e2e/end-guest', {headers});
+      if (second) await second.request.post('/__e2e/end-guest', {headers});
       await other.close();
       await request.post('/__e2e/guest-register?enabled=0', {headers});
     }
