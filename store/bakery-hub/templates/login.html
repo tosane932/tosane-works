@@ -41,6 +41,11 @@
 
                 <section class="guest-demo-section" aria-labelledby="guest-demo-heading">
                     <h4 id="guest-demo-heading">ゲストデモ</h4>
+                    {% if config.REGISTER_V32_GUEST_ENABLED %}
+                    <p>自分専用の架空のパン屋で、商品管理・レジ・売上分析を体験できます。</p>
+                    <p>実店舗の売上・仕入れ情報、スタッフやお客様の個人情報、パスワードなどは入力しないでください。商品名・価格・写真には架空のデータをご利用ください。</p>
+                    <p>利用は開始から最長2時間、操作がない場合は30分で終了します。期限切れデータは後で削除されます。重要なデータの保管や実店舗の運営には使わないでください。AIの助言は参考情報で、成果を保証しません。</p>
+                    {% endif %}
 
             {% if current_user.is_authenticated and current_user.is_guest %}
             <p class="guest-demo-active-message">

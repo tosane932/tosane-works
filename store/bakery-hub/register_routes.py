@@ -9,6 +9,7 @@ from flask_wtf.csrf import generate_csrf
 from sqlalchemy.exc import SQLAlchemyError
 
 from models import RegisterCutover, RegisterOfflinePermit, RegisterProduct, RegisterTransaction, RegisterTransactionLine, db
+from guest_register import guest_register_enabled
 from register_catalog_proof import issue_catalog_proof
 from register_offline_service import (OfflineReviewRequired, prepare_offline,
                                       save_offline_transaction)
@@ -24,13 +25,15 @@ LOCAL_SCOPE_SESSION_KEY = "register_local_scope"
 
 
 def _production_owner_allowed(owner):
+    if guest_register_enabled(owner):
+        return True
     if not current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED"):
         return True
     return owner.kind == "admin" and current_user.is_authenticated and current_user.is_admin
 
 
 def _production_cutover_ready(owner):
-    if not current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED"):
+    if not guest_register_enabled(owner) and not current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED"):
         return True
     from register_service import TOKYO, utc_now
     cutover = db.session.get(RegisterCutover, owner.id)
@@ -52,7 +55,7 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
     @blueprint.get("/register/preview")
     @access_required
     def preview():
-        if not current_app.config["REGISTER_V3_PREVIEW_ENABLED"]:
+        if not guest_register_enabled() and not current_app.config["REGISTER_V3_PREVIEW_ENABLED"]:
             abort(404)
         owner = resolve_dataset()
         if not _production_owner_allowed(owner):
@@ -60,7 +63,7 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
         if not _production_cutover_ready(owner):
             abort(404)
         try:
-            if owner.kind == "guest":
+            if owner.kind == "guest" and not guest_register_enabled(owner):
                 ensure_standard_products(owner)
             products = (RegisterProduct.query.filter_by(dataset_id=owner.id, is_active=True)
                         .order_by(RegisterProduct.display_order, RegisterProduct.id).all())
@@ -76,14 +79,15 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
                  "image": product_image_url(product, {key: {"url": value} for key, value in image_urls.items()}),
                  "standard": product.template_key is not None}
                 for product in products]
-        save_enabled = bool(current_app.config["REGISTER_V3_SAVE_ENABLED"])
+        save_enabled = guest_register_enabled(owner) or bool(current_app.config["REGISTER_V3_SAVE_ENABLED"])
         offline_enabled = bool(owner.kind == "admin" and save_enabled and
                                current_app.config.get("REGISTER_V3_OFFLINE_MODE_ENABLED"))
         response = current_app.make_response(render_template(
             "register.html", products=rows, save_enabled=save_enabled,
             local_scope=(f"{owner.id}:admin" if owner.kind == "admin" else
                          f"{owner.id}:{session[LOCAL_SCOPE_SESSION_KEY]}"),
-            production=bool(current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED")),
+            guest_experience=guest_register_enabled(owner),
+            production=owner.kind == "admin" and bool(current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED")),
             recovery_enabled=owner.kind == "admin" and bool(
                 current_app.config.get("REGISTER_V3_RECOVERY_ENABLED")),
             offline_enabled=offline_enabled,
@@ -225,7 +229,7 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
     @blueprint.post("/api/register/transactions")
     @access_required
     def create_transaction():
-        if not (current_app.config["REGISTER_V3_PREVIEW_ENABLED"]
+        if not guest_register_enabled() and not (current_app.config["REGISTER_V3_PREVIEW_ENABLED"]
                 and current_app.config["REGISTER_V3_SAVE_ENABLED"]):
             return jsonify(error="レジ会計の保存は現在利用できません。", code="disabled"), 403
         owner = resolve_dataset()
@@ -276,7 +280,7 @@ def create_register_blueprint(*, access_required, admin_required, resolve_datase
     @blueprint.get("/api/register/transactions/<uuid:submission_key>/status")
     @access_required
     def transaction_status(submission_key):
-        if not (current_app.config["REGISTER_V3_PREVIEW_ENABLED"] and
+        if not guest_register_enabled() and not (current_app.config["REGISTER_V3_PREVIEW_ENABLED"] and
                 (current_app.config["REGISTER_V3_SAVE_ENABLED"] or
                  current_app.config.get("REGISTER_V3_PRODUCTION_ENABLED"))):
             return jsonify(error="保存状況の照会は現在利用できません。", code="disabled"), 403

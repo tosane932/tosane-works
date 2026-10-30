@@ -96,10 +96,18 @@ def protect_control():
         abort(404)
 
 
+@app.post("/__e2e/guest-register")
+@app_module.csrf.exempt
+def e2e_guest_register():
+    app.config["REGISTER_V32_GUEST_ENABLED"] = request.args.get("enabled") == "1"
+    return jsonify(enabled=app.config["REGISTER_V32_GUEST_ENABLED"])
+
+
 @app.get("/__e2e/state")
 def e2e_state():
-    rows = RegisterTransaction.query.order_by(RegisterTransaction.completed_at,
-                                               RegisterTransaction.id).all()
+    owner = Dataset.query.filter_by(kind="admin", system_key="admin").one()
+    rows = RegisterTransaction.query.filter_by(dataset_id=owner.id).order_by(
+        RegisterTransaction.completed_at, RegisterTransaction.id).all()
     return jsonify([dict(key=str(row.submission_key), id=str(row.id),
                          day=row.business_date.isoformat(), total=row.total_yen,
                          method=row.save_method,

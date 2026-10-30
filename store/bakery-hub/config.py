@@ -28,6 +28,10 @@ REGISTER_V3_RECOVERY_ENABLED = _environment_flag_is_true(
 REGISTER_V3_OFFLINE_MODE_ENABLED = _environment_flag_is_true(
     os.environ.get("REGISTER_V3_OFFLINE_MODE_ENABLED")
 )
+# Guest体験のみ。Admin本番ゲートとは独立、公開は別途承認して有効化。
+REGISTER_V32_GUEST_ENABLED = _environment_flag_is_true(
+    os.environ.get("REGISTER_V32_GUEST_ENABLED")
+)
 _register_runtime = LOCAL_DEVELOPMENT or REGISTER_V3_PRODUCTION_ENABLED
 
 # 各フラグの単独trueでは無効。ローカル開発または本番用の独立ゲートも要求する。
