@@ -88,9 +88,10 @@ function element(id) {
 
 function harness({ database = new MemoryDB(), scope = 'dataset:login', online = false,
                    fetcher, sessionValues = new Map(), recoveryUrl = null,
-                   catalogProof = null, offlineGrant = null, authReady = false } = {}) {
+                   catalogProof = null, offlineGrant = null, authReady = false,
+                   guestExperience = false } = {}) {
     const ids = ['register-root', 'register-config', 'register-message',
-        'complete-checkout', 'received-yen', 'sync-state', 'recovery-list', 'product-grid',
+        'complete-checkout', 'received-yen', 'sync-state', 'checkout-result', 'checkout-result-text', 'guest-sales-analysis-link', 'recovery-list', 'product-grid',
         'cart-lines', 'checkout-kind', 'total-label', 'total-yen', 'cash-area',
         'jump-checkout', 'checkout-title', 'check-register-status', 'status-check-result',
         'change-yen', 'cash-hint', 'refund-dialog', 'refund-dialog-detail',
@@ -98,13 +99,15 @@ function harness({ database = new MemoryDB(), scope = 'dataset:login', online = 
         'discard-cancel', 'discard-confirm'];
     const elements = Object.fromEntries(ids.map(id => [id, element(id)]));
     elements['register-config'].textContent = JSON.stringify({
-        products, scope, saveEnabled: true, postUrl: '/api/register/transactions',
+        products, scope, guestExperience, saveEnabled: true, postUrl: '/api/register/transactions',
         statusBase: '/api/register/transactions',
         recoveryUrl, catalogProof, offlineGrant,
         offlineSyncUrl: '/api/register/offline/sync', offlineMode: Boolean(offlineGrant),
         approvedDays: [core.tokyoDay(new Date())],
         offlineExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     });
+    elements['guest-sales-analysis-link'].hidden = true;
+    elements['checkout-result'].hidden = true;
     elements['register-back'].href = '/home';
     elements['checkout-title'].scrollIntoView = () => {};
     const quantity = element('quantity');
@@ -508,6 +511,7 @@ test('保存状況照会は同じキーと明細が一致した会計だけ保�
     await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
     assert.equal(ui.database.stores.get('queue').size, 1);
     assert.equal(ui.calls.length, 1);
+    await until(() => /サーバーに保存済み/.test(ui.elements['status-check-result'].textContent));
     assert.match(ui.elements['status-check-result'].textContent, /サーバーに保存済み/);
 });
 
@@ -640,4 +644,29 @@ test('事前許可済みの前日会計を50件、元キーで照合して一部
     assert.deepEqual(result.map(row => row.receipt.submission_key), ids);
     assert.equal(calls.filter(call => call.receipt).length, 50);
     assert.ok(calls.filter(call => call.receipt).every(call => call.grant_token === 'signed-grant'));
+});
+
+test('Guestの売上分析リンクは対象会計のサーバー保存確認後だけ表示する', async () => {
+    const ui = harness({ online: false, guestExperience: true });
+    await until(() => ui.database.stores.has('queue'));
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    await ui.elements['complete-checkout'].fire('click');
+
+    const link = ui.elements['guest-sales-analysis-link'];
+    assert.equal(link.hidden, true);
+
+    ui.navigator.onLine = true;
+    ui.events.online();
+    await until(() => [...ui.database.stores.get('queue').values()][0].status === 'synced');
+    await until(() => link.hidden === false);
+    assert.equal(link.hidden, false);
+
+    ui.navigator.onLine = false;
+    ui.touch();
+    ui.elements['received-yen'].value = '500';
+    ui.elements['received-yen'].fire('input');
+    await ui.elements['complete-checkout'].fire('click');
+    assert.equal(link.hidden, true, '前の会計の成功を新しい会計に流用しない');
 });

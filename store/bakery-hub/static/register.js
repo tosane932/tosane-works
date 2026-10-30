@@ -10,6 +10,9 @@
     const $ = id => document.getElementById(id);
     const message = $("register-message");
     const checkoutButton = $("complete-checkout");
+    const checkoutResult = $("checkout-result");
+    const checkoutResultText = $("checkout-result-text");
+    const guestSalesLink = config.guestExperience ? $("guest-sales-analysis-link") : null;
     const receivedInput = $("received-yen");
     const cashPad = globalThis.RegisterCashPad?.mount(receivedInput);
     const formatter = new Intl.NumberFormat("ja-JP");
@@ -24,6 +27,7 @@
     let draftTimer;
     let draftWrite = Promise.resolve();
     let pendingRefund;
+    let lastCompletedKey = null;
 
     function showError(text) {
         message.textContent = text;
@@ -113,6 +117,15 @@
     async function updateState() {
         if (!database) { return; }
         const records = await scopeRecords();
+        if (guestSalesLink) {
+            const last = records.find(item => item.receipt?.submission_key === lastCompletedKey);
+            const confirmed = Boolean(lastCompletedKey && last?.status === "synced" && last.transactionId);
+            guestSalesLink.hidden = !confirmed;
+            if (confirmed) {
+                checkoutResultText.textContent = "✓ この会計はサーバーに保存され、売上に反映されました。";
+                checkoutResult.hidden = false;
+            }
+        }
         const pending = records.filter(item => item.status === "pending").length;
         const unresolved = records.filter(item => item.status !== "synced").length;
         const synced = records.filter(item => item.status === "synced").length;
@@ -288,7 +301,11 @@
 
     async function complete() {
         if (busy || !database || !config.saveEnabled) { return; }
-        busy = true; render();
+        busy = true;
+        lastCompletedKey = null;
+        if (guestSalesLink) { guestSalesLink.hidden = true; }
+        if (checkoutResult) { checkoutResult.hidden = true; }
+        render();
         try {
             if (["denied", "checking"].includes(globalThis.RegisterOfflineAuth)) {
                 throw Error("認証または端末許可が失効しました。Adminがオンラインで再準備してください。");
@@ -307,11 +324,15 @@
             await checkoutToLocal({ id: `${config.scope}:${key}`, scope: config.scope,
                                     status: "pending", receipt, grantToken: config.offlineGrant || null,
                                     attempts: 0, nextRetryAt: 0 });
+            lastCompletedKey = receipt.submission_key;
             cart = core.createCart(products);
             receivedInput.value = "";
             key = uuid();
             clearError();
-            if ($("checkout-result")) { $("checkout-result").textContent = "✓ 会計完了・端末に記録済み。サーバーへの反映待ちです。"; }
+            if (checkoutResult && checkoutResultText) {
+                checkoutResultText.textContent = "✓ 会計完了・端末に記録済み。サーバーへの反映待ちです。";
+                checkoutResult.hidden = false;
+            }
             await updateState();
             kickSync();
         } catch (error) {
