@@ -2473,3 +2473,5 @@ python app.py
 ### Phase 4 Guestスタッフ（開発中）
 
 `GUEST_STAFF_ENABLED` は既定OFF。v3.2 Guestレジの有効な体験に限りスタッフ・シフトとホーム出勤予定を共通画面で利用します。仕込み・廃棄は今回まだGuest非公開です。公開は別承認です。
+
+Guestスタッフの追加検証では正規Guest開始からAdmin共通CRUD契約、Admin/Guest ID越境、期限切れHTTP拒否を確認します。PostgreSQL cleanup試験には全主体のStaff/Shiftを含め、ロック競合・rollback後の保持も照合します。

@@ -283,7 +283,7 @@
             <dd>{{ source_links(['app.py', 'models.py', 'product_images.py', 'product_catalog/admin_products.json', 'catalog_repository.py', 'templates/index.html', 'tests/test_admin_product_catalog.py', 'tests/test_catalog_repository.py', 'tests/test_products.py']) }}</dd>
         {% endcall %}
 
-        <p>Phase 4のスタッフ体験は既定OFFの独立ゲートで制御します。認証主体のDatasetでスタッフとシフトを照合し、期限切れ削除ではシフトをスタッフより先に削除します。画面のリンク表示とサーバーの認可は同じ条件を使用します。</p>
+        <p>Phase 4のスタッフ体験は既定OFFの独立ゲートで制御します。認証主体のDatasetでスタッフとシフトを照合し、期限切れ削除ではシフトをスタッフより先に削除します。pytestではGuestの期限切れHTTP拒否とAdmin/Guest越境を確認し、隔離PostgreSQLではロック競合とrollback後のスタッフ・シフト保持も検証します。画面のリンク表示とサーバーの認可は同じ条件を使用します。</p>
         <p>v3.2のGuestレジは専用フラグ（既定OFF）で公開します。新規Guest開始時に公開可能な標準商品と切替日を同じDBトランザクションで保存し、失敗時はまとめて取り消します。共通の商品編集・写真登録・会計保存を利用し、認証主体のDatasetだけを読み書きします。UUIDによる再送照合、商品30件の独自枠、会計1,000件の上限、期限とCSRF保護を維持します。切替日以降の旧日次入力はPOSTでも拒否し、ダッシュボードは共通の排他集計を利用します。Adminの本番認可とオフライン端末許可は開放しません。</p>
         <p>v3.2 Phase 3では、Guestの会計完了後に<code>register.js</code>が端末内の直前の会計キーと同期結果を照合し、サーバー保存を確認した場合だけ「売上分析を見る」を表示します。端末への記録だけでは売上確定と案内しません。ダッシュボードは既存のDataset別の期間集計を使い、販売・返金を差し引きます。AIは別のPOST操作で対象年月の売上を利用し、Guest共通の利用回数制限を維持します。JavaScript・pytest・Chromium E2Eで境界を検証します。</p>
         {% call feature('product-catalog', '商品一覧・共通商品マスタ', 'Adminの商品管理フラグ有効時は写真・価格・分類・販売状態を一か所で管理し、レジが同じ商品を読み込みます。Guest専用フラグ有効時も同じ画面を使い、無効な環境では月次Catalogを維持します。', 'GET /products・GET/POST /register/products/new・POST /register/products/&lt;id&gt;/status') %}
