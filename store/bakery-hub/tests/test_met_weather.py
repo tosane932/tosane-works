@@ -2,6 +2,10 @@
 import datetime
 import gzip
 import json
+import sys
+from types import SimpleNamespace
+
+import pytest
 from urllib.error import HTTPError, URLError
 from zoneinfo import ZoneInfo
 
@@ -10,6 +14,26 @@ from test_store_operations import guest_client
 
 JST = ZoneInfo("Asia/Tokyo")
 UTC = datetime.timezone.utc
+
+
+@pytest.fixture(autouse=True, params=["12:00", "23:55", "00:05"])
+def weather_clock(monkeypatch, request):
+    """予報と判定だけを同じ時計に固定し、認証・DBの時計には触れない。"""
+    instant = datetime.datetime.fromisoformat(f"2026-10-30T{request.param}:00+09:00")
+    real_datetime = datetime.datetime
+
+    class Clock(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return instant.astimezone(tz) if tz is not None else instant.astimezone().replace(tzinfo=None)
+
+    module = SimpleNamespace(**{name: getattr(datetime, name) for name in dir(datetime)})
+    module.datetime = Clock
+    monkeypatch.setattr(weather, "datetime", module)
+    monkeypatch.setattr(sys.modules[__name__], "datetime", module)
+    weather._cache.clear()
+    yield instant
+    weather._cache.clear()
 
 
 def settings(**overrides):
@@ -24,7 +48,8 @@ def settings(**overrides):
 
 def payload(*, symbol="partlycloudy_day", target=None, issued=None):
     now = datetime.datetime.now(UTC)
-    target = target or now + datetime.timedelta(minutes=15)
+    # 正常系は当日の予報。未来の別営業日は専用テストで明示する。
+    target = target or now
     issued = issued or now - datetime.timedelta(hours=1)
     return {
         "properties": {"meta": {"updated_at": issued.isoformat().replace("+00:00", "Z")}, "timeseries": [{
@@ -182,3 +207,16 @@ def test_weekly_forecast_reuses_request_and_cache_isolation(monkeypatch):
     cached = weather.current_weather(settings())
     assert cached['forecast_days'][0]['temperature_max'] != 999
     assert len(calls) == 1
+
+
+def test_met_next_jst_day_is_rejected(monkeypatch, weather_clock):
+    """23:55の15分後は翌日なので本体の当日保護を維持する。"""
+    target = (weather_clock + datetime.timedelta(days=1)).replace(hour=0, minute=10)
+    monkeypatch.setattr(weather, "urlopen", lambda *a, **k: Response(payload(target=target)))
+    result = weather.current_weather(settings())
+    assert result == {"available": False, "reason": weather.UNAVAILABLE}
+
+
+def test_met_default_payload_stays_on_current_jst_day(weather_clock):
+    target = datetime.datetime.fromisoformat(payload()["properties"]["timeseries"][0]["time"])
+    assert target.astimezone(JST).date() == weather_clock.date()
