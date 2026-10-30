@@ -8,6 +8,7 @@ for (const viewport of [{ width: 390, height: 800 }, { width: 1280, height: 800 
     test(`Guest: 初期商品→会計保存→自身の売上 ${viewport.width}`, async ({ page, request, browser }) => {
         const control = { 'X-E2E-Control': auth().control };
         expect((await request.post('/__e2e/guest-register?enabled=1', { headers: control })).ok()).toBe(true);
+        const adminBefore = await (await request.get('/__e2e/state', { headers: control })).json();
         const other = await browser.newContext();
         try {
             await page.setViewportSize(viewport);
@@ -25,6 +26,7 @@ for (const viewport of [{ width: 390, height: 800 }, { width: 1280, height: 800 
             await enterCash(page, '100000');
             await page.locator('#complete-checkout').click();
             await expect.poll(async () => (await page.request.get('/api/dashboard-data')).json().then(d => d.today_sales)).toBe(config.products[0].price);
+            expect(await (await request.get('/__e2e/state', { headers: control })).json()).toEqual(adminBefore);
             const second = await other.newPage();
             await second.goto('http://127.0.0.1:8765/login');
             await second.locator('#guest-demo-start').click();
