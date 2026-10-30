@@ -17,6 +17,8 @@ from models import (
     Product,
     ShopMemo,
     ShopTask,
+    ShopStaff,
+    ShopShift,
     db,
 )
 from postgresql_test_utils import get_isolated_postgresql_test_url
@@ -278,6 +280,13 @@ def _seed_cleanup_scenario(engine, cleanup_time):
                 ),
             ],
         )
+        for dataset_id in (expired_guest_id, active_guest_id, admin_id):
+            staff_id = connection.execute(ShopStaff.__table__.insert().values(
+                dataset_id=dataset_id, display_name='架空cleanup担当', role='production'
+            ).returning(ShopStaff.id)).scalar_one()
+            connection.execute(ShopShift.__table__.insert().values(
+                dataset_id=dataset_id, staff_id=staff_id,
+                business_date=cleanup_time.date(), status='all_day'))
         product_ids = connection.execute(
             Product.__table__.insert().returning(
                 Product.id,
@@ -423,6 +432,12 @@ def _assert_preserved_dataset_counts(engine, expected):
             for dataset_id in expected
         }
     assert actual == expected
+    with engine.connect() as connection:
+        for dataset_id, counts in expected.items():
+            for table in (ShopStaff.__table__, ShopShift.__table__):
+                assert len(connection.execute(
+                    table.select().where(table.c.dataset_id == dataset_id)
+                ).fetchall()) == counts[0]
 
 
 def test_activity_committed_before_cleanup_lock_preserves_guest_data(tmp_path):

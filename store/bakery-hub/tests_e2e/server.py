@@ -100,7 +100,24 @@ def protect_control():
 @app_module.csrf.exempt
 def e2e_guest_register():
     app.config["REGISTER_V32_GUEST_ENABLED"] = request.args.get("enabled") == "1"
+    app.config["GUEST_STAFF_ENABLED"] = request.args.get("staff") == "1"
     return jsonify(enabled=app.config["REGISTER_V32_GUEST_ENABLED"])
+
+
+@app.post("/__e2e/end-guest")
+@app_module.csrf.exempt
+def e2e_end_guest():
+    from flask_login import current_user
+    if not current_user.is_authenticated or not current_user.is_guest:
+        abort(403)
+    owner = app_module.require_current_dataset()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    owner.created_at = now - datetime.timedelta(hours=3)
+    owner.absolute_expires_at = now - datetime.timedelta(seconds=1)
+    db.session.commit()
+    deleted = app_module._cleanup_expired_guest_datasets(now=now)
+    db.session.commit()
+    return jsonify(deleted=deleted)
 
 
 @app.get("/__e2e/state")
