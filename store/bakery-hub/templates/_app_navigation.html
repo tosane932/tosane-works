@@ -235,7 +235,7 @@
             <a href="{{ url_for('shop_memos.list_memos') }}">店舗メモ</a>
             <a href="{{ url_for('shop_tasks.list_tasks') }}">タスク管理</a>
         </div>
-        {% if current_user.is_authenticated and current_user.is_admin %}
+        {% if current_user.is_authenticated and (current_user.is_admin or guest_staff_active) %}
         <a
             href="{{ url_for('shop_staff_shifts.index') }}"
             data-page="staff-shifts"
@@ -251,6 +251,8 @@
             </span>
             <span>スタッフ・シフト管理</span>
         </a>
+        {% endif %}
+        {% if current_user.is_authenticated and current_user.is_admin %}
         <a href="{{ url_for('production_prep.index') }}" data-page="prep"
             class="app-sidebar-link app-sidebar-link-prep touch-control-no-select{% if active_app_page == 'prep' %} app-sidebar-link-current{% endif %}"
             {% if active_app_page == 'prep' %}aria-current="page"{% endif %}>

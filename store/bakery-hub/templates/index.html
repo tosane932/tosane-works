@@ -326,7 +326,7 @@
             <span>この内容で今月のメニューを登録する</span>
         </button>
     </form>
-    {% if current_user.is_admin %}
+    {% if current_user.is_admin or guest_staff_active %}
     <section class="admin-catalog-section" aria-labelledby="admin-catalog-heading">
         <h2 id="admin-catalog-heading">商品カタログへ追加</h2>
         <p>テンプレートの申請を作成します。レビュー後のデプロイで選択できるようになります。今月の商品には自動登録されません。</p>
