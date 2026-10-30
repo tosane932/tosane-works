@@ -1,4 +1,4 @@
-"""Admin-only staff directory and planned shifts. No attendance is recorded here."""
+"""Dataset-scoped staff directory and planned shifts. No attendance is recorded here."""
 import calendar
 import datetime
 import logging
@@ -9,6 +9,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from models import ShopShift, ShopStaff, db
+from guest_register import guest_staff_enabled
 from shop_schedules import JST, as_jst, parse_day
 
 logger = logging.getLogger(__name__)
@@ -26,9 +27,10 @@ MAX_SHIFT = datetime.timedelta(hours=12)
 
 
 def planned_work_for_day(dataset, day):
-    """Phase 3用。認可済みAdmin DatasetのJST業務日だけを取得する。"""
-    if dataset.kind != "admin" or dataset.system_key != "admin":
-        raise ValueError("Admin Datasetが必要です。")
+    """認可済み店舗のJST業務日だけを取得する。"""
+    if not ((dataset.kind == "admin" and dataset.system_key == "admin")
+                or guest_staff_enabled(dataset)):
+        raise ValueError("利用可能な店舗Datasetが必要です。")
     return (
         ShopShift.query.filter(
             ShopShift.dataset_id == dataset.id, ShopShift.business_date == day,
@@ -95,7 +97,8 @@ def create_shop_staff_shifts_blueprint(*, access_required, resolve_dataset):
 
     def admin_dataset():
         dataset = resolve_dataset()
-        if dataset.kind != "admin" or dataset.system_key != "admin":
+        if not ((dataset.kind == "admin" and dataset.system_key == "admin")
+                or guest_staff_enabled(dataset)):
             abort(403)
         return dataset
 

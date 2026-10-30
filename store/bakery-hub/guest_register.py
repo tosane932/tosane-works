@@ -10,3 +10,11 @@ def guest_register_enabled(owner=None):
     return owner is None or (owner.kind == 'guest'
                              and owner.id == current_user.dataset_id
                              and owner.system_key is None)
+
+
+def guest_staff_enabled(owner=None):
+    from models import RegisterCutover, db
+    if not (current_app.config.get('GUEST_STAFF_ENABLED', False)
+            and guest_register_enabled(owner)):
+        return False
+    return db.session.get(RegisterCutover, current_user.dataset_id) is not None

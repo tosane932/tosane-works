@@ -2469,3 +2469,7 @@ python app.py
 - [第4段階](https://qiita.com/tosane932/items/372270330e73583a227f)
 - [第5段階](https://qiita.com/tosane932/items/85fd24c7baa6fe7c76a7)
 
+
+### Phase 4 Guestスタッフ（開発中）
+
+`GUEST_STAFF_ENABLED` は既定OFF。v3.2 Guestレジの有効な体験に限りスタッフ・シフトとホーム出勤予定を共通画面で利用します。仕込み・廃棄は今回まだGuest非公開です。公開は別承認です。

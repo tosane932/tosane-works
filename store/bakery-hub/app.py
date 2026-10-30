@@ -42,6 +42,7 @@ from models import (
     ShopTask,
     ShopSchedule,
     ShopStaff,
+    ShopShift,
     DailyForecast,
     Product,
     DailySales,
@@ -56,7 +57,7 @@ from production_prep import create_production_prep_blueprint
 from waste_records import create_waste_blueprint
 from prompts import build_sales_prompt
 from sales_period_summary import PERIOD_OFFSETS, sales_period_summary, period_bounds
-from guest_register import guest_register_enabled
+from guest_register import guest_register_enabled, guest_staff_enabled
 from legacy_sales_cutover import LegacySalesClosed, assert_legacy_sales_writable, legacy_sales_closed
 from register_sales_aggregation import (
     SalesAggregationConsistencyError, SalesCutoverIntegrityError,
@@ -128,6 +129,7 @@ app.config["WEATHER_LOCATION_NAME"] = config.WEATHER_LOCATION_NAME
 app.config["WEATHER_JMA_AREA_CODE"] = config.WEATHER_JMA_AREA_CODE
 app.config["PUOPPO_INTEGRATION_ENABLED"] = config.PUOPPO_INTEGRATION_ENABLED
 app.config["REGISTER_V32_GUEST_ENABLED"] = config.REGISTER_V32_GUEST_ENABLED
+app.config["GUEST_STAFF_ENABLED"] = config.GUEST_STAFF_ENABLED
 app.config["REGISTER_V3_PREVIEW_ENABLED"] = config.REGISTER_V3_PREVIEW_ENABLED
 app.config["REGISTER_V3_SAVE_ENABLED"] = config.REGISTER_V3_SAVE_ENABLED
 app.config["REGISTER_V3_AGGREGATION_ENABLED"] = config.REGISTER_V3_AGGREGATION_ENABLED
@@ -388,6 +390,10 @@ def _cleanup_expired_guest_datasets(*, now=None):
         DailyForecast.dataset_id.in_(expired_dataset_ids)
     ).delete(synchronize_session=False)
 
+    # 子を先に削除し、別Datasetのスタッフには触れない。
+    ShopShift.query.filter(ShopShift.dataset_id.in_(expired_dataset_ids)).delete(synchronize_session=False)
+    ShopStaff.query.filter(ShopStaff.dataset_id.in_(expired_dataset_ids)).delete(synchronize_session=False)
+
     # The register FKs intentionally restrict deletion. Remove only the
     # rechecked, locked Guest Datasets' children, before their parent rows.
     RegisterTransactionLine.query.filter(
@@ -600,7 +606,7 @@ app.register_blueprint(
 )
 app.register_blueprint(
     create_shop_staff_shifts_blueprint(
-        access_required=admin_required,
+        access_required=admin_or_guest_required,
         resolve_dataset=require_current_dataset,
     )
 )
@@ -651,7 +657,7 @@ def register_navigation_state():
         owner = require_current_dataset()
         row = db.session.get(RegisterCutover, owner.id)
         active = row is not None and business_today() >= row.first_register_date
-    return {"register_nav_active": active}
+    return {"register_nav_active": active, "guest_staff_active": guest_staff_enabled()}
 
 
 def _reserve_guest_ai_usage(current_dataset):
@@ -1489,7 +1495,7 @@ def home():
         today_sales = _get_today_sales_amount(dataset, today)
         has_today_sales = _has_today_sales_record(dataset, today)
     staff_state, staff_count, today_staff, remaining_staff = None, None, [], 0
-    if current_user.is_admin:
+    if current_user.is_admin or guest_staff_enabled(dataset):
         try:
             planned = planned_work_for_day(dataset, today)
             staff_count = len(planned)
