@@ -26,7 +26,7 @@ def test_product_registration_fixed_ui_uses_semantic_svg_icons(
     admin_dataset,
     csrf_post,
 ):
-    today = datetime.date.today()
+    today = app_module.business_today()
     product = Product(
         dataset=admin_dataset,
         year=today.year,
@@ -105,7 +105,7 @@ def test_sales_input_fixed_ui_uses_svg_and_css_status_dot(
     authenticated_client,
     admin_dataset,
 ):
-    today = datetime.date.today()
+    today = app_module.business_today()
     db.session.add(
         Product(
             dataset=admin_dataset,
