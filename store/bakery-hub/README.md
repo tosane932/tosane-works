@@ -2479,3 +2479,7 @@ Guestスタッフの追加検証では正規Guest開始からAdmin共通CRUD契�
 ### v3.2 Guest仕込み（本番NO-GO）
 
 GUEST_PREP_ENABLEDは既定OFF。Guestレジ有効・正規初期化済みのGuestに共通の3ステップ仕込みを提供します。register:商品IDでレシピを識別し、同名でも別IDは統合しません。改名・終売後も保存済みレシピと予定を保持します。Decimalの材料計算と原子的な一括保存を共用し、製造実績・在庫・販売数は変更しません。Guestの売上参考連携は未対応、廃棄ロスは非公開です。
+
+### Guest公開準備
+
+段階的なコードデプロイ・Guest有効化・実機判定と緊急停止は[公開準備記録](docs/v3.2-guest-launch-readiness.md)を参照してください。最新バックアップ/隔離復元と個別承認が揃うまで本番NO-GO。旧稼働版への単純rollbackは新Guest仕込みのcleanup互換性を保証しません。
