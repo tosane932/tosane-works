@@ -10,7 +10,7 @@ import uuid
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
-from models import Dataset, PrepRecipe, PrepPlan, PrepIngredient, db
+from models import Dataset, PrepRecipe, PrepPlan, PrepIngredient, RegisterCutover, db
 from postgresql_test_utils import get_isolated_postgresql_test_url
 
 URL = get_isolated_postgresql_test_url()
@@ -28,7 +28,13 @@ app.config.update(TESTING=True, SECRET_KEY='only-for-isolated-test', ADMIN_USERN
 barrier = threading.Barrier(2)
 def post(_):
     client = app.test_client()
-    assert client.post('/login', data={'username':'prep-admin','password':'prep-password'}).status_code == 302
+    if os.environ.get('PREP_GUEST'):
+        app.config.update(REGISTER_V32_GUEST_ENABLED=True, GUEST_PREP_ENABLED=True)
+        with client.session_transaction() as session:
+            session['_user_id'] = 'guest:' + os.environ['PREP_GUEST']
+            session['_fresh'] = True
+    else:
+        assert client.post('/login', data={'username':'prep-admin','password':'prep-password'}).status_code == 302
     barrier.wait(timeout=15)
     if os.environ.get('PREP_BULK'):
         return client.post('/prep/plans/bulk', data={'recipe_id':'1','business_date':'2026-10-16','quantity_1':'4'}).status_code
@@ -38,7 +44,8 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
 '''
 
 
-def test_postgresql_dataset_constraints_and_concurrent_plan_posts():
+@pytest.mark.parametrize("principal", ["admin", "guest"])
+def test_postgresql_dataset_constraints_and_concurrent_plan_posts(principal):
     engine = create_engine(URL, pool_pre_ping=True)
     try:
         with engine.begin() as conn:
@@ -47,12 +54,15 @@ def test_postgresql_dataset_constraints_and_concurrent_plan_posts():
             db.metadata.create_all(conn)
             admin, guest = uuid.uuid4(), uuid.uuid4()
             conn.execute(Dataset.__table__.insert().values(
-                id=admin, kind="admin", system_key="admin",
+                id=admin, kind=principal, system_key="admin" if principal == "admin" else None,
+                absolute_expires_at=None if principal == "admin" else datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=2),
             ))
             conn.execute(Dataset.__table__.insert().values(
                 id=guest, kind="guest",
                 absolute_expires_at=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2),
             ))
+            if principal == "guest":
+                conn.execute(RegisterCutover.__table__.insert().values(dataset_id=admin, first_register_date=datetime.date(2026,1,1)))
             recipe_id = conn.execute(PrepRecipe.__table__.insert().values(
                 dataset_id=admin, product_key="template:croissant", display_name="クロワッサン", base_quantity=10
             ).returning(PrepRecipe.id)).scalar_one()
@@ -65,12 +75,12 @@ def test_postgresql_dataset_constraints_and_concurrent_plan_posts():
                 conn.execute(PrepPlan.__table__.insert().values(
                     dataset_id=guest, recipe_id=recipe_id, business_date=datetime.date(2026, 10, 15), quantity=1))
         worker = subprocess.run([sys.executable, "-c", WORKER], cwd=Path(__file__).resolve().parent.parent,
-                                env={**os.environ, "DATABASE_URL": URL}, capture_output=True, text=True, timeout=45)
+                                env={**os.environ, "DATABASE_URL": URL, **({"PREP_GUEST": str(admin)} if principal == "guest" else {})}, capture_output=True, text=True, timeout=45)
         assert worker.returncode == 0, worker.stderr[-1500:]
         statuses = json.loads(worker.stdout.strip().splitlines()[-1])
         assert sorted(statuses) == [303, 409]
         bulk_worker = subprocess.run([sys.executable, "-c", WORKER], cwd=Path(__file__).resolve().parent.parent,
-                                     env={**os.environ, "DATABASE_URL": URL, "PREP_BULK": "1"},
+                                     env={**os.environ, "DATABASE_URL": URL, "PREP_BULK": "1", **({"PREP_GUEST": str(admin)} if principal == "guest" else {})},
                                      capture_output=True, text=True, timeout=45)
         assert bulk_worker.returncode == 0, bulk_worker.stderr[-1500:]
         assert sorted(json.loads(bulk_worker.stdout.strip().splitlines()[-1])) == [303, 303]
