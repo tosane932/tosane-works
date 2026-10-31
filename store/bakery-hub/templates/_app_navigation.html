@@ -252,7 +252,7 @@
             <span>スタッフ・シフト管理</span>
         </a>
         {% endif %}
-        {% if current_user.is_authenticated and current_user.is_admin %}
+        {% if current_user.is_authenticated and (current_user.is_admin or guest_prep_active) %}
         <a href="{{ url_for('production_prep.index') }}" data-page="prep"
             class="app-sidebar-link app-sidebar-link-prep touch-control-no-select{% if active_app_page == 'prep' %} app-sidebar-link-current{% endif %}"
             {% if active_app_page == 'prep' %}aria-current="page"{% endif %}>
@@ -265,7 +265,7 @@
         </a>
         <div class="app-sidebar-submenu" id="app-prep-submenu">
             <a href="{{ url_for('production_prep.index') }}" {% if current_endpoint.startswith('production_prep.') %}aria-current="page"{% endif %}>製造予定・材料管理</a>
-            <a href="{{ url_for('waste_records.index') }}" {% if current_endpoint.startswith('waste_records.') %}aria-current="page"{% endif %}>廃棄・ロス管理</a>
+            {% if current_user.is_admin %}<a href="{{ url_for('waste_records.index') }}" {% if current_endpoint.startswith('waste_records.') %}aria-current="page"{% endif %}>廃棄・ロス管理</a>{% endif %}
         </div>
         {% endif %}
         <div class="app-sidebar-nav-divider" aria-hidden="true"></div>

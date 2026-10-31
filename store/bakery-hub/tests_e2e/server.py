@@ -101,6 +101,7 @@ def protect_control():
 def e2e_guest_register():
     app.config["REGISTER_V32_GUEST_ENABLED"] = request.args.get("enabled") == "1"
     app.config["GUEST_STAFF_ENABLED"] = request.args.get("staff") == "1"
+    app.config["GUEST_PREP_ENABLED"] = request.args.get("prep") == "1"
     return jsonify(enabled=app.config["REGISTER_V32_GUEST_ENABLED"])
 
 

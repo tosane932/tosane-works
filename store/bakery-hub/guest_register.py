@@ -18,3 +18,10 @@ def guest_staff_enabled(owner=None):
             and guest_register_enabled(owner)):
         return False
     return db.session.get(RegisterCutover, current_user.dataset_id) is not None
+
+
+def guest_prep_enabled(owner=None):
+    from models import RegisterCutover, db
+    return bool(current_app.config.get('GUEST_PREP_ENABLED', False)
+                and guest_register_enabled(owner)
+                and db.session.get(RegisterCutover, current_user.dataset_id) is not None)

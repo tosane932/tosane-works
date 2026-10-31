@@ -135,3 +135,5 @@ PUOPPO_INTEGRATION_ENABLED = _environment_flag_is_true(
 
 # Guest店舗運営は検証済み機能だけ独立して公開する。
 GUEST_STAFF_ENABLED = _environment_flag_is_true(os.environ.get("GUEST_STAFF_ENABLED"))
+
+GUEST_PREP_ENABLED = _environment_flag_is_true(os.environ.get("GUEST_PREP_ENABLED"))
