@@ -8,7 +8,8 @@ from decimal import Decimal, ROUND_UP
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from models import Dataset, PrepIngredient, PrepPlan, PrepRecipe, Product, db
+from models import Dataset, PrepIngredient, PrepPlan, PrepRecipe, Product, RegisterProduct, db
+from guest_register import guest_prep_enabled
 from product_images import available_product_images, available_product_image_assets
 from prep_sales_reference import prep_sales_reference
 from register_sales_aggregation import sales_read_snapshot
@@ -129,7 +130,7 @@ def create_production_prep_blueprint(*, access_required, resolve_dataset, busine
 
     def dataset():
         selected = resolve_dataset()
-        if selected.kind != "admin":
+        if selected.kind != "admin" and not guest_prep_enabled(selected):
             abort(403)
         return selected
 
@@ -140,6 +141,13 @@ def create_production_prep_blueprint(*, access_required, resolve_dataset, busine
         return query.one_or_none() or abort(404)
 
     def source_for(current, source):
+        if current.kind == "guest":
+            if not re.fullmatch(r"register:[1-9]\d{0,10}", source):
+                abort(404)
+            product = RegisterProduct.query.filter_by(dataset_id=current.id, id=int(source[9:]), is_active=True).one_or_none()
+            if product is None:
+                abort(404)
+            return product.name, product.image_key
         if source.startswith("template:"):
             key = source[len("template:"):]
             option = available_product_images(current_app.static_folder, is_guest=False).get(key)
@@ -160,13 +168,14 @@ def create_production_prep_blueprint(*, access_required, resolve_dataset, busine
         current = dataset()
         try:
             recipes = PrepRecipe.query.filter_by(dataset_id=current.id).order_by(PrepRecipe.id).all()
-            products = Product.query.filter_by(dataset_id=current.id).order_by(Product.id.desc()).all()
+            products = (RegisterProduct.query.filter_by(dataset_id=current.id, is_active=True).order_by(RegisterProduct.id).all() if current.kind == "guest" else Product.query.filter_by(dataset_id=current.id).order_by(Product.id.desc()).all())
         except SQLAlchemyError:
             db.session.rollback()
             logger.exception("Failed to load prep catalog")
             return "仕込み管理を表示できませんでした。", 500
         return render_template("prep_index.html", recipes=recipes, products=products,
-                               templates=available_product_images(current_app.static_folder, is_guest=False),
+                               templates={} if current.kind == "guest" else available_product_images(current_app.static_folder, is_guest=False),
+                               guest_catalog=current.kind == "guest",
                                known_keys={recipe.product_key for recipe in recipes})
 
     def render_form(current, recipe=None, *, source=None, raw=None, error=None, status=200):
@@ -340,7 +349,7 @@ def create_production_prep_blueprint(*, access_required, resolve_dataset, busine
         try:
             # PostgreSQLではDataset行をロックし、同じ店舗の日別一括保存を直列化する。
             # SQLiteでも既存の一意制約とIntegrityErrorで二重作成を拒否する。
-            db.session.query(Dataset).filter_by(id=current.id, kind="admin").with_for_update().one()
+            db.session.query(Dataset).filter_by(id=current.id, kind=current.kind).with_for_update().one()
             recipes = PrepRecipe.query.filter(PrepRecipe.dataset_id == current.id,
                                                PrepRecipe.id.in_(ids)).all()
             if len(recipes) != len(ids):

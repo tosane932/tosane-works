@@ -13,7 +13,7 @@
       <button type="submit" class="prep-secondary">日付を変更</button>
     </form>
     <p class="prep-hint">{{ day.month }}月{{ day.day }}日の製造予定 · 必要量は現在のレシピによる試算です。</p>
-    <a class="prep-secondary" href="{{ url_for('waste_records.index', date=day.isoformat()) }}">製造実績・廃棄ロスを記録する ›</a>
+    {% if current_user.is_admin %}<a class="prep-secondary" href="{{ url_for('waste_records.index', date=day.isoformat()) }}">製造実績・廃棄ロスを記録する ›</a>{% endif %}
   </header>
   {% if error %}<p role="alert" class="prep-error">{{ error }}</p>{% endif %}
   <div class="prep-work-columns">

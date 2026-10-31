@@ -17,6 +17,7 @@ from models import (
     Product,
     ShopMemo,
     ShopTask,
+    PrepRecipe, PrepIngredient, PrepPlan, RegisterProduct, RegisterPrepLink,
     ShopStaff,
     ShopShift,
     db,
@@ -287,6 +288,20 @@ def _seed_cleanup_scenario(engine, cleanup_time):
             connection.execute(ShopShift.__table__.insert().values(
                 dataset_id=dataset_id, staff_id=staff_id,
                 business_date=cleanup_time.date(), status='all_day'))
+        for dataset_id in (expired_guest_id, active_guest_id, admin_id):
+            product_id = connection.execute(RegisterProduct.__table__.insert().values(
+                dataset_id=dataset_id, name='架空仕込みパン', price_yen=180
+            ).returning(RegisterProduct.id)).scalar_one()
+            recipe_id = connection.execute(PrepRecipe.__table__.insert().values(
+                dataset_id=dataset_id, product_key=f'register:{product_id}',
+                display_name='架空配合', base_quantity=10
+            ).returning(PrepRecipe.id)).scalar_one()
+            connection.execute(PrepIngredient.__table__.insert().values(
+                dataset_id=dataset_id, recipe_id=recipe_id, name='粉', unit='g', amount=500))
+            connection.execute(PrepPlan.__table__.insert().values(
+                dataset_id=dataset_id, recipe_id=recipe_id, business_date=cleanup_time.date(), quantity=10))
+            connection.execute(RegisterPrepLink.__table__.insert().values(
+                dataset_id=dataset_id, recipe_id=recipe_id, register_product_id=product_id))
         product_ids = connection.execute(
             Product.__table__.insert().returning(
                 Product.id,
@@ -434,7 +449,7 @@ def _assert_preserved_dataset_counts(engine, expected):
     assert actual == expected
     with engine.connect() as connection:
         for dataset_id, counts in expected.items():
-            for table in (ShopStaff.__table__, ShopShift.__table__):
+            for table in (ShopStaff.__table__, ShopShift.__table__, PrepRecipe.__table__, PrepIngredient.__table__, PrepPlan.__table__, RegisterPrepLink.__table__, RegisterProduct.__table__):
                 assert len(connection.execute(
                     table.select().where(table.c.dataset_id == dataset_id)
                 ).fetchall()) == counts[0]

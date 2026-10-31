@@ -2475,3 +2475,7 @@ python app.py
 `GUEST_STAFF_ENABLED` は既定OFF。v3.2 Guestレジの有効な体験に限りスタッフ・シフトとホーム出勤予定を共通画面で利用します。仕込み・廃棄は今回まだGuest非公開です。公開は別承認です。
 
 Guestスタッフの追加検証では正規Guest開始からAdmin共通CRUD契約、Admin/Guest ID越境、期限切れHTTP拒否を確認します。PostgreSQL cleanup試験には全主体のStaff/Shiftを含め、ロック競合・rollback後の保持も照合します。
+
+### v3.2 Guest仕込み（本番NO-GO）
+
+GUEST_PREP_ENABLEDは既定OFF。Guestレジ有効・正規初期化済みのGuestに共通の3ステップ仕込みを提供します。register:商品IDでレシピを識別し、同名でも別IDは統合しません。改名・終売後も保存済みレシピと予定を保持します。Decimalの材料計算と原子的な一括保存を共用し、製造実績・在庫・販売数は変更しません。Guestの売上参考連携は未対応、廃棄ロスは非公開です。
