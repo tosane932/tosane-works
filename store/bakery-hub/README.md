@@ -2501,4 +2501,4 @@ Guest廃棄・ロス管理、ログアウト時の未同期会計の安全案内
 
 ## システムガイドと印刷用教科書
 
-[システム概要](/system-overview)は初めて見る方向けの5章構成です。詳しい処理・設計・安全性・運用は[システム教科書PDF](static/docs/bakery-hub-system-guide.pdf)にまとめています。[原稿・再生成手順・照合記録](docs/system-guide/README.md)も管理しています。v3.2 Guest本番未公開・Admin正式レジNO-GOは維持します。
+[システム概要](https://bakery-salesdata.onrender.com/system-overview)は初めて見る方向けの5章構成です。詳しい処理・設計・安全性・運用は[システム教科書PDF](static/docs/bakery-hub-system-guide.pdf)にまとめています。[原稿・再生成手順・照合記録](docs/system-guide/README.md)も管理しています。v3.2 Guest本番未公開・Admin正式レジNO-GOは維持します。
