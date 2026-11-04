@@ -103,7 +103,11 @@ npx playwright test --config=tests_e2e/playwright.config.cjs system_overview
 
 ## 判定と残課題
 
-原稿・PDF・Web実装はレビュー可能ですが、スクロール操作のブラウザ検証が未完了のため完成・merge判断はNO-GOです。Draft PRでCIのChromium E2Eを確認し、スマホ・タブレット・PCの実表示と実機を確認してください。今回は隔離PostgreSQL・全pytest・実プリンター検証を実行していません。業務処理・モデル・migration・認証・Dataset・PWA保存領域・公開フラグは変更していません。
+実装検証コミット `e847951b8bf3713a70905101aaad225df67558f9` のGitHub Actionsで、**全pytest 1515 passed / 68 skipped、Chromium E2E 85 passed、PostgreSQL統合、Admin session operations成功**を確認しました。E2Eには今回追加した概要の7件を含みます。実装・資料はレビュー可能（今回の変更はGO）です。mainへのマージ・本番デプロイは実施せず、別承認です。Admin正式レジ・Guest v3.2の本番公開NO-GOは維持します。
+
+検証記録：[Bakery Hub Tests #506](https://github.com/tosane932/tosane-works/actions/runs/41835803743)。この成功後の最終整理は、本記録の更新と、文書に現れなくなった旧解答欄・学習リストCSSの削除だけです。業務処理・モデル・migration・認証・Dataset・PWA保存領域・公開フラグは変更していません。
+
+ローカルChromeの起動制限はGitHub側のChromium検証で補いました。実スマホ／タブレットでの操作、実機PWA更新、実プリンター出力は未実施です。Admin廃棄ロスの本番利用可否も、運用記録の時点混在があるため未確認のままです。
 
 ### PR #162での追加確認
 
@@ -120,3 +124,8 @@ GitHub Actions初回（66c88e2）では管理者セッションとPostgreSQL統�
 
 
 98bfb67の再CI：全pytest **1515 passed / 68 skipped**、PostgreSQL統合成功。ブラウザは **84 passed / 1 failed**、概要6/7成功で、スクラバードラッグ・キー・幅変更時フォーカス復帰も成功。残る390pxの失敗は文字200%変更直後の上部バー再表示待ちです。スクロールアンカーによる再配置と試験の上スクロールが同フレームで競合した可能性があるため、再配置を2フレーム待ってから上へスクロールする操作へ調整します。Guest仕込みの前回2件は再CIでは成功しており、再現性のある今回の回帰とは断定しません。
+
+
+### 最終結果
+
+文字拡大後の再配置を待ってから上スクロールする試験へ調整し、390pxも成功。現在地・目次開閉・章リンク・スクラバードラッグとキー・幅変更時のフォーカス復帰・JS無効・Admin/Guest/PDFを含む新規7件がすべて成功しました。既存業務画面を含む全85件も成功しています。旧クイズ用CSSを削除した後のローカルPWA＋概要pytestも46件PASS、git diff --check PASSです。
