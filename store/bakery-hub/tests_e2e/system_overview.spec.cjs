@@ -2,6 +2,7 @@
 const {test, expect} = require('playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
+test.setTimeout(30000);
 const chapters = ['about','features','architecture','safety','textbook'];
 test.beforeEach(async ({context}) => {
     await context.route(/^https?:\/\//, route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
@@ -52,7 +53,7 @@ for (const width of [390, 800, 1280]) {
     });
 }
 
-test('touch scrubber drag, keyboard, cancellation and rotation retain chapter navigation', async ({browser})=>{
+test('touch scrubber drag, keyboard and rotation retain chapter navigation', async ({browser})=>{
     const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
     const page=await context.newPage();await page.goto('http://127.0.0.1:8765/system-overview');
     await page.evaluate(()=>scrollBy(0,300));

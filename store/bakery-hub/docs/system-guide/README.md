@@ -104,3 +104,9 @@ npx playwright test --config=tests_e2e/playwright.config.cjs system_overview
 ## 判定と残課題
 
 原稿・PDF・Web実装はレビュー可能ですが、スクロール操作のブラウザ検証が未完了のため完成・merge判断はNO-GOです。Draft PRでCIのChromium E2Eを確認し、スマホ・タブレット・PCの実表示と実機を確認してください。今回は隔離PostgreSQL・全pytest・実プリンター検証を実行していません。業務処理・モデル・migration・認証・Dataset・PWA保存領域・公開フラグは変更していません。
+
+### PR #162での追加確認
+
+GitHub Actions初回（66c88e2）では管理者セッションとPostgreSQL統合ジョブが成功。全pytestは1514 passed / 68 skipped / 1 failedで、失敗は旧 `#feature-pwa` の詳細解説をWebから読む別ファイルのテストでした。PWAの短い説明をWebに戻し、Manifest・Service Worker・Cache Storage・未同期保存の区別を移設先原稿でも同じ期待値で確認するよう修正しました。修正後の関連PWA＋概要pytestは46件PASSです。
+
+追加のナビゲーションpytestでは、`test_app_action_controls_disable_selection_without_covering_content` の旧商品登録 `/` ケースがローカルで失敗しました。同じテスト選択を基準mainの独立worktreeでも実行し、同じ1 failed / 2 passedを再現しています。今回の概要変更による回帰とは区別し、業務画面・既存テストは変更していません。CI初回の全pytestではこのケースは成功していました。ローカルでの単独選択時の既存課題として記録します。
