@@ -1,0 +1,362 @@
+[
+  {
+    "file": "app.py",
+    "symbol": "index",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_parse_bounded_nonnegative_integer",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_tasks.py",
+    "symbol": "_parse_boolean",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "index",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "require_current_dataset",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "index",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "input_sales",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_memos.py",
+    "symbol": "_split_url_suffix",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "input_sales",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "dashboard",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "input_sales",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "product_catalog",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_tasks.py",
+    "symbol": "_validate_title",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_tasks.py",
+    "symbol": "create_shop_tasks_blueprint.create_task",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_get_sales_from_db",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "dashboard",
+    "scope": "業務処理"
+  },
+  {
+    "file": "prompts.py",
+    "symbol": "build_sales_prompt",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "AdminUser",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "GuestUser",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "GuestUser.id",
+    "scope": "業務処理"
+  },
+  {
+    "file": "models.py",
+    "symbol": "Product",
+    "scope": "業務処理"
+  },
+  {
+    "file": "models.py",
+    "symbol": "DailySales",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "input_sales",
+    "scope": "業務処理"
+  },
+  {
+    "file": "catalog_repository.py",
+    "symbol": "validate_image",
+    "scope": "業務処理"
+  },
+  {
+    "file": "catalog_repository.py",
+    "symbol": "InvalidCatalogImage",
+    "scope": "業務処理"
+  },
+  {
+    "file": "catalog_repository.py",
+    "symbol": "CatalogPublishError",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "GuestCapacityFull",
+    "scope": "業務処理"
+  },
+  {
+    "file": "seed_demo.py",
+    "symbol": "seed_demo_data",
+    "scope": "初期データ作成"
+  },
+  {
+    "file": "migrations/versions/c7a1d9e4f2b6_create_datasets_and_backfill_products.py",
+    "symbol": "_validate_backfill",
+    "scope": "migration"
+  },
+  {
+    "file": "shop_tasks.py",
+    "symbol": "create_shop_tasks_blueprint.reorder_tasks",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "input_sales",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "dashboard",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_tasks.py",
+    "symbol": "create_shop_tasks_blueprint.render_list",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_tasks.py",
+    "symbol": "_parse_task_ids",
+    "scope": "業務処理"
+  },
+  {
+    "file": "tests/test_admin_login_rate_limit.py",
+    "symbol": "test_five_failed_logins_are_allowed_and_sixth_is_rate_limited",
+    "scope": "テスト"
+  },
+  {
+    "file": "tests/test_admin_login_rate_limit_postgresql.py",
+    "symbol": "test_concurrent_failed_admin_logins_never_exceed_postgresql_limit",
+    "scope": "テスト"
+  },
+  {
+    "file": "shop_memos.py",
+    "symbol": "_derive_title_from_body",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_generate_ai_advice",
+    "scope": "業務処理"
+  },
+  {
+    "file": "catalog_repository.py",
+    "symbol": "publish_catalog_change",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_tasks.py",
+    "symbol": "_parse_task_ids",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_memos.py",
+    "symbol": "create_shop_memos_blueprint.memo_json_payload",
+    "scope": "業務処理"
+  },
+  {
+    "file": "models.py",
+    "symbol": "ShopMemo",
+    "scope": "業務処理"
+  },
+  {
+    "file": "models.py",
+    "symbol": "ShopTask",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_generate_ai_advice",
+    "scope": "業務処理"
+  },
+  {
+    "file": "prompts.py",
+    "symbol": "build_sales_prompt",
+    "scope": "業務処理"
+  },
+  {
+    "file": "models.py",
+    "symbol": "Dataset",
+    "scope": "業務処理"
+  },
+  {
+    "file": "product_images.py",
+    "symbol": "load_admin_catalog",
+    "scope": "業務処理"
+  },
+  {
+    "file": "catalog_repository.py",
+    "symbol": "validate_image",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_get_admin_auth_fingerprint",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "load_user",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_get_rate_limit_client_key",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "admin_or_guest_required",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_serialize_admin_login_attempt",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_memos.py",
+    "symbol": "_linkify_memo_body",
+    "scope": "業務処理"
+  },
+  {
+    "file": "product_images.py",
+    "symbol": "available_product_images",
+    "scope": "業務処理"
+  },
+  {
+    "file": "product_images.py",
+    "symbol": "_safe_image_path",
+    "scope": "業務処理"
+  },
+  {
+    "file": "product_images.py",
+    "symbol": "_safe_image_path",
+    "scope": "業務処理"
+  },
+  {
+    "file": "product_images.py",
+    "symbol": "load_admin_catalog",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_serialize_admin_login_attempt",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "login",
+    "scope": "業務処理"
+  },
+  {
+    "file": "conftest.py",
+    "symbol": "flask_app",
+    "scope": "テスト"
+  },
+  {
+    "file": "app.py",
+    "symbol": "dashboard",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "admin_or_guest_required",
+    "scope": "業務処理"
+  },
+  {
+    "file": "shop_tasks.py",
+    "symbol": "create_shop_tasks_blueprint.list_tasks",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "GuestUser.id",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_serialize_admin_login_attempt",
+    "scope": "業務処理"
+  },
+  {
+    "file": "tests/test_business_date.py",
+    "symbol": "test_business_today_uses_jst_at_utc_date_boundary",
+    "scope": "テスト"
+  },
+  {
+    "file": "app.py",
+    "symbol": "business_today",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "input_sales",
+    "scope": "業務処理"
+  },
+  {
+    "file": "tests/test_business_date.py",
+    "symbol": "test_business_today_uses_jst_at_utc_date_boundary",
+    "scope": "テスト"
+  },
+  {
+    "file": "models.py",
+    "symbol": "utc_now",
+    "scope": "業務処理"
+  },
+  {
+    "file": "app.py",
+    "symbol": "_guest_dataset_is_expired",
+    "scope": "業務処理"
+  }
+]

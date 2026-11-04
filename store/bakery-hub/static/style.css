@@ -9326,3 +9326,10 @@ body.shop-task-reorder-lock .shop-task-card {
 .operations-links .operations-work-link:hover { background: color-mix(in srgb, var(--work-color) 18%, white); text-decoration: none; }
 .operations-links .operations-work-link:focus-visible { outline: 3px solid var(--work-color); outline-offset: 3px; }
 .operations-links .operations-work-link span:last-child { color: var(--work-color); font-size: 1.25rem; }
+
+/* Concise system guide; reader navigation and scrubber retain their shared styles. */
+.system-overview-page .overview-guide-features { margin: 0; }
+.system-overview-page .overview-guide-features dt { border-top: 1px solid #d6cbbc; padding-top: 16px; }
+.system-overview-page .overview-guide-features dd { margin-bottom: 16px; }
+.system-overview-page .overview-guide-link { display: inline-flex; align-items: center; min-height: 48px; padding: 8px 14px; border: 1px solid currentColor; border-radius: 8px; box-sizing: border-box; }
+.system-overview-page #textbook { min-height: calc(100svh - var(--overview-anchor-offset, 100px)); box-sizing: border-box; }

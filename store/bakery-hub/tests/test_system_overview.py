@@ -1,13 +1,27 @@
 import ast
+
+
 import datetime
+
+
 from pathlib import Path
+
+
 from urllib.parse import urlsplit
 
+
 import pytest
+
+
 from bs4 import BeautifulSoup
+
+
 from sqlalchemy import event
 
+
 import app as app_module
+
+
 from models import Dataset, Product, db
 
 
@@ -99,43 +113,6 @@ def test_existing_pages_link_to_overview_without_losing_navigation(
     assert len(navigation.select('a[aria-current="page"]')) == 1
 
 
-def test_overview_has_readable_sections_and_valid_internal_links(client):
-    document = _document(client.get("/system-overview"))
-    main = document.select_one("main")
-    for section_id in ("flow", "features", "basics", "technologies", "tests"):
-        assert main.select_one(f"section#{section_id} > h2")
-    for feature_id in (
-        "home", "schedule", "staff-shifts", "prep", "products", "product-catalog", "sales", "dashboard", "materials", "memos", "tasks",
-        "guest", "auth", "ai",
-    ):
-        card = main.select_one(f"article#feature-{feature_id}")
-        assert card.select_one("h3")
-        assert card.select_one("details > summary")
-        assert {label.get_text(strip=True) for label in card.select("dt")} >= {
-            "Python / Flask", "Database", "Frontend", "pytest", "確認するコード",
-        }
-    for link in main.select('a[href^="#"]'):
-        assert document.find(id=link["href"][1:])
-    assert document.select_one('meta[name="viewport"]')
-    assert document.select_one('button[aria-controls="app-sidebar"]')
-    # The reader uses a local deferred script; external SDKs remain unnecessary.
-    assert [script["src"] for script in document.select("script[src]")] == [
-        "/static/system_overview.js", "/static/system_overview_scrubber.js",
-    ]
-
-
-def test_overview_explains_catalog_vs_monthly_product_and_history(client):
-    document = _document(client.get('/system-overview'))
-    registration = document.select_one('#feature-products').get_text(' ', strip=True)
-    listing = document.select_one('#feature-product-catalog').get_text(' ', strip=True)
-    for phrase in ('18品', '初期価格', '自由入力', '0〜9,990円', 'request.files',
-                   'GitHub API', 'PR', 'PostgreSQL', 'DailySales', '画像なし'):
-        assert phrase in registration
-    for phrase in ('今月登録の商品', '過去に登録された商品', '最終登録年月',
-                   'business_today()', 'Dataset', 'DailySales'):
-        assert phrase in listing
-
-
 def test_overview_does_not_render_business_data_or_arbitrary_query_values(
     authenticated_client, admin_dataset,
 ):
@@ -160,300 +137,12 @@ def test_overview_does_not_accept_writes(client, csrf_token):
     assert response.status_code == 405
 
 
-def test_learning_sections_have_headings_and_contents_links(client):
-    document = _document(client.get("/system-overview"))
-    contents = document.select_one('nav[aria-label="このページの目次"]')
-    for section_id, title in (
-        ("walkthrough", "1つの処理を最後まで追ってみる"),
-        ("quiz", "理解度チェック"),
-        ("troubleshooting", "困ったときはどこを見る？"),
-    ):
-        section = document.select_one(f"main section#{section_id}")
-        assert section is not None
-        assert title in section.select_one("h2").get_text()
-        assert contents.select_one(f'a[href="#{section_id}"]')
-
-
-def test_sales_walkthrough_explains_actual_save_and_dashboard_path(client):
-    document = _document(client.get("/system-overview"))
-    steps = document.select("#walkthrough ol > li")
-    assert len(steps) == 6
-    for step, title in zip(steps, (
-        "売上入力画面を開く", "入力して送信する", "Pythonで入力を確認する",
-        "DBへ保存する", "保存結果からDashboardへ進む", "Dashboardで表示する",
-    )):
-        assert title in step.select_one("h3").get_text()
-        assert step.select_one("details > summary").get_text() == "処理と基礎を読む"
-        assert "ここで学べる基礎" in step.get_text()
-        assert step.select_one(".overview-foundations code")
-    assert "GET /input" in steps[0].get_text()
-    assert "POST /input" in steps[1].get_text()
-    assert "request.form" in steps[1].get_text()
-    assert "Dataset" in steps[2].get_text()
-    assert "db.session.commit()" in steps[3].get_text()
-    assert "rollback()" in steps[3].get_text()
-    assert "PostgreSQL" in steps[3].get_text()
-    assert "リダイレクトはしません" in steps[4].get_text()
-    assert "success=True" in steps[4].get_text()
-    assert "GET /dashboard" in steps[4].get_text()
-    assert "db.func.sum()" in steps[5].get_text()
-    assert "sorted()" in steps[5].get_text()
-    assert "/api/dashboard-data" in steps[5].get_text()
-    assert steps[0].select_one('a[href$="/templates/input.html"]')
-    assert steps[3].select_one('a[href$="/app.py"]')
-    assert steps[5].select_one('a[href$="/templates/dashboard.html"]')
-
-
-def test_quiz_keeps_eight_explained_answers_in_closed_native_details(client):
-    document = _document(client.get("/system-overview"))
-    questions = document.select("#quiz article")
-    assert len(questions) == 8
-    for number, question in enumerate(questions, start=1):
-        assert question["id"] == f"quiz-q{number}"
-        assert question.select_one("h3").get_text().startswith(f"Q{number}.")
-        details = question.select_one("details")
-        assert details is not None
-        assert not details.has_attr("open")
-        assert details.select_one("summary").get_text() == "答えを見る"
-        answer = details.select_one(".overview-answer")
-        assert answer is not None
-        assert len(answer.get_text(strip=True)) >= 50
-    for question, expected in zip(questions, (
-        "request.form", "GET", "db.session.commit()", "return",
-        "Model", "Jinja", "rollback", "Flask-Login",
-    )):
-        assert expected in question.select_one(".overview-answer").get_text()
-    # Questions are ordinary headings; answer text belongs only to the details.
-    assert all(q.select_one("h3").find_parent("details") is None for q in questions)
-    assert [script["src"] for script in document.select("script[src]")] == [
-        "/static/system_overview.js", "/static/system_overview_scrubber.js",
-    ]
-
-
-def test_troubleshooting_maps_real_symptoms_to_places_and_reasons(client):
-    document = _document(client.get("/system-overview"))
-    cards = document.select("#troubleshooting article")
-    assert len(cards) == 8
-    for card in cards:
-        assert card.select_one("h3")
-        assert card.select_one("details > summary").get_text() == "確認場所と理由を見る"
-        assert card.select_one("code")
-        assert card.select_one("details p")
-        assert card.select_one('a[href^="#feature-"]')
-    csrf_card = document.select_one("#trouble-post")
-    assert "400" in csrf_card.select_one("h3").get_text()
-    assert "CSRF" in csrf_card.get_text()
-    assert "入力検証" in csrf_card.get_text()
-    assert "business_today()" in document.select_one("#trouble-date").get_text()
-    assert "require_current_dataset()" in document.select_one("#trouble-dataset").get_text()
-    assert "fixture" in document.select_one("#trouble-pytest").get_text()
-
-
-PYTHON_CATEGORIES = (
-    "values", "conditions", "loops", "structures", "functions", "classes",
-    "exceptions", "iteration", "strings", "state", "modules", "stdlib",
-    "regex", "paths", "context", "decorators", "dates",
-)
-
-
-@pytest.mark.parametrize("category", PYTHON_CATEGORIES)
-def test_python_map_has_grouped_lessons_with_purpose_and_code_address(client, category):
-    document = _document(client.get("/system-overview"))
-    card = document.select_one(f"#basics article#python-{category}")
-    assert card is not None
-    assert card.select_one("h3")
-    assert card.select_one("details > summary")
-    assert not card.select_one("details").has_attr("open")
-    assert document.select_one(
-        f'nav[aria-label="Python基礎・応用マップの目次"] a[href="#python-{category}"]'
-    )
-    lessons = card.select(".python-lesson")
-    assert lessons
-    for lesson in lessons:
-        assert lesson.select_one("h4")
-        labels = [item.get_text(strip=True) for item in lesson.select("dt")]
-        assert labels == ["これは何か", "Bakery Hubでは", "なぜ使うか", "教材の住所"]
-        assert all(item.get_text(strip=True) for item in lesson.select("dd"))
-        assert lesson.select_one("a[data-code-address]")
-        assert lesson.select_one('a[href^="#feature-"]')
-
-
-def _source_definitions(source):
-    """Nested Blueprint handlers and class methods also have a real address."""
-    definitions = {}
-
-    def visit(node, prefix=""):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            prefix = f"{prefix}.{node.name}" if prefix else node.name
-            definitions[prefix] = node
-        for child in ast.iter_child_nodes(node):
-            visit(child, prefix)
-
-    visit(ast.parse(source))
-    return definitions
-
-
-def test_python_code_links_resolve_to_existing_files_definitions_and_lines(client):
-    document = _document(client.get("/system-overview"))
-    app_root = Path(app_module.__file__).parent.resolve()
-    links = document.select("#basics a[data-code-address]")
-    assert len(links) >= len(PYTHON_CATEGORIES)
-    for link in links:
-        path = (app_root / link["data-source-file"]).resolve()
-        assert path.is_relative_to(app_root)
-        assert path.is_file()
-        source = path.read_text(encoding="utf-8")
-        definition = _source_definitions(source)[link["data-source-symbol"]]
-        url = urlsplit(link["href"])
-        assert url.scheme == "https"
-        assert url.netloc == "github.com"
-        assert url.path == (
-            "/tosane932/tosane-works/blob/main/store/bakery-hub/"
-            + link["data-source-file"]
-        )
-        assert url.fragment == f"L{definition.lineno}"
-        assert link["data-source-file"] in link.get_text()
-        assert link["data-source-symbol"] in link.get_text()
-        assert link["data-source-scope"] in {"業務処理", "テスト", "初期データ作成", "migration"}
-
-
-def test_python_snippets_are_short_actual_source_without_template_execution(client):
-    document = _document(client.get("/system-overview"))
-    app_root = Path(app_module.__file__).parent
-    snippets = document.select("#basics .python-source-snippet code")
-    assert snippets
-    for snippet in snippets:
-        lesson = snippet.find_parent(class_="python-lesson")
-        link = lesson.select_one("a[data-code-address]")
-        source = (app_root / link["data-source-file"]).read_text(encoding="utf-8")
-        definition = _source_definitions(source)[link["data-source-symbol"]]
-        excerpt = ast.get_source_segment(source, definition)
-        text = snippet.get_text()
-        assert 1 <= len(text.splitlines()) <= 8
-        assert text in excerpt
-
-
-def test_python_map_distinguishes_builtin_calls_from_database_and_test_tools(client):
-    document = _document(client.get("/system-overview"))
-    # all() and range() were found in tests; query.all() is a SQLAlchemy method.
-    all_lesson = document.select_one("#python-all-range")
-    assert "テスト" in all_lesson.get_text()
-    assert all(
-        link["data-source-scope"] == "テスト"
-        for link in all_lesson.select("a[data-code-address]")
-    )
-    assert "query.all()" in all_lesson.get_text()
-    hints = document.select_one("#python-type-hints").get_text()
-    assert "prompts.py" in hints
-    assert "全体" in hints and "入力検証" in hints
-    assert "SQLAlchemy" in document.select_one("#python-models").get_text()
-    context_text = document.select_one("#python-context").get_text()
-    assert "_serialize_admin_login_attempt" in context_text
-    assert "flask_app" in context_text
-    assert "大量" in context_text  # Do not describe these yield uses as CSV streaming.
-
-
-def test_python_map_excludes_unimplemented_features_and_preserves_web_connections(client):
-    document = _document(client.get("/system-overview"))
-    text = document.select_one("#basics").get_text()
-    for unused in ("dataclass", "Enum", "csv", "Counter", "defaultdict", "TypedDict", "match / case", "cache"):
-        assert unused not in text
-    web = document.select_one("#web-connections")
-    assert web is not None
-    for term in ("Python", "Flask", "SQLAlchemy", "JavaScript", "request.form", "fetch", "GET", "POST", "CRUD"):
-        assert term in web.get_text()
-    assert document.select_one('#basics a[href="#python-help"]')
-    assert document.select_one('#python-help a[href="#python-functions"]')
-    assert document.select_one('#python-help a[href="#python-state"]')
-
-
-def test_python_quiz_adds_fifteen_closed_answers_with_links_back_to_lessons(client):
-    document = _document(client.get("/system-overview"))
-    questions = document.select("#python-quiz article")
-    assert len(questions) == 15
-    contents = document.select_one('nav[aria-label="このページの目次"]')
-    assert contents.select_one('a[href="#python-quiz"]')
-    for number, question in enumerate(questions, start=1):
-        assert question["id"] == f"python-q{number}"
-        assert question.select_one("h3").get_text().startswith(f"Q{number}.")
-        details = question.select_one("details")
-        assert not details.has_attr("open")
-        assert details.select_one("summary").get_text() == "答えを見る"
-        answer = details.select_one(".overview-answer")
-        assert len(answer.get_text(strip=True)) >= 50
-        link = answer.select_one('a[href^="#python-"]')
-        assert document.select_one(link["href"])
-        assert question.select_one("h3").find_parent("details") is None
-    assert len(document.select("#quiz article")) == 8
-    assert len(document.select("#troubleshooting article")) == 8
-
-
 def test_overview_ids_are_unique_and_every_internal_anchor_resolves(client):
     document = _document(client.get("/system-overview"))
     ids = [element["id"] for element in document.select("[id]")]
     assert len(ids) == len(set(ids))
     for link in document.select('main a[href^="#"]'):
         assert link["href"][1:] in ids
-
-
-CHAPTERS = (
-    ("flow", "1. Bakery Hub全体の流れ"),
-    ("walkthrough", "2. 1つの処理を最後まで追ってみる"),
-    ("features", "3. メニュー・機能別の仕組み"),
-    ("basics", "4. Python基礎・応用マップ"),
-    ("technologies", "5. 共通技術と役割"),
-    ("tests", "6. テストは何を壊さないためにある？"),
-    ("quiz", "7. 理解度チェック"),
-    ("python-quiz", "8. Python基礎チェック"),
-    ("troubleshooting", "9. 困ったときはどこを見る？"),
-)
-
-
-def test_numbered_chapters_preserve_ids_and_have_focusable_headings(client):
-    document = _document(client.get("/system-overview"))
-    chapters = document.select("main > section[data-overview-chapter]")
-    assert [chapter["id"] for chapter in chapters] == [item[0] for item in CHAPTERS]
-    for number, (chapter, (_, title)) in enumerate(zip(chapters, CHAPTERS), start=1):
-        heading = chapter.select_one(":scope > h2")
-        assert heading.get_text(strip=True) == title
-        assert heading["tabindex"] == "-1"
-        assert chapter["data-overview-chapter"] == str(number)
-    assert len(document.select("#basics article[id^='python-']")) == 17
-    assert len(document.select("#quiz article")) == 8
-    assert len(document.select("#python-quiz article")) == 15
-    assert len(document.select("#troubleshooting article")) == 8
-
-
-def test_location_disclosure_is_hidden_until_javascript_initializes(client):
-    document = _document(client.get("/system-overview"))
-    reader = document.select_one("#overview-reader-navigation")
-    assert reader is not None and reader.has_attr("hidden")
-    button = reader.select_one("button#overview-location-button")
-    assert button["type"] == "button"
-    assert button["aria-expanded"] == "false"
-    panel = document.find(id=button["aria-controls"])
-    assert panel["id"] == "overview-page-contents"
-    # No-JS readers keep one ordinary, fully visible list of anchor links.
-    assert not panel.has_attr("hidden")
-    assert panel.find_parent(attrs={"hidden": True}) is None
-    assert panel.select_one("h2").get_text(strip=True) == "このページの目次"
-    assert panel.select_one("button[data-overview-close]").has_attr("hidden")
-    assert "1. 全体の流れ" in button.get_text()
-    assert "目次" in button["aria-label"]
-
-
-def test_single_chapter_contents_links_match_every_chapter_and_mark_current_location(client):
-    document = _document(client.get("/system-overview"))
-    contents = document.select('nav[aria-label="このページの目次"]')
-    assert len(contents) == 1
-    links = contents[0].select("a[data-overview-link]")
-    assert [link["href"] for link in links] == [f"#{item[0]}" for item in CHAPTERS]
-    assert len(links) == 9
-    for number, link in enumerate(links, start=1):
-        assert link.get_text(strip=True).startswith(f"{number}.")
-    # JS owns the live marker; no-JS anchor navigation must not leave a stale
-    # "current" claim on chapter 1 after a reader jumps to another chapter.
-    assert not contents[0].select('a[aria-current]')
 
 
 def test_overview_loads_only_its_local_deferred_navigation_script(client):
@@ -477,60 +166,6 @@ def test_chapter_navigation_does_not_appear_on_business_pages(authenticated_clie
     assert document.select_one('script[src="/static/system_overview_scrubber.js"]') is None
 
 
-def test_contents_backdrop_and_scrubber_are_progressive_enhancements(client):
-    document = _document(client.get("/system-overview"))
-    backdrop = document.select_one("button#overview-contents-backdrop")
-    assert backdrop is not None
-    assert backdrop["type"] == "button"
-    assert backdrop.has_attr("hidden")
-    assert backdrop["aria-label"] == "目次を閉じる"
-    assert document.select_one("#overview-reader-navigation").has_attr("hidden")
-    assert not document.select_one("#overview-page-contents").has_attr("hidden")
-
-    scrubber = document.select_one("#overview-chapter-scrubber")
-    assert scrubber is not None and scrubber.has_attr("hidden")
-    thumb = scrubber.select_one('[role="slider"]')
-    # The shortcut becomes keyboard-focusable only while it is visible.
-    assert thumb["tabindex"] == "-1"
-    assert thumb["aria-orientation"] == "vertical"
-    assert thumb["aria-valuemin"] == "1"
-    assert thumb["aria-valuemax"] == "9"
-    assert thumb["aria-valuenow"] == "1"
-    assert "1." in thumb["aria-valuetext"]
-    preview = scrubber.select_one("[data-scrubber-preview]")
-    assert preview is not None
-    assert preview.has_attr("hidden")
-    assert document.select_one('nav[aria-label="このページの目次"]')
-    assert len(document.select("main > section[data-overview-chapter]")) == 9
-
-
-def test_overview_scripts_are_scoped_and_scrubber_can_be_removed_independently(client):
-    document = _document(client.get("/system-overview"))
-    scripts = document.select("script[src]")
-    assert [script["src"] for script in scripts] == [
-        "/static/system_overview.js", "/static/system_overview_scrubber.js",
-    ]
-    assert all(script.has_attr("defer") for script in scripts)
-    for script in scripts:
-        assert client.get(script["src"]).status_code == 200
-    assert len(document.select("#basics article[id^='python-']")) == 17
-    assert len(document.select("#quiz article")) == 8
-    assert len(document.select("#python-quiz article")) == 15
-    assert len(document.select("#troubleshooting article")) == 8
-
-
-def test_scrubber_is_available_on_the_normal_page_without_a_preview_query(client):
-    ordinary = _document(client.get("/system-overview"))
-    preview = _document(client.get("/system-overview?chapter-scrubber=preview"))
-    for document in (ordinary, preview):
-        assert document.select_one("#overview-chapter-scrubber [role='slider']")
-        assert len(document.select("#overview-page-contents a[data-overview-link]")) == 9
-        assert len(document.select("#basics article[id^='python-']")) == 17
-    script = client.get("/static/system_overview_scrubber.js").get_data(as_text=True)
-    assert "URLSearchParams" not in script
-    assert '"preview"' not in script
-
-
 def test_scrubber_refinement_preserves_hit_area_and_chapter_navigation():
     style = (Path(app_module.app.root_path) / "static" / "style.css").read_text()
     scrubber = (Path(app_module.app.root_path) / "static" / "system_overview_scrubber.js").read_text()
@@ -546,3 +181,87 @@ def test_scrubber_refinement_preserves_hit_area_and_chapter_navigation():
     assert "visibleFor = 1600" in scrubber
     assert "if (commit && moved) jumpTo(index)" in scrubber
     assert "reader.offsetTop + button.offsetHeight" in overview
+
+CHAPTERS = ('about', 'features', 'architecture', 'safety', 'textbook')
+
+
+def test_concise_guide_preserves_readable_contents_and_reader_controls(client):
+    document = _document(client.get('/system-overview'))
+    chapters = document.select('main > section[data-overview-chapter]')
+    assert [node['id'] for node in chapters] == list(CHAPTERS)
+    for number, node in enumerate(chapters, 1):
+        assert node['data-overview-chapter'] == str(number)
+        assert node.h2['tabindex'] == '-1'
+        assert node.h2.get_text().startswith(f'{number}.')
+    contents = document.select('nav[aria-label="このページの目次"]')
+    assert len(contents) == 1
+    assert [a['href'] for a in contents[0].select('a[data-overview-link]')] == [f'#{c}' for c in CHAPTERS]
+    assert not contents[0].select('[aria-current]')
+    assert not document.select('main details, #quiz, #python-quiz')
+    assert '理解度チェック' not in document.select_one('main').get_text()
+    assert 'Python基礎チェック' not in document.select_one('main').get_text()
+    assert document.select_one('#overview-reader-navigation').has_attr('hidden')
+    assert not document.select_one('#overview-page-contents').has_attr('hidden')
+    assert document.select_one('[data-overview-close]').has_attr('hidden')
+    button = document.select_one('#overview-location-button')
+    assert button['aria-expanded'] == 'false'
+    assert button['aria-controls'] == 'overview-page-contents'
+    backdrop = document.select_one('#overview-contents-backdrop')
+    assert backdrop.has_attr('hidden') and backdrop['aria-label'] == '目次を閉じる'
+    thumb = document.select_one('#overview-chapter-scrubber [role=slider]')
+    assert thumb['tabindex'] == '-1'
+    assert thumb['aria-valuemax'] == str(len(CHAPTERS))
+    assert thumb['aria-orientation'] == 'vertical'
+    assert document.select_one('[data-scrubber-preview]').has_attr('hidden')
+
+
+def test_publication_status_and_pdf_are_real_readable_and_public(client):
+    from io import BytesIO
+    from pypdf import PdfReader
+    document = _document(client.get('/system-overview'))
+    text = document.select_one('main').get_text()
+    for phrase in ('本番未公開', 'NO-GO', 'Guest', '2026年11月4日', '6f61e12'):
+        assert phrase in text
+    link = document.select_one('a[href$="bakery-hub-system-guide.pdf"]')
+    response = client.get(link['href'])
+    assert response.status_code == 200
+    assert response.mimetype == 'application/pdf'
+    pdf = PdfReader(BytesIO(response.data))
+    assert len(pdf.pages) >= 10
+    all_text = '\n'.join(p.extract_text() for p in pdf.pages)
+    for phrase in ('システム教科書', '第8章', 'Dataset', 'submission_key', '本番未公開', 'NO-GO'):
+        assert phrase in all_text
+    assert '答えを見る' not in all_text
+    for page in pdf.pages:
+        assert abs(float(page.mediabox.width) - 595.28) < 1
+        assert abs(float(page.mediabox.height) - 841.89) < 1
+
+
+def test_scrubber_adapts_to_document_chapter_count():
+    source = (Path(app_module.app.root_path) / 'static/system_overview_scrubber.js').read_text()
+    assert 'chapters.length !== 9' not in source
+    assert 'chapters.length !== links.length' in source
+    assert 'String(chapters.length)' in source
+
+
+def test_moved_code_addresses_and_excerpt_still_match_actual_source():
+    root = Path(app_module.app.root_path)
+    import json
+    addresses = json.loads((root / 'docs/system-guide/code-addresses.json').read_text())
+    assert len(addresses) >= 17
+    def definitions(source):
+        result = set()
+        def visit(node, prefix=''):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                prefix = f'{prefix}.{node.name}' if prefix else node.name
+                result.add(prefix)
+            for child in ast.iter_child_nodes(node):
+                visit(child, prefix)
+        visit(ast.parse(source))
+        return result
+    for address in addresses:
+        file = (root / address['file']).resolve()
+        assert file.is_relative_to(root.resolve())
+        assert address['symbol'] in definitions(file.read_text())
+    excerpt = 'previous = _existing(owner.id, key, digest)\n        if previous is not None:\n            db.session.commit()\n            return previous'
+    assert excerpt in (root / 'register_service.py').read_text()

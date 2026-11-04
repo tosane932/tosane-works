@@ -9,8 +9,9 @@
     const links = [...document.querySelectorAll("#overview-page-contents a[data-overview-link]")];
     const viewport = window.matchMedia("(max-width: 900px) and (pointer: coarse) and (min-height: 500px)");
 
-    if (!scrubber || !thumb || !preview || chapters.length !== 9 || links.length !== 9
+    if (!scrubber || !thumb || !preview || chapters.length < 2 || chapters.length !== links.length
         || !document.body.classList.contains("overview-navigation-ready")) return;
+    thumb.setAttribute("aria-valuemax", String(chapters.length));
     let currentIndex = links.findIndex(link => link.getAttribute("aria-current") === "location");
     if (currentIndex < 0) currentIndex = 0;
     let drag = null;

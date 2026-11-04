@@ -73,6 +73,9 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Install PDF inspection dependency (test only)
+        run: pip install pypdf==6.10.0
+
       - name: JavaScriptテストを実行
         run: |
           node --test tests_js/home_weather.test.cjs tests_js/register_core.test.cjs tests_js/register_ui.test.cjs tests_js/register_demo.test.cjs tests_js/register_offline.test.cjs tests_js/register_pager.test.cjs tests_js/register_cash_pad.test.cjs
