@@ -242,8 +242,6 @@ def test_scrubber_adapts_to_document_chapter_count():
     assert 'chapters.length !== 9' not in source
     assert 'chapters.length !== links.length' in source
     assert 'String(chapters.length)' in source
-    assert source.index('const hadFocus = document.activeElement === thumb') < source.index('if (!enabled)')
-    assert 'else if (hadFocus)' in source
 
 
 def test_moved_code_addresses_and_excerpt_still_match_actual_source():

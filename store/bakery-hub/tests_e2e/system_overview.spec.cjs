@@ -10,7 +10,11 @@ test.beforeEach(async ({context}) => {
 async function openContents(page) {
     // The shared mobile bar intentionally hides on downward scroll.
     // Reveal it by scrolling upward, just as a reader does, before using it.
-    await page.evaluate(() => scrollBy(0, -40));
+    await page.evaluate(async () => {
+        // Let resize/text reflow and scroll anchoring settle before the user scroll.
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        scrollBy(0, -80);
+    });
     const button = page.locator('#overview-location-button');
     await expect(button).toBeVisible();
     await button.click();
