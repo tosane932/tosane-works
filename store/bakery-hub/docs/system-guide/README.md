@@ -110,3 +110,10 @@ npx playwright test --config=tests_e2e/playwright.config.cjs system_overview
 GitHub Actions初回（66c88e2）では管理者セッションとPostgreSQL統合ジョブが成功。全pytestは1514 passed / 68 skipped / 1 failedで、失敗は旧 `#feature-pwa` の詳細解説をWebから読む別ファイルのテストでした。PWAの短い説明をWebに戻し、Manifest・Service Worker・Cache Storage・未同期保存の区別を移設先原稿でも同じ期待値で確認するよう修正しました。修正後の関連PWA＋概要pytestは46件PASSです。
 
 追加のナビゲーションpytestでは、`test_app_action_controls_disable_selection_without_covering_content` の旧商品登録 `/` ケースがローカルで失敗しました。同じテスト選択を基準mainの独立worktreeでも実行し、同じ1 failed / 2 passedを再現しています。今回の概要変更による回帰とは区別し、業務画面・既存テストは変更していません。CI初回の全pytestではこのケースは成功していました。ローカルでの単独選択時の既存課題として記録します。
+
+
+### ブラウザCIで確認した動作と追加修正
+
+初回E2Eは80 passed / 5 failed。概要のPC・JS無効・Admin/Guest閲覧は成功しました。390/800pxは下スクロール後に自動で隠れた現在章ボタンを直接クリックしようとして待機したため、既存の上スクロールでバーを再表示する操作を試験へ追加しました。スクラバードラッグ・キーでの章選択は成功しましたが、幅変更時はinert設定によるフォーカス消失後に復帰判定していました。非表示化の前にフォーカス状態を記録する最小修正を行い、復帰の期待値は維持しています。残り2件はGuest仕込みのpage.reload時のProtocol errorで、今回その業務コード・試験は変更していません。原因の確定や修正は別課題です。
+
+修正版d30724eのGitHub全pytestジョブとPostgreSQL統合は成功しました。ブラウザの上記修正後は再CIで確認します。

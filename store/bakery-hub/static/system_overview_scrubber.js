@@ -81,6 +81,7 @@
     }
 
     function syncVisibility() {
+        const hadFocus = document.activeElement === thumb;
         const enabled = viewport.matches && !document.querySelector("#overview-page-contents[aria-modal]");
         if (!enabled) {
             clearTimeout(fadeTimer);
@@ -92,7 +93,7 @@
         }
         scrubber.hidden = !enabled;
         if (enabled) setThumb(currentIndex, scrollProgress());
-        else if (document.activeElement === thumb) {
+        else if (hadFocus) {
             document.getElementById("overview-location-button").focus({preventScroll: true});
         }
     }

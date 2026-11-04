@@ -7,6 +7,14 @@ const chapters = ['about','features','architecture','safety','textbook'];
 test.beforeEach(async ({context}) => {
     await context.route(/^https?:\/\//, route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
 });
+async function openContents(page) {
+    // The shared mobile bar intentionally hides on downward scroll.
+    // Reveal it by scrolling upward, just as a reader does, before using it.
+    await page.evaluate(() => scrollBy(0, -40));
+    const button = page.locator('#overview-location-button');
+    await expect(button).toBeVisible();
+    await button.click();
+}
 for (const width of [390, 800, 1280]) {
     test(`public guide ${width}px: contents, focus, current location, resize and PDF`, async ({page}) => {
         await page.setViewportSize({width,height:844});
@@ -14,7 +22,7 @@ for (const width of [390, 800, 1280]) {
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         const button=page.locator('#overview-location-button');
         await expect(button).toBeVisible();
-        await button.click();
+        await openContents(page);
         const panel=page.locator('#overview-page-contents');
         await expect(panel).toBeVisible();
         await expect(panel.locator('[aria-current=location]')).toBeFocused();
@@ -22,7 +30,7 @@ for (const width of [390, 800, 1280]) {
         await expect(button).toBeFocused();
         await expect(panel).toBeHidden();
         for (let i=0;i<chapters.length;i++) {
-            await button.click();
+            await openContents(page);
             await panel.locator(`a[href="#${chapters[i]}"]`).click();
             await expect(page.locator(`#${chapters[i]} > h2`)).toBeFocused();
             await expect(button).toContainText(`${i+1}.`);
@@ -30,16 +38,16 @@ for (const width of [390, 800, 1280]) {
             const bar=await button.boundingBox();
             expect(heading.y).toBeGreaterThanOrEqual(bar.y+bar.height-2);
         }
-        await button.click();
+        await openContents(page);
         await panel.locator('[data-overview-close]').click();
         await expect(button).toBeFocused();
-        await button.click();
+        await openContents(page);
         await page.locator('#overview-contents-backdrop').click({position:{x:8,y:700}});
         await expect(panel).toBeHidden();
         await page.emulateMedia({reducedMotion:'reduce'});
         await page.setViewportSize({width:width===390?844:390,height:844});
         await page.locator('html').evaluate(n=>n.style.fontSize='200%');
-        await button.click();
+        await openContents(page);
         await panel.locator('a[href="#architecture"]').click();
         await expect(page.locator('#architecture > h2')).toBeFocused();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -71,6 +79,7 @@ test('touch scrubber drag, keyboard and rotation retain chapter navigation', asy
     await page.keyboard.press('Home');await expect(page).toHaveURL(/#about$/);
     await page.keyboard.press('ArrowDown');await expect(page).toHaveURL(/#features$/);
     await page.keyboard.press('End');await expect(page).toHaveURL(/#textbook$/);
+    await expect(thumb).toBeFocused();
     await page.setViewportSize({width:1000,height:600});
     await expect(scrubber).toBeHidden();
     await expect(page.locator('#overview-location-button')).toBeFocused();
