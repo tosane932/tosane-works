@@ -46,7 +46,7 @@
     }
 
     function updateCurrent() {
-        // Only nine chapter positions: a huge chapter need not intersect the viewport.
+        // Read chapter positions from the document: a huge chapter need not intersect the viewport.
         // rAF batches scroll events, including jumps, backward scroll and details changes.
         // Keep the chapter boundary stable when the mobile top bar slides away.
         const readingLine = reader.offsetTop + button.offsetHeight + 16;

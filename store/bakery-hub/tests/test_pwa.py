@@ -130,6 +130,11 @@ def test_guest_manifest_does_not_grant_admin_or_extend_expiry(flask_app, client)
 def test_overview_distinguishes_manifest_worker_and_offline_data(client):
     page = BeautifulSoup(client.get("/system-overview").data, "html.parser")
     explanation = page.select_one("#feature-pwa").get_text(" ", strip=True)
+    for phrase in ("PWA", "ログイン", "権限", "未同期", "サーバー"):
+        assert phrase in explanation
+    # Detailed technology distinctions moved to the printable textbook;
+    # retain every existing requirement at its new published address.
+    explanation = (ROOT / "docs/system-guide/legacy-reference.md").read_text()
     for phrase in ("PWA", "Web App Manifest", "Service Worker", "Cache Storage", "HTTPS",
                    "ネイティブアプリ", "/register/", "未同期", "新しいService Workerは登録しません"):
         assert phrase in explanation

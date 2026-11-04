@@ -2498,3 +2498,7 @@ GUEST_PREP_ENABLEDは既定OFF。Guestレジ有効・正規初期化済みのGue
 ### 最新の開発課題
 
 Guest廃棄・ロス管理、ログアウト時の未同期会計の安全案内、Guest仕込みへの販売実績参考表示、正式レジの本番実機検証が残ります。追加の大型機能は現行機能の完成度と運用性を優先してから検討します。
+
+## システムガイドと印刷用教科書
+
+[システム概要](https://bakery-salesdata.onrender.com/system-overview)は初めて見る方向けの5章構成です。詳しい処理・設計・安全性・運用は[システム教科書PDF](static/docs/bakery-hub-system-guide.pdf)にまとめています。[原稿・再生成手順・照合記録](docs/system-guide/README.md)も管理しています。v3.2 Guest本番未公開・Admin正式レジNO-GOは維持します。
